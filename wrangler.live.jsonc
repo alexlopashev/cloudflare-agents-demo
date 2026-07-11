@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "regression-surgeon-platform",
+  "main": "workers/platform/src/index.ts",
+  "compatibility_date": "2026-07-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "apps/web/dist/client",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/agents/*"]
+  },
+  "ai": { "binding": "AI" },
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "RegressionSurgeonAgent",
+        "name": "REGRESSION_SURGEON_AGENT"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["RegressionSurgeonAgent"],
+      "tag": "v1"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "TELEMETRY_DB",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_name": "regression-surgeon-telemetry",
+      "migrations_dir": "migrations/telemetry"
+    }
+  ],
+  "services": [
+    {
+      "binding": "HEALTH_SERVICE",
+      "service": "regression-surgeon-health-service"
+    }
+  ],
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+  "vars": { "MODEL_MODE": "workers-ai" },
+  "observability": { "enabled": true }
+}

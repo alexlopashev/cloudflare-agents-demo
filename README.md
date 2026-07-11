@@ -33,7 +33,8 @@ The initial product supports one controlled repository, one supervised applicati
 
 Bootstrap is repository-local and affects only the active shell. It never edits a shell profile, installs tools into a system path, or inherits tools from a user's global mise configuration.
 
-The reproducible foundation is implemented. Application and Worker packages arrive in the next delivery phase.
+The reproducible foundation and Cloudflare application skeleton are implemented. The supervised
+Deployboard behavior arrives in the next delivery phase.
 
 ### Bootstrap
 
@@ -62,11 +63,16 @@ mise run doctor
 mise run build
 mise run check
 mise run dev
+mise run dev:live
 mise run e2e
 mise run teardown
 ```
 
-`mise run build`, `mise run check`, and `mise run e2e` currently verify the implemented foundation. `mise run dev` fails explicitly until the Cloudflare application skeleton lands in issue #3. Later phases add credential-free deterministic development, live Workers AI, and deployment tasks.
+`mise run dev` starts the complete local Cloudflare stack in deterministic fake-model mode, with no
+credentials or remote AI usage. It serves Deployboard at `/app`, the durable Project Think session at
+`/investigator`, and the platform APIs from one URL. `mise run dev:live` builds the app and starts the
+same Worker with the explicit Workers AI configuration; Cloudflare authentication and remote usage
+apply. `mise run e2e` verifies both public routes, runtime metadata, and the auxiliary service binding.
 
 ## Engineering method
 
@@ -87,7 +93,10 @@ After every meaningful change, contributors must reassess and align the implemen
 
 ## Current status
 
-Phase 1, the mise-native monorepo foundation, is implemented and verified locally. The Cloudflare application skeleton in issue #3 is next; the milestone and native blocked-by issue graph remain the executable delivery plan.
+Phases 1 and 2 are implemented and verified locally: the mise-native foundation, React/Vite shell,
+platform Worker, auxiliary Worker, D1 binding, and persistent Project Think agent all run through the
+Cloudflare-native local stack. The supervised application in issue #4 is next; the milestone and
+native blocked-by issue graph remain the executable delivery plan.
 
 ## License
 

@@ -708,6 +708,11 @@ Acceptance criteria:
 
 ### Phase 2 — Cloudflare skeleton
 
+Status: complete in issue #3. One Cloudflare Vite development URL now serves the React shell, the
+platform Worker, a SQLite-backed Project Think Durable Object, local D1, version metadata, and the
+auxiliary health-service Worker. Fake mode is credential-free and omits the remote AI binding;
+`wrangler.live.jsonc` is the explicit Workers AI configuration.
+
 - Add the React/Vite application.
 - Add the platform Worker.
 - Add the Think Durable Object.
