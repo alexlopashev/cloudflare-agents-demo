@@ -1,0 +1,4 @@
+interface:
+  display_name: "Align Project System"
+  short_description: "Keep plans, issues, wiki, and guidance aligned"
+  default_prompt: "Use $align-project-system to reconcile this change across the plan, GitHub issues, wiki, README, and agent guidance."

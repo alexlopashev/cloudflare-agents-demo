@@ -1,0 +1,60 @@
+name: Implementation work
+description: Plan one test-driven, dependency-aware implementation outcome
+title: ""
+labels: []
+body:
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose
+      description: Describe the observable outcome and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: In scope
+      description: List the smallest coherent implementation boundary.
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: State what this issue deliberately will not solve.
+    validations:
+      required: true
+  - type: textarea
+    id: tdd
+    attributes:
+      label: Test-first plan
+      description: List the meaningful invariants and the first failing test.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Provide verifiable completion criteria.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: List proposed blockers. Native blocked-by relations must also be added after creation.
+  - type: checkboxes
+    id: alignment
+    attributes:
+      label: Project-system alignment on completion
+      options:
+        - label: Implementation plan assessed
+          required: true
+        - label: Milestone issues and blocked-by relations assessed
+          required: true
+        - label: Wiki and README assessed
+          required: true
+        - label: AGENTS.md files and repository-local skills assessed
+          required: true
