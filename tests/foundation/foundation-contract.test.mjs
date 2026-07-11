@@ -105,6 +105,9 @@ test("CI covers every supported operating-system and architecture pair", () => {
   for (const runner of ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15", "macos-15-intel"]) {
     assert.match(workflow, new RegExp(`- ${runner.replaceAll(".", "\\.")}`));
   }
+  assert.match(workflow, /actions\/checkout@v7/);
+  assert.match(workflow, /jdx\/mise-action@v4/);
+  assert.match(workflow, /mise exec node -- pnpm install --frozen-lockfile/);
 });
 
 for (const shell of ["sh", "bash", "zsh"]) {
