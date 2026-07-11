@@ -31,9 +31,9 @@ The initial product supports one controlled repository, one supervised applicati
 - Linux ARM64 and x64
 - sh, Bash, Zsh, Fish, and Nu
 
-Bootstrap is repository-local and affects only the active shell. It never edits a shell profile or installs tools into a system path.
+Bootstrap is repository-local and affects only the active shell. It never edits a shell profile, installs tools into a system path, or inherits tools from a user's global mise configuration.
 
-The implementation has not been scaffolded yet. The commands below are the committed interface that the foundation issue will implement.
+The reproducible foundation is implemented. Application and Worker packages arrive in the next delivery phase.
 
 ### Bootstrap
 
@@ -63,10 +63,10 @@ mise run build
 mise run check
 mise run dev
 mise run e2e
-mise run deploy
+mise run teardown
 ```
 
-`mise run dev` will provide a credential-free deterministic model for local development. `mise run dev:live` will use the remote Workers AI binding.
+`mise run build`, `mise run check`, and `mise run e2e` currently verify the implemented foundation. `mise run dev` fails explicitly until the Cloudflare application skeleton lands in issue #3. Later phases add credential-free deterministic development, live Workers AI, and deployment tasks.
 
 ## Engineering method
 
@@ -87,7 +87,7 @@ After every meaningful change, contributors must reassess and align the implemen
 
 ## Current status
 
-Planning is complete and implementation is ready to begin. The GitHub milestone and blocked-by issue graph are the executable delivery plan.
+Phase 1, the mise-native monorepo foundation, is implemented and verified locally. The Cloudflare application skeleton in issue #3 is next; the milestone and native blocked-by issue graph remain the executable delivery plan.
 
 ## License
 

@@ -17,7 +17,7 @@ The demonstration path is deliberately narrow:
 ## 2. Fixed architectural decisions
 
 | Area | Decision |
-|---|---|
+| --- | --- |
 | Hosting | Cloudflare Workers only |
 | Agent harness | Project Think |
 | Model | Workers AI through `workers-ai-provider` |
@@ -176,9 +176,12 @@ lockfile = true
 
 [tools]
 node = "24.18.0"
-pnpm = { version = "10.34.5", depends = ["node"] }
 wrangler = { version = "4.110.0", depends = ["node"] }
 gh = "2.96.0"
+shellcheck = "0.11.0"
+shfmt = "3.13.1"
+actionlint = "1.7.12"
+"github:nushell/nushell" = "0.113.1"
 
 # Optional container lane. These are not installed on unsupported hosts.
 colima = { version = "0.10.3", os = ["macos", "linux"] }
@@ -193,7 +196,7 @@ Commit `mise.lock` with platform entries for:
 - Linux ARM64
 - Linux x64
 
-mise owns external executables. pnpm owns source-linked JavaScript libraries such as React, Think, the Cloudflare Vite plugin, TypeScript, and Vitest.
+mise owns external executables. The mise-managed Node runtime supplies Corepack, which provisions the exact `pnpm@10.34.5` declared by the root `packageManager` field inside the repository-local tool tree. This avoids an incomplete package-manager backend catalog while keeping every executable root under mise. pnpm owns source-linked JavaScript libraries such as React, Think, the Cloudflare Vite plugin, TypeScript, and Vitest.
 
 The Cloudflare Vite plugin itself depends on Wrangler. The pnpm lockfile may therefore also contain Wrangler, but its version must match the mise-pinned 4.110.0.
 
@@ -207,7 +210,7 @@ References:
 Bootstrap supports only macOS and Linux on ARM64 and x64.
 
 | Shell | Bootstrap command |
-|---|---|
+| --- | --- |
 | sh | `. ./scripts/bootstrap` |
 | Bash | `source ./scripts/bootstrap` |
 | Zsh | `source ./scripts/bootstrap` |
@@ -240,7 +243,10 @@ MISE_DATA_DIR=.local/share/mise
 MISE_CACHE_DIR=.local/cache/mise
 MISE_STATE_DIR=.local/state/mise
 MISE_GLOBAL_CONFIG_FILE=.local/mise-global.toml
+MISE_CONFIG_DIR=.local/config/mise
 ```
+
+The adapters also add the user's normal global mise config to `MISE_IGNORED_CONFIG_PATHS`. This prevents unrelated personal tools or aliases from leaking into a repository bootstrap.
 
 When the terminal closes, activation and environment changes disappear. Downloaded repository-local tools remain cached until teardown.
 
@@ -248,13 +254,13 @@ When the terminal closes, activation and environment changes disappear. Download
 
 The common `bootstrap-core.sh` performs filesystem and installation work but does not attempt to alter the calling shell.
 
-The shell adapters then activate mise:
+The shell adapters then expose the repository toolchain:
 
-- sh uses `mise activate sh`.
+- sh prepends the repository's mise shims because mise has no plain-`sh` activation mode.
 - Bash uses `mise activate bash`.
 - Zsh uses `mise activate zsh`.
 - Fish pipes `mise activate fish` into `source`.
-- Nu stores generated activation code under `.local/` and imports it into the current Nu session.
+- Nu prepends the repository's mise shims and binary directory to its current-session path.
 
 ### 7.3 Consent behavior
 
@@ -283,7 +289,7 @@ Bootstrap never prompts about shell profiles because persistent activation is fo
 Subsequent terminal sessions can source a lightweight activation script without repeating installation:
 
 | Shell | Activation command |
-|---|---|
+| --- | --- |
 | sh | `. ./scripts/activate` |
 | Bash | `source ./scripts/activate` |
 | Zsh | `source ./scripts/activate` |
@@ -325,7 +331,7 @@ Because bootstrap affects only the current shell, teardown does not attempt to e
 Complex orchestration lives in cross-platform `.mjs` files rather than shell-specific task bodies.
 
 | Task | Purpose |
-|---|---|
+| --- | --- |
 | `mise run doctor` | Verify versions, ports, configuration, credentials, and bindings |
 | `mise run install` | Install pnpm dependencies |
 | `mise run build` | Build every workspace package and Worker |
@@ -681,6 +687,8 @@ The root `AGENTS.md` is the authoritative contributor contract for TDD, quality 
 ## 16. Implementation phases
 
 ### Phase 1 — Foundation
+
+Status: complete in issue #2. The real repository-local bootstrap, doctor, build, aggregate checks, and foundation E2E suite pass on macOS ARM64. The macOS/Linux CI matrix supplies cross-platform and Fish execution evidence.
 
 - Initialize the pnpm workspace.
 - Add mise configuration and lockfile.
