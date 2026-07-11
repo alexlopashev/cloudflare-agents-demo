@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "workers/*"
+
+catalogMode: strict
+
+sharedWorkspaceLockfile: true

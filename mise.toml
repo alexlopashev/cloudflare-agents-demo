@@ -1,0 +1,68 @@
+min_version = "2026.6.14"
+
+[settings]
+lockfile = true
+
+[tools]
+node = "24.18.0"
+wrangler = { version = "4.110.0", depends = ["node"] }
+gh = "2.96.0"
+shellcheck = "0.11.0"
+shfmt = "3.13.1"
+actionlint = "1.7.12"
+"github:nushell/nushell" = "0.113.1"
+colima = { version = "0.10.3", os = ["macos", "linux"] }
+docker-cli = { version = "29.6.1", os = ["macos", "linux"] }
+docker-compose = { version = "5.3.1", os = ["macos", "linux"] }
+
+[tasks.install]
+description = "Install locked JavaScript dependencies"
+run = "pnpm install --frozen-lockfile"
+
+[tasks.build]
+description = "Build all implemented workspace components"
+run = "pnpm build"
+
+[tasks.format]
+description = "Apply canonical formatting"
+run = "pnpm format"
+
+[tasks."format:check"]
+description = "Verify canonical formatting"
+run = "pnpm format:check"
+
+[tasks.lint]
+description = "Run code, shell, workflow, and Markdown linting"
+run = "pnpm lint"
+
+[tasks.typecheck]
+description = "Run strict TypeScript checks"
+run = "pnpm typecheck"
+
+[tasks.test]
+description = "Run repository tests"
+run = "pnpm test"
+
+[tasks."test:watch"]
+description = "Run tests continuously during TDD"
+run = "pnpm test:watch"
+
+[tasks.e2e]
+description = "Run the currently implemented credential-free E2E scope"
+run = "pnpm e2e"
+
+[tasks.check]
+description = "Run all non-deployment quality gates"
+run = "pnpm check"
+
+[tasks.doctor]
+description = "Verify the local foundation and pinned tools"
+run = "pnpm run doctor"
+
+[tasks.dev]
+description = "Run the currently implemented local stack"
+run = "pnpm dev"
+
+[tasks.teardown]
+description = "Remove project-owned local runtime state"
+run = "sh scripts/teardown"

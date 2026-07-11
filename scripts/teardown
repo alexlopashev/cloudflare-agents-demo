@@ -1,0 +1,33 @@
+#!/bin/sh
+
+set -eu
+
+if [ ! -f "mise.toml" ]; then
+  printf '%s\n' "Run teardown from the repository root." >&2
+  exit 1
+fi
+
+root=$PWD
+
+remove_project_path() {
+  path=$1
+  case "$path" in
+    "$root"/*) rm -rf "$path" ;;
+    *)
+      printf '%s\n' "Refusing to remove a path outside the repository: $path" >&2
+      exit 1
+      ;;
+  esac
+}
+
+for path in "$root/.wrangler/state" "$root/.local/run" "$root/coverage" "$root/dist"; do
+  if [ -e "$path" ]; then
+    remove_project_path "$path"
+  fi
+done
+
+if [ "${1:-}" = "--purge-toolchain" ] && [ -e "$root/.local" ]; then
+  remove_project_path "$root/.local"
+fi
+
+printf '%s\n' "Project-owned local runtime state removed."

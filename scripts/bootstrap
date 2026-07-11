@@ -1,0 +1,60 @@
+#!/bin/sh
+
+# This file supports both execution and sourcing; ShellCheck cannot infer the latter return path.
+# shellcheck disable=SC2317
+
+if [ ! -f "mise.toml" ]; then
+  printf '%s\n' "Run bootstrap from the repository root." >&2
+  return 1 2>/dev/null || exit 1
+fi
+
+REGRESSION_SURGEON_ROOT=$PWD
+export REGRESSION_SURGEON_ROOT
+if [ -z "${REGRESSION_SURGEON_USER_MISE_CONFIG:-}" ]; then
+  if [ -n "${MISE_CONFIG_DIR:-}" ]; then
+    REGRESSION_SURGEON_USER_MISE_CONFIG="$MISE_CONFIG_DIR/config.toml"
+  elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
+    REGRESSION_SURGEON_USER_MISE_CONFIG="$XDG_CONFIG_HOME/mise/config.toml"
+  else
+    REGRESSION_SURGEON_USER_MISE_CONFIG="$HOME/.config/mise/config.toml"
+  fi
+  export REGRESSION_SURGEON_USER_MISE_CONFIG
+fi
+export MISE_INSTALL_PATH="$REGRESSION_SURGEON_ROOT/.local/bin/mise"
+export MISE_DATA_DIR="$REGRESSION_SURGEON_ROOT/.local/share/mise"
+export MISE_CACHE_DIR="$REGRESSION_SURGEON_ROOT/.local/cache/mise"
+export MISE_STATE_DIR="$REGRESSION_SURGEON_ROOT/.local/state/mise"
+export MISE_GLOBAL_CONFIG_FILE="$REGRESSION_SURGEON_ROOT/.local/mise-global.toml"
+export MISE_CONFIG_DIR="$REGRESSION_SURGEON_ROOT/.local/config/mise"
+case ":${MISE_IGNORED_CONFIG_PATHS:-}:" in
+  *":$REGRESSION_SURGEON_USER_MISE_CONFIG:"*) ;;
+  *) export MISE_IGNORED_CONFIG_PATHS="$REGRESSION_SURGEON_USER_MISE_CONFIG${MISE_IGNORED_CONFIG_PATHS:+:$MISE_IGNORED_CONFIG_PATHS}" ;;
+esac
+
+if [ -n "${ZSH_VERSION:-}" ]; then
+  REGRESSION_SURGEON_SHELL=zsh
+else
+  case "${0##*/}" in
+    *bash) REGRESSION_SURGEON_SHELL=bash ;;
+    *) REGRESSION_SURGEON_SHELL="sh" ;;
+  esac
+fi
+
+if [ "${REGRESSION_SURGEON_BOOTSTRAP_TEST:-0}" = "1" ]; then
+  REGRESSION_SURGEON_MISE_ACTIVE=$REGRESSION_SURGEON_SHELL
+  export REGRESSION_SURGEON_MISE_ACTIVE
+else
+  sh "$REGRESSION_SURGEON_ROOT/scripts/bootstrap-core.sh" || {
+    return 1 2>/dev/null || exit 1
+  }
+  if [ "$REGRESSION_SURGEON_SHELL" = "sh" ]; then
+    PATH="$MISE_DATA_DIR/shims:$(dirname "$MISE_INSTALL_PATH"):$PATH"
+    export PATH
+  else
+    eval "$("$MISE_INSTALL_PATH" activate "$REGRESSION_SURGEON_SHELL")"
+  fi
+  REGRESSION_SURGEON_MISE_ACTIVE=$REGRESSION_SURGEON_SHELL
+  export REGRESSION_SURGEON_MISE_ACTIVE
+fi
+
+unset REGRESSION_SURGEON_SHELL
