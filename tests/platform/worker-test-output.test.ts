@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isKnownIncompleteDependencySourcemap } from "../../scripts/run-worker-tests.mjs";
+import { isKnownIncompleteDependencySourcemap } from "../../scripts/run-worker-tests.ts";
 
 describe("Worker test output policy", () => {
   it("recognizes only incomplete maps from audited transitive packages", () => {

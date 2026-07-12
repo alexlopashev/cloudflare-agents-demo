@@ -79,6 +79,18 @@ run = "pnpm dev"
 description = "Build and run locally with the live Workers AI binding"
 run = "pnpm dev:live"
 
+[tasks."container:check"]
+description = "Validate the optional single-container Compose model"
+run = "docker-cli-plugin-docker-compose --file compose.yaml config --quiet"
+
+[tasks."container:up"]
+description = "Start the optional named Colima and Compose stack"
+run = "node scripts/container.ts up"
+
+[tasks."container:down"]
+description = "Stop only project-owned Compose and Colima resources"
+run = "node scripts/container.ts down"
+
 [tasks.teardown]
 description = "Remove project-owned local runtime state"
 run = "sh scripts/teardown"

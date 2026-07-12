@@ -1,0 +1,6 @@
+.git/
+.local/
+.wrangler/
+coverage/
+dist/
+node_modules/

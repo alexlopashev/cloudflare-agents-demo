@@ -1,10 +1,8 @@
 import { execFileSync } from "node:child_process";
 
-/** @param {string} command @param {string[]} args */
-const run = (command, args) => execFileSync(command, args, { stdio: "inherit" });
+const run = (command: string, args: string[]) => execFileSync(command, args, { stdio: "inherit" });
 
-/** @param {unknown} error */
-const isMissingCommand = (error) =>
+const isMissingCommand = (error: unknown) =>
   error instanceof Error && "code" in error && error.code === "ENOENT";
 
 run("shellcheck", [

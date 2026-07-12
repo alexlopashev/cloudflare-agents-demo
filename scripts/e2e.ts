@@ -2,7 +2,7 @@ import { createServer } from "vite";
 
 import { verifyLocalStack } from "./local-stack-contract.ts";
 
-const server = await createServer({
+const server: Awaited<ReturnType<typeof createServer>> = await createServer({
   configFile: new URL("../vite.config.ts", import.meta.url).pathname,
   server: { host: "127.0.0.1", port: 0 },
 });

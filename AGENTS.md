@@ -96,6 +96,13 @@ Do not assert exact natural-language output from a live model. Assert structured
 - TTY settings are restored on every exit path.
 - Bootstrap and teardown are idempotent.
 - Teardown removes only project-owned resources.
+- Bootstrap never starts Colima or changes the active Docker context.
+- The optional project profile mounts only the repository root explicitly and requires 4 GiB of
+  memory for the Vite/`workerd` stack.
+- Container lifecycle code must fail closed on invalid ownership markers and retain recovery evidence
+  after a partial start.
+- Host `node_modules`, `.local`, and `.wrangler` state must never be reused inside the Linux
+  container.
 
 ## Test layers
 
@@ -104,6 +111,8 @@ Use the lowest layer that proves the behavior, then add higher-level coverage on
 - Unit tests cover calculations, validation, state machines, and pure policy.
 - Worker integration tests cover D1, Durable Objects, service bindings, Think tools, and persistence.
 - Shell contract tests cover bootstrap, activation, consent, and teardown in isolated temporary homes.
+- Container contract tests cover the resolved Compose model, named-volume isolation, repeated
+  lifecycle operations, pre-existing profile preservation, and failed-start recovery without a VM.
 - End-to-end tests cover the complete deterministic investigation and draft-PR preview path.
 
 Snapshots are acceptable for stable serialized protocols or rendered structures. Do not use snapshots as a substitute for behavioral assertions.
@@ -127,6 +136,7 @@ mise run lint
 mise run typecheck
 mise run test
 mise run e2e
+mise run container:check
 mise run build
 ```
 
@@ -137,6 +147,10 @@ Do not bypass pinned tools with globally installed alternatives. Do not replace 
 ## TypeScript standards
 
 - Enable strict TypeScript compiler options.
+- Keep repository Node automation in `scripts/*.ts`; `.mjs` automation entrypoints are forbidden.
+- Directly executed scripts must use only erasable TypeScript syntax supported by the pinned Node 24
+  runtime. `erasableSyntaxOnly` stays enabled, and `tsc --noEmit` remains the type-safety gate because
+  Node strips types without checking them.
 - Preserve concrete types across Worker bindings, tools, D1 records, and GitHub responses.
 - Do not introduce `any` when `unknown` plus validation is possible.
 - Validate all external data at the boundary.

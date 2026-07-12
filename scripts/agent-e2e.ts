@@ -1,6 +1,19 @@
 import { createServer } from "vite";
+import { z } from "zod";
 
-const server = await createServer({
+const investigationResultSchema = z.object({
+  report: z.string(),
+  toolTypes: z.array(z.string()),
+});
+
+const remediationPreviewSchema = z.object({
+  body: z.string(),
+  branch: z.string(),
+  status: z.literal("preview"),
+  writesPerformed: z.literal(false),
+});
+
+const server: Awaited<ReturnType<typeof createServer>> = await createServer({
   configFile: new URL("../vite.config.ts", import.meta.url).pathname,
   server: { host: "127.0.0.1", port: 0 },
 });
@@ -16,7 +29,7 @@ try {
     headers: { "x-local-scenario-key": "regression-surgeon-local-only" },
   });
   if (!response.ok) throw new Error(`Agent E2E returned HTTP ${response.status}`);
-  const result = await response.json();
+  const result = investigationResultSchema.safeParse(await response.json());
   const expectedTools = [
     "tool-query_telemetry",
     "tool-query_telemetry",
@@ -25,19 +38,17 @@ try {
     "tool-read_repo_files",
   ];
   if (
-    typeof result !== "object" ||
-    result === null ||
-    JSON.stringify(result.toolTypes) !== JSON.stringify(expectedTools) ||
-    typeof result.report !== "string" ||
-    !/Evidence[\s\S]+scenario-trace-[0-9]+[\s\S]+d591869[\s\S]+PR #19/.test(result.report) ||
-    !/Inference[\s\S]+Confidence[\s\S]+Unknowns/.test(result.report)
+    !result.success ||
+    JSON.stringify(result.data.toolTypes) !== JSON.stringify(expectedTools) ||
+    !/Evidence[\s\S]+scenario-trace-[0-9]+[\s\S]+d591869[\s\S]+PR #19/.test(result.data.report) ||
+    !/Inference[\s\S]+Confidence[\s\S]+Unknowns/.test(result.data.report)
   ) {
     throw new Error(
       `Agent E2E did not prove the evidence-driven Think loop: ${JSON.stringify(result)}`,
     );
   }
   const investigatedTraceId = /Representative trace: (scenario-trace-[0-9]+)/.exec(
-    result.report,
+    result.data.report,
   )?.[1];
   if (investigatedTraceId === undefined) {
     throw new Error("Agent E2E report did not expose its representative trace");
@@ -52,18 +63,13 @@ try {
   if (!previewResponse.ok) {
     throw new Error(`Remediation preview E2E returned HTTP ${previewResponse.status}`);
   }
-  const preview = await previewResponse.json();
+  const preview = remediationPreviewSchema.safeParse(await previewResponse.json());
   if (
-    typeof preview !== "object" ||
-    preview === null ||
-    preview.status !== "preview" ||
-    preview.writesPerformed !== false ||
-    typeof preview.branch !== "string" ||
-    !/^regression-surgeon\/[0-9a-f]{16}$/.test(preview.branch) ||
-    typeof preview.body !== "string" ||
-    !preview.body.includes(investigatedTraceId) ||
-    !/Evidence[\s\S]+d591869[\s\S]+PR #19/.test(preview.body) ||
-    !/Risk[\s\S]+Validation/.test(preview.body)
+    !preview.success ||
+    !/^regression-surgeon\/[0-9a-f]{16}$/.test(preview.data.branch) ||
+    !preview.data.body.includes(investigatedTraceId) ||
+    !/Evidence[\s\S]+d591869[\s\S]+PR #19/.test(preview.data.body) ||
+    !/Risk[\s\S]+Validation/.test(preview.data.body)
   ) {
     throw new Error(
       `Remediation E2E did not prove preview-only safety: ${JSON.stringify(preview)}`,

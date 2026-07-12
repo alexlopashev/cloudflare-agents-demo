@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { access } from "node:fs/promises";
 
-const expected = new Map([
+const expected = new Map<string, string>([
   ["node", "v24.18.0"],
   ["pnpm", "10.34.5"],
   ["wrangler", "4.110.0"],

@@ -1,0 +1,48 @@
+name: regression-surgeon
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Containerfile
+    command:
+      - sh
+      - -lc
+      - mise run --skip-tools install && exec mise run --skip-tools dev
+    environment:
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      REGRESSION_SURGEON_DEV_HOST: 0.0.0.0
+      npm_config_store_dir: /workspace/.local/pnpm-store
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - --show-error
+        - http://127.0.0.1:5173/api/runtime
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 15s
+    init: true
+    ports:
+      - 127.0.0.1:5173:5173
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
+      - type: volume
+        source: dependencies
+        target: /workspace/node_modules
+      - type: volume
+        source: mise_runtime
+        target: /workspace/.local
+      - type: volume
+        source: wrangler_state
+        target: /workspace/.wrangler
+
+volumes:
+  dependencies:
+  mise_runtime:
+  wrangler_state:

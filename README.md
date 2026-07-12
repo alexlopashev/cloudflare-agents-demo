@@ -33,6 +33,8 @@ The initial product supports one controlled repository, one supervised applicati
 - sh, Bash, Zsh, Fish, and Nu
 
 Bootstrap is repository-local and affects only the active shell. It never edits a shell profile, installs tools into a system path, or inherits tools from a user's global mise configuration.
+Repository automation uses `scripts/*.ts`, executed directly through Node 24.18's stable type
+stripping with `erasableSyntaxOnly`; `tsc --noEmit` remains the separate strict type-checking gate.
 
 The reproducible foundation, Cloudflare application skeleton, supervised Deployboard, immutable
 repository connector, measured telemetry pipeline, and evidence-driven investigation are
@@ -58,6 +60,11 @@ source ./scripts/bootstrap.fish
 source ./scripts/bootstrap.nu
 ```
 
+Each filesystem-changing bootstrap stage uses a single-keystroke `Y/n` confirmation. The approved
+path installs the locked dependencies, applies repository-local D1 migrations, loads the measured
+good/bad fixtures, builds the application, and runs the complete credential-free verification suite.
+Colima is never started by bootstrap.
+
 ### Core tasks
 
 ```text
@@ -70,6 +77,9 @@ mise run scenario:reseed
 mise run dev
 mise run dev:live
 mise run e2e
+mise run container:check
+mise run container:up
+mise run container:down
 mise run teardown
 ```
 
@@ -86,6 +96,28 @@ correlated browser telemetry, statistically distinguishable scenario evidence, a
 five-step Project Think investigation that cites the measured trace, immutable commit, and source PR.
 It also validates an evidence-rich draft-PR preview against base/blob freshness, path, byte, line, and
 changed-line limits while proving that local mode performs no GitHub writes.
+
+### Optional Colima parity
+
+The native path above is canonical. For a clean Linux-container parity check, run:
+
+```text
+mise run container:up
+```
+
+This starts the dedicated `polylane-take-home` Colima profile without changing the active Docker
+context, assigns the profile 4 GiB of memory, mounts the exact repository root, builds one Linux
+service, waits for its health check, and exposes the same application at `http://127.0.0.1:5173`.
+The container runs the canonical `mise run dev` task. Source code is bind mounted, while
+`node_modules`, `.local`, and `.wrangler` use Linux-owned named volumes so host-native `workerd`
+binaries can never leak into the container. The explicit repository mount means clones and worktrees
+outside the home directory behave the same way.
+
+`mise run container:down` removes the Compose containers and network, stops Colima only when this
+project started it, and preserves the named volumes for a fast restart. `mise run teardown` is the
+full reset: it also removes project Compose volumes and deletes a Colima profile only when a
+repository ownership marker proves this project created it. Both operations are repeatable, and a
+failed start retains the marker required for safe recovery. A pre-existing profile is never deleted.
 
 ## Engineering method
 
@@ -106,7 +138,7 @@ After every meaningful change, contributors must reassess and align the implemen
 
 ## Current status
 
-Phases 1 through 6 are implemented and verified locally. The real known-good release at `cf25e52`
+Phases 1 through 7 are implemented and verified locally. The real known-good release at `cf25e52`
 loads three service checks concurrently; the current scenario release intentionally serializes them
 to reduce simultaneous downstream pressure. A deterministic reseed measured local p75 latency near
 127 ms versus 380 ms and stored sequential service spans on the degraded critical path. Reset and
@@ -117,9 +149,11 @@ and survives browser reconnection without duplicating messages or tool effects. 
 by default, produces a credential-free local preview, and exposes no merge capability. Its live REST
 adapter restricts repository, path, SHA/blob freshness, request/response size, changed lines, draft
 state, and incident idempotency; deterministic branch names make partial writes recoverable.
-[Issue #10](https://github.com/alexlopashev/cloudflare-agents-demo/issues/10) is next: it completes
-local delivery and optional Colima parity. The milestone and native blocked-by issue graph remain the
-executable delivery plan.
+Native bootstrap now reaches the complete local E2E, and the optional Colima lane reproduces the same
+dev task through one isolated Linux service with ownership-safe recovery and teardown.
+[Issue #11](https://github.com/alexlopashev/cloudflare-agents-demo/issues/11) is next: it deploys the
+public Cloudflare demonstration and populates remote evidence. The milestone and native blocked-by
+issue graph remain the executable delivery plan.
 
 ## License
 
