@@ -1,0 +1,78 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { handlePlatformRequest, type PlatformBindings } from "../../workers/platform/src/routing";
+
+function createBindings() {
+  const healthFetch = vi.fn(async (request: Request) => {
+    void request;
+    return Response.json({ service: "health-service", status: "ok" });
+  });
+  const assetFetch = vi.fn(async (request: Request) =>
+    Response.json({ path: new URL(request.url).pathname }),
+  );
+  const bindings = {
+    AI: {},
+    ASSETS: { fetch: assetFetch },
+    CF_VERSION_METADATA: { id: "version-good" },
+    HEALTH_SERVICE: { fetch: healthFetch },
+    MODEL_MODE: "fake",
+  } as unknown as PlatformBindings;
+
+  return { assetFetch, bindings, healthFetch };
+}
+
+describe("platform routing", () => {
+  it("delegates health requests to the auxiliary Worker binding", async () => {
+    const { bindings, healthFetch } = createBindings();
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/api/health"),
+      bindings,
+      async () => null,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ service: "health-service", status: "ok" });
+    expect(healthFetch).toHaveBeenCalledOnce();
+    expect(new URL(healthFetch.mock.calls[0]?.[0].url ?? "").pathname).toBe("/health");
+  });
+
+  it.each(["/app", "/investigator"])("serves %s through the asset binding", async (path) => {
+    const { assetFetch, bindings } = createBindings();
+    const response = await handlePlatformRequest(
+      new Request(`https://example.test${path}`),
+      bindings,
+      async () => null,
+    );
+
+    expect(await response.json()).toEqual({ path });
+    expect(assetFetch).toHaveBeenCalledOnce();
+  });
+
+  it("gives the Agents protocol ownership of /agents routes", async () => {
+    const { assetFetch, bindings, healthFetch } = createBindings();
+    const agentResponse = new Response("agent-route");
+    const routeAgent = vi.fn(async () => agentResponse);
+
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/agents/regression-surgeon/session"),
+      bindings,
+      routeAgent,
+    );
+
+    expect(response).toBe(agentResponse);
+    expect(routeAgent).toHaveBeenCalledOnce();
+    expect(assetFetch).not.toHaveBeenCalled();
+    expect(healthFetch).not.toHaveBeenCalled();
+  });
+
+  it("reports runtime mode and immutable version metadata", async () => {
+    const { bindings } = createBindings();
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/api/runtime"),
+      bindings,
+      async () => null,
+    );
+
+    expect(await response.json()).toEqual({ mode: "fake", versionId: "version-good" });
+  });
+});

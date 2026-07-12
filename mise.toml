@@ -60,8 +60,12 @@ description = "Verify the local foundation and pinned tools"
 run = "pnpm run doctor"
 
 [tasks.dev]
-description = "Run the currently implemented local stack"
+description = "Run the credential-free Cloudflare local stack"
 run = "pnpm dev"
+
+[tasks."dev:live"]
+description = "Build and run locally with the live Workers AI binding"
+run = "pnpm dev:live"
 
 [tasks.teardown]
 description = "Remove project-owned local runtime state"

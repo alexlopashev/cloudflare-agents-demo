@@ -8,24 +8,67 @@
     "node": "24.18.0",
     "pnpm": "10.34.5"
   },
+  "dependencies": {
+    "@cloudflare/ai-chat": "0.9.3",
+    "@cloudflare/shell": "0.4.1",
+    "@cloudflare/think": "0.12.1",
+    "@ai-sdk/provider": "3.0.14",
+    "agents": "0.17.3",
+    "ai": "6.0.224",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "workers-ai-provider": "3.3.1",
+    "zod": "4.4.3"
+  },
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "build": "vite build",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
-    "dev": "node scripts/dev.mjs",
+    "dev": "vite dev",
+    "dev:live": "pnpm build && wrangler dev --config wrangler.live.jsonc",
     "doctor": "node scripts/doctor.mjs",
-    "e2e": "node --test tests/foundation/*.test.mjs",
+    "e2e": "node --test tests/foundation/*.test.mjs && node scripts/e2e.mjs",
     "format": "biome format --write . && markdownlint-cli2 --fix '**/*.md' '#node_modules' '#.local'",
     "format:check": "biome format . && markdownlint-cli2 '**/*.md' '#node_modules' '#.local'",
     "lint": "biome lint . && node scripts/lint-shells.mjs",
-    "test": "node --test tests/**/*.test.mjs",
-    "test:watch": "node --test --watch tests/**/*.test.mjs",
+    "test": "pnpm test:foundation && pnpm test:platform",
+    "test:foundation": "node --test tests/**/*.test.mjs",
+    "test:platform": "vitest run --config vitest.config.ts && node scripts/run-worker-tests.mjs",
+    "test:watch": "vitest --config vitest.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.3",
+    "@cloudflare/vite-plugin": "1.44.0",
+    "@cloudflare/vitest-pool-workers": "0.18.4",
+    "@cloudflare/workers-types": "5.20260711.1",
     "@types/node": "24.12.4",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.3",
     "markdownlint-cli2": "0.23.0",
     "typescript": "7.0.2",
-    "vitest": "4.1.10"
+    "vite": "8.1.4",
+    "vitest": "4.1.10",
+    "wrangler": "4.110.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "workerd"
+    ],
+    "ignoredBuiltDependencies": [
+      "@mongodb-js/zstd",
+      "core-js-pure",
+      "node-liblzma"
+    ],
+    "allowedDeprecatedVersions": {
+      "prebuild-install": "7.1.3"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@cloudflare/workers-types": "5"
+      }
+    }
   }
 }

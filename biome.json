@@ -1,7 +1,17 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.3/schema.json",
   "files": {
-    "includes": ["**", "!!node_modules", "!!.local", "!!.git", "!!LICENSE", "!!pnpm-lock.yaml"]
+    "includes": [
+      "**",
+      "!!node_modules",
+      "!!.local",
+      "!!.git",
+      "!!.wrangler",
+      "!!**/.wrangler",
+      "!!**/dist",
+      "!!LICENSE",
+      "!!pnpm-lock.yaml"
+    ]
   },
   "formatter": {
     "enabled": true,

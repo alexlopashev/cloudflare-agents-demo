@@ -5,8 +5,9 @@
     "checkJs": true,
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "noEmit": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
@@ -17,7 +18,20 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "ES2024",
-    "types": ["node"]
+    "jsx": "react-jsx",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["node", "@cloudflare/workers-types", "@cloudflare/vitest-pool-workers/types"]
   },
-  "include": ["scripts/**/*.mjs", "tests/**/*.mjs"]
+  "include": [
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "scripts/**/*.mjs",
+    "scripts/**/*.ts",
+    "tests/**/*.mjs",
+    "tests/**/*.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "vitest.worker.config.ts",
+    "workers/**/*.ts"
+  ]
 }
