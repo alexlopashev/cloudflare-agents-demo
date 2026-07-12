@@ -8,7 +8,9 @@ export default defineConfig({
       miniflare: {
         bindings: {
           GIT_SHA: "0000000000000000000000000000000000000000",
+          HEALTH_LOADING_MODE: "sequential",
           MODEL_MODE: "fake",
+          SCENARIO_CONTROL_ENABLED: "false",
         },
         compatibilityDate: "2026-07-11",
         compatibilityFlags: ["nodejs_compat"],

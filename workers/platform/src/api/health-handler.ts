@@ -1,5 +1,5 @@
 import { evidenceIdSchema } from "../../../../packages/contracts/src/health";
-import { createHealthAggregator } from "./health";
+import { createHealthAggregator, type HealthLoadingMode } from "./health";
 import type { SpanRecord, TraceRecord } from "../telemetry/store";
 
 type Fetcher = (request: Request) => Promise<Response>;
@@ -8,6 +8,7 @@ export type HealthApiOptions = {
   fetcher: Fetcher;
   releaseId: string;
   createTraceId: () => string;
+  loadingMode?: HealthLoadingMode;
   gitSha?: string;
   deployedAtMs?: number;
   now?: () => number;
@@ -113,6 +114,7 @@ export async function handleHealthApiRequest(
     const report = await createHealthAggregator({
       fetcher: options.fetcher,
       createTraceId: options.createTraceId,
+      ...(options.loadingMode === undefined ? {} : { loadingMode: options.loadingMode }),
       now,
       observeSpan: (span) => spans.push(span),
     }).collect({ interactionId: parsed.data, releaseId: options.releaseId });

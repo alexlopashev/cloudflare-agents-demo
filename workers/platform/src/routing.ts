@@ -1,4 +1,6 @@
 import { handleHealthApiRequest } from "./api/health-handler";
+import { generateRegressionScenario } from "./scenario/generator";
+import { handleScenarioRequest } from "./scenario/handler";
 import { createTelemetryStore } from "./telemetry/store";
 import { handleUxTelemetryRequest } from "./telemetry/ux-handler";
 
@@ -11,8 +13,10 @@ export interface PlatformBindings {
   ASSETS: FetchBinding;
   CF_VERSION_METADATA: { id: string; timestamp?: string };
   GIT_SHA: string;
+  HEALTH_LOADING_MODE: "concurrent" | "sequential";
   HEALTH_SERVICE: FetchBinding;
   MODEL_MODE: string;
+  SCENARIO_CONTROL_ENABLED: string;
   TELEMETRY_DB: D1Database;
 }
 
@@ -32,6 +36,7 @@ export async function handlePlatformRequest(
     ReturnType<typeof createTelemetryStore>,
     "recordTrace" | "recordUxEvent"
   > = createTelemetryStore,
+  scenarioRequestHandler: typeof handleScenarioRequest = handleScenarioRequest,
 ): Promise<Response> {
   const url = new URL(request.url);
 
@@ -39,6 +44,26 @@ export async function handlePlatformRequest(
     const response = await routeAgent(request, bindings);
     if (response) return response;
     return new Response("Agent route not found", { status: 404 });
+  }
+
+  if (url.pathname.startsWith("/api/scenario/")) {
+    const store = createTelemetryStore(bindings.TELEMETRY_DB);
+    return scenarioRequestHandler(request, {
+      enabled: bindings.SCENARIO_CONTROL_ENABLED === "true",
+      resetScenarioEvidence: store.resetScenarioEvidence,
+      generate: (input) =>
+        generateRegressionScenario({
+          ...input,
+          sampleCount: 20,
+          fetcher: (healthRequest) => bindings.HEALTH_SERVICE.fetch(healthRequest),
+          createTraceId: () => crypto.randomUUID(),
+          now: Date.now,
+          store,
+        }),
+      compareReleases: store.compareReleases,
+      findSlowTraces: store.findSlowTraces,
+      getTraceDetail: store.getTraceDetail,
+    });
   }
 
   if (url.pathname === "/api/health") {
@@ -49,6 +74,7 @@ export async function handlePlatformRequest(
       releaseId: bindings.CF_VERSION_METADATA.id,
       createTraceId,
       gitSha: bindings.GIT_SHA,
+      loadingMode: bindings.HEALTH_LOADING_MODE,
       deployedAtMs: Number.isFinite(deployedAtMs) ? deployedAtMs : 0,
       recordTrace: store.recordTrace,
     });

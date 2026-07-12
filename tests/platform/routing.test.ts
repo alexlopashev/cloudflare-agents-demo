@@ -24,7 +24,9 @@ function createBindings() {
     },
     GIT_SHA: "0123456789abcdef0123456789abcdef01234567",
     HEALTH_SERVICE: { fetch: healthFetch },
+    HEALTH_LOADING_MODE: "sequential",
     MODEL_MODE: "fake",
+    SCENARIO_CONTROL_ENABLED: "false",
     TELEMETRY_DB: {},
   } as unknown as PlatformBindings;
 
@@ -145,5 +147,28 @@ describe("platform routing", () => {
       mode: "fake",
       versionId: "version-good",
     });
+  });
+
+  it("routes scenario controls through their local-only boundary", async () => {
+    const { bindings } = createBindings();
+    bindings.SCENARIO_CONTROL_ENABLED = "true";
+    const scenarioHandler = vi.fn(
+      async (_request: Request, _options: unknown) => new Response(null, { status: 204 }),
+    );
+    const response = await handlePlatformRequest(
+      new Request("http://localhost/api/scenario/reset", {
+        method: "POST",
+        headers: { "x-local-scenario-key": "regression-surgeon-local-only" },
+      }),
+      bindings,
+      async () => null,
+      undefined,
+      undefined,
+      scenarioHandler,
+    );
+
+    expect(response.status).toBe(204);
+    expect(scenarioHandler).toHaveBeenCalledOnce();
+    expect(scenarioHandler.mock.calls[0]?.[1]).toMatchObject({ enabled: true });
   });
 });
