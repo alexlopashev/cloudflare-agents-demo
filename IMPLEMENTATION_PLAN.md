@@ -886,7 +886,11 @@ Acceptance criteria:
 
 ### Phase 9 — Release readiness
 
-Tracked by issue #12.
+Status: complete in issue #12. A clean macOS ARM64 worktree installed the repository-local toolchain
+through the documented sourced bootstrap, applied migrations, regenerated measured evidence, and
+passed aggregate checks, build, and full local E2E. The public no-login routes and deployed keyed
+smoke were reverified. README, wiki, plan, milestone dependencies, instructions, skills, limitations,
+and evidence were reconciled.
 
 - Re-run a native clean-room bootstrap and the public reviewer walkthrough.
 - Reconcile README, wiki, implementation plan, issues, blockers, instructions, and skills.
