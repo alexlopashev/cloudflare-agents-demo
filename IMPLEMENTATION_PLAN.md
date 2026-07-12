@@ -82,11 +82,10 @@ References:
 ├── workers/
 │   ├── platform/
 │   │   └── src/
-│   │       ├── agent/            # Think subclass and prompt
+│   │       ├── agent/            # Think model, evidence tools, and services
 │   │       ├── api/              # Supervised application API
 │   │       ├── github/           # GitHub REST adapter
 │   │       ├── telemetry/        # D1 ingestion and queries
-│   │       ├── tools/            # Think tool definitions
 │   │       └── index.ts
 │   │
 │   └── health-service/
@@ -384,9 +383,10 @@ Workers AI bindings execute remotely even when Worker code runs locally. The pro
 - Tool calls and results
 - Telemetry investigation
 - Commit and PR correlation
-- Draft PR proposal validation
+- Structured evidence, inference, confidence, and unknowns
 
-It never writes to GitHub.
+It never calls a live model or writes to GitHub. Phase 6 extends this path with a validated draft-PR
+preview and explicit approval behavior.
 
 `mise run dev:live` uses Workers AI and requires Cloudflare authentication.
 
@@ -675,9 +675,12 @@ The deterministic fake model follows a realistic investigation path:
 2. Inspect representative slow traces.
 3. Inspect the first bad release.
 4. Read the relevant implementation.
-5. Produce a PR proposal.
+5. Produce a structured evidence report.
 
-The E2E runner starts the actual local Worker stack, waits for readiness, loads fixtures, submits the investigation prompt, observes tool events, and validates the final report and PR preview.
+The E2E runner starts the actual local Worker stack, waits for readiness, loads measured scenario
+evidence, submits the investigation prompt through a local-only Durable Object RPC, observes the five
+tool events, and validates the trace-, commit-, and PR-backed report. Browser verification separately
+proves the rendered timeline and reconnect behavior. Phase 6 adds the guarded PR preview.
 
 End-to-end tests must not depend on a live LLM, GitHub writes, wall-clock sleeps, unseeded randomness, or shared mutable remote data.
 
@@ -774,10 +777,12 @@ Acceptance criteria:
 
 ### Phase 5 — Read-only agent
 
-Status: the bounded repository connector prerequisite is complete in issue #7. It resolves configured
-release evidence to immutable commits and associated PR metadata, returns explicit unknowns, and
-enforces repository, path, pagination, response, diff, file-count, and byte limits. The phase remains
-open until issue #8 wires this connector and telemetry into the Project Think tool loop.
+Status: complete in issues #7 and #8. The bounded connector resolves release evidence to immutable
+commits and associated PR metadata. Project Think exposes only `query_telemetry`, `inspect_release`,
+and `read_repo_files`, enforces eight tool steps and deterministic result truncation, and produces a
+report that separates evidence, inference, confidence, and unknowns. The credential-free E2E runs a
+real five-step Think turn over measured local D1 evidence; Worker and browser checks prove durable
+reconnection without duplicate messages or tool effects.
 
 - Add `query_telemetry`, `inspect_release`, and `read_repo_files`.
 - Configure prompt, step limits, and tool-event UI.
@@ -836,9 +841,10 @@ Implement in this order:
 1. Working supervised regression
 2. Measured telemetry
 3. Correct read-only investigation
-4. Public deployment
-5. Guarded draft PR
-6. Optional Colima/Compose lane
+4. Guarded draft PR
+5. Reproducible local delivery
+6. Public deployment
+7. Optional Colima/Compose lane
 
 Do not delay the working public investigation for container polish.
 

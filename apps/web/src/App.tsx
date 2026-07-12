@@ -4,6 +4,7 @@ import { useAgent } from "agents/react";
 
 import { Deployboard } from "./deployboard/Deployboard";
 import { resolveExperience } from "./experience";
+import { buildToolTimeline, ToolTimeline } from "./investigator/ToolTimeline";
 
 function messageText(parts: ReadonlyArray<{ type: string; text?: string }>): string {
   return parts
@@ -16,6 +17,7 @@ function Investigator() {
   const [input, setInput] = useState("");
   const agent = useAgent({ agent: "RegressionSurgeonAgent", name: "local-investigation" });
   const { messages, sendMessage, status } = useAgentChat({ agent });
+  const toolTimeline = buildToolTimeline(messages);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,6 +52,7 @@ function Investigator() {
         </dl>
       </section>
       <section className="panel chat-panel" aria-label="Investigation chat">
+        <ToolTimeline entries={toolTimeline} />
         <div className="messages" aria-live="polite">
           {messages.length === 0 ? (
             <p className="empty-state">Describe a latency regression to begin.</p>

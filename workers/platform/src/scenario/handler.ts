@@ -17,7 +17,12 @@ export type ScenarioControlOptions = {
     candidateReleaseId: string;
     windowMs: number;
   }): Promise<unknown>;
-  findSlowTraces(input: { sinceMs: number; untilMs: number; limit: number }): Promise<
+  findSlowTraces(input: {
+    releaseId?: string;
+    sinceMs: number;
+    untilMs: number;
+    limit: number;
+  }): Promise<
     {
       traceId: string;
       releaseId: string;
@@ -27,6 +32,7 @@ export type ScenarioControlOptions = {
   getTraceDetail(traceId: string): Promise<{
     criticalPath: { durationMs: number; spanIds: string[] };
   } | null>;
+  investigate(): Promise<unknown>;
 };
 
 const seedSchema = z
@@ -91,6 +97,11 @@ export async function handleScenarioRequest(
     await options.resetScenarioEvidence(scenarioReleaseIds);
     return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
   }
+  if (path === "/api/scenario/investigate") {
+    return Response.json(await options.investigate(), {
+      headers: { "cache-control": "no-store" },
+    });
+  }
   if (path !== "/api/scenario/reseed") return hiddenResponse();
   const mediaType = (request.headers.get("content-type") ?? "")
     .split(";", 1)[0]
@@ -119,6 +130,7 @@ export async function handleScenarioRequest(
     windowMs: 60_000,
   });
   const slowTraces = await options.findSlowTraces({
+    releaseId: scenario.degradedReleaseId,
     sinceMs: baselineDeployedAtMs,
     untilMs: degradedDeployedAtMs + 60_000,
     limit: 10,

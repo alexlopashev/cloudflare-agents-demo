@@ -35,7 +35,8 @@ The initial product supports one controlled repository, one supervised applicati
 Bootstrap is repository-local and affects only the active shell. It never edits a shell profile, installs tools into a system path, or inherits tools from a user's global mise configuration.
 
 The reproducible foundation, Cloudflare application skeleton, supervised Deployboard, immutable
-repository connector, and measured telemetry pipeline are implemented.
+repository connector, measured telemetry pipeline, and evidence-driven investigation are
+implemented.
 
 ### Bootstrap
 
@@ -81,7 +82,8 @@ concurrent and 20 measured sequential interactions in local D1; `mise run scenar
 only those two releases. `mise run dev:live` builds the app and starts the same Worker with the
 explicit Workers AI configuration; Cloudflare authentication and remote usage apply. `mise run e2e`
 verifies both public routes, runtime metadata, the auxiliary service binding, trace persistence,
-correlated browser telemetry, and statistically distinguishable scenario evidence.
+correlated browser telemetry, statistically distinguishable scenario evidence, and a credential-free
+five-step Project Think investigation that cites the measured trace, immutable commit, and source PR.
 
 ## Engineering method
 
@@ -102,14 +104,15 @@ After every meaningful change, contributors must reassess and align the implemen
 
 ## Current status
 
-Phases 1 through 4 are implemented and verified locally. The real known-good release at `cf25e52`
+Phases 1 through 5 are implemented and verified locally. The real known-good release at `cf25e52`
 loads three service checks concurrently; the current scenario release intentionally serializes them
 to reduce simultaneous downstream pressure. A deterministic reseed measured local p75 latency near
-128 ms versus 381 ms and stored sequential service spans on the degraded critical path. Reset and
-reseed are idempotent and preserve unrelated telemetry. The independently sequenced read-only
-repository connector is also complete. Issue #8 is next: it wires telemetry and immutable repository
-evidence into the Project Think investigation loop. The milestone and native blocked-by issue graph
-remain the executable delivery plan.
+127 ms versus 380 ms and stored sequential service spans on the degraded critical path. Reset and
+reseed are idempotent and preserve unrelated telemetry. Project Think now performs five bounded
+evidence steps, reports measured latency and trace evidence, resolves commit `d591869…` and PR #19,
+and survives browser reconnection without duplicating messages or tool effects. Issue #9 is next: it
+adds the approval-gated, guarded draft-PR remediation path. The milestone and native blocked-by issue
+graph remain the executable delivery plan.
 
 ## License
 

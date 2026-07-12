@@ -1,0 +1,97 @@
+import { stepCountIs, streamText, tool } from "ai";
+import { z } from "zod";
+import { describe, expect, it } from "vitest";
+
+import { createDeterministicModel } from "../../workers/platform/src/agent/model";
+
+describe("deterministic investigation model", () => {
+  it("performs the complete evidence sequence before producing a structured report", async () => {
+    const calls: string[] = [];
+    const tools = {
+      query_telemetry: tool({
+        inputSchema: z.object({ operation: z.string() }).passthrough(),
+        execute: async (input) => {
+          calls.push(`query_telemetry:${input.operation}`);
+          if (input.operation === "find-slow-traces") {
+            return [{ traceId: "regression-trace-7", releaseId: "regression-sequential" }];
+          }
+          if (input.operation === "inspect-trace") {
+            return { trace: { traceId: "regression-trace-7" }, criticalPath: { durationMs: 443 } };
+          }
+          return { status: "ready", baseline: { p75Ms: 111 }, candidate: { p75Ms: 443 } };
+        },
+      }),
+      inspect_release: tool({
+        inputSchema: z.object({ versionId: z.string() }),
+        execute: async () => {
+          calls.push("inspect_release");
+          return {
+            release: { commitSha: "d591869a8ef995f1835ef80152f4de085b10255b" },
+            pullRequest: { status: "found", number: 19 },
+          };
+        },
+      }),
+      read_repo_files: tool({
+        inputSchema: z.object({ commitSha: z.string(), paths: z.array(z.string()) }),
+        execute: async () => {
+          calls.push("read_repo_files");
+          return [{ content: 'loadingMode === "sequential"' }];
+        },
+      }),
+    };
+    const result = streamText({
+      model: createDeterministicModel(),
+      prompt: "Investigate the measured latency regression.",
+      tools,
+      stopWhen: stepCountIs(8),
+    });
+
+    const text = await result.text;
+
+    expect(calls).toEqual([
+      "query_telemetry:compare-releases",
+      "query_telemetry:find-slow-traces",
+      "query_telemetry:inspect-trace",
+      "inspect_release",
+      "read_repo_files",
+    ]);
+    expect(text).toMatch(/Evidence[\s\S]+regression-trace-7[\s\S]+d591869[\s\S]+PR #19/);
+    expect(text).toMatch(/baseline-concurrent p75 111 ms; regression-sequential p75 443 ms/);
+    expect(text).toMatch(/critical path is approximately 443 ms/);
+    expect(text).toMatch(/Inference[\s\S]+Confidence[\s\S]+Unknowns/);
+    expect(calls.indexOf("read_repo_files")).toBeLessThan(text.length);
+  });
+
+  it("keeps bounded tool failure visible and refuses a confident causal claim", async () => {
+    const error = {
+      status: "error" as const,
+      code: "unavailable" as const,
+      message: "Evidence source is unavailable." as const,
+    };
+    const tools = {
+      query_telemetry: tool({
+        inputSchema: z.object({}).passthrough(),
+        execute: async () => error,
+      }),
+      inspect_release: tool({
+        inputSchema: z.object({}).passthrough(),
+        execute: async () => error,
+      }),
+      read_repo_files: tool({
+        inputSchema: z.object({}).passthrough(),
+        execute: async () => error,
+      }),
+    };
+    const result = streamText({
+      model: createDeterministicModel(),
+      prompt: "Investigate the measured latency regression.",
+      tools,
+      stopWhen: stepCountIs(8),
+    });
+
+    const text = await result.text;
+
+    expect(text).toMatch(/Evidence[\s\S]+unavailable[\s\S]+Confidence[\s\S]+Low/i);
+    expect(text).not.toMatch(/likely cause/i);
+  });
+});

@@ -23,6 +23,8 @@ function createBindings() {
       timestamp: "2026-07-11T12:00:00.000Z",
     },
     GIT_SHA: "0123456789abcdef0123456789abcdef01234567",
+    GITHUB_OWNER: "alexlopashev",
+    GITHUB_REPO: "cloudflare-agents-demo",
     HEALTH_SERVICE: { fetch: healthFetch },
     HEALTH_LOADING_MODE: "sequential",
     MODEL_MODE: "fake",

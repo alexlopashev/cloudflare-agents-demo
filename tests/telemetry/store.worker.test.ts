@@ -245,4 +245,15 @@ describe("D1 telemetry store", () => {
     ).all<{ release_id: string }>();
     expect(releases.results).toEqual([{ release_id: "unrelated-release" }]);
   });
+
+  it("resolves immutable release attribution without exposing SQL", async () => {
+    const store = createTelemetryStore(env.TELEMETRY_DB);
+    await store.recordTrace(traceInput("release-a", 1_000, 1, 120));
+
+    await expect(store.getReleaseAttribution("release-a")).resolves.toEqual({
+      versionId: "release-a",
+      commitSha: gitSha,
+    });
+    await expect(store.getReleaseAttribution("missing-release")).resolves.toBeNull();
+  });
 });
