@@ -4,8 +4,10 @@ import { handlePlatformRequest, type PlatformBindings } from "../../workers/plat
 
 function createBindings() {
   const healthFetch = vi.fn(async (request: Request) => {
-    void request;
-    return Response.json({ service: "health-service", status: "ok" });
+    return Response.json({
+      serviceId: request.headers.get("x-service-id"),
+      status: "healthy",
+    });
   });
   const assetFetch = vi.fn(async (request: Request) =>
     Response.json({ path: new URL(request.url).pathname }),
@@ -25,15 +27,29 @@ describe("platform routing", () => {
   it("delegates health requests to the auxiliary Worker binding", async () => {
     const { bindings, healthFetch } = createBindings();
     const response = await handlePlatformRequest(
-      new Request("https://example.test/api/health"),
+      new Request("https://example.test/api/health", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ interactionId: "interaction-1" }),
+      }),
       bindings,
       async () => null,
+      () => "trace-1",
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ service: "health-service", status: "ok" });
-    expect(healthFetch).toHaveBeenCalledOnce();
-    expect(new URL(healthFetch.mock.calls[0]?.[0].url ?? "").pathname).toBe("/health");
+    expect(await response.json()).toMatchObject({
+      interactionId: "interaction-1",
+      traceId: "trace-1",
+      releaseId: "version-good",
+      outcome: "healthy",
+    });
+    expect(healthFetch).toHaveBeenCalledTimes(3);
+    expect(healthFetch.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual([
+      "/health/api",
+      "/health/jobs",
+      "/health/storage",
+    ]);
   });
 
   it.each(["/app", "/investigator"])("serves %s through the asset binding", async (path) => {

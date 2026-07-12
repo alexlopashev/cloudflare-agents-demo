@@ -3,7 +3,7 @@ export interface FetchBinding {
 }
 
 export interface PlatformBindings {
-  AI: Ai;
+  AI?: Ai;
   ASSETS: FetchBinding;
   CF_VERSION_METADATA: { id: string };
   HEALTH_SERVICE: FetchBinding;
@@ -19,6 +19,7 @@ export async function handlePlatformRequest(
   request: Request,
   bindings: PlatformBindings,
   routeAgent: AgentRequestRouter,
+  createTraceId: () => string = () => crypto.randomUUID(),
 ): Promise<Response> {
   const url = new URL(request.url);
 
@@ -29,9 +30,11 @@ export async function handlePlatformRequest(
   }
 
   if (url.pathname === "/api/health") {
-    return bindings.HEALTH_SERVICE.fetch(
-      new Request("https://health-service.internal/health", { headers: request.headers }),
-    );
+    return handleHealthApiRequest(request, {
+      fetcher: (healthRequest) => bindings.HEALTH_SERVICE.fetch(healthRequest),
+      releaseId: bindings.CF_VERSION_METADATA.id,
+      createTraceId,
+    });
   }
 
   if (url.pathname === "/api/runtime") {
@@ -47,3 +50,4 @@ export async function handlePlatformRequest(
 
   return new Response("Not found", { status: 404 });
 }
+import { handleHealthApiRequest } from "./api/health-handler";
