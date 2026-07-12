@@ -159,6 +159,7 @@ Read [AGENTS.md](AGENTS.md) before changing code. It defines the required TDD wo
 ## Project documentation
 
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
+- [v1 release-readiness evidence](RELEASE_READINESS.md)
 - [GitHub wiki](https://github.com/alexlopashev/cloudflare-agents-demo/wiki)
 - [v1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/1)
 - [Delivery tracking issue](https://github.com/alexlopashev/cloudflare-agents-demo/issues/1)
@@ -185,9 +186,10 @@ dev task through one isolated Linux service with ownership-safe recovery and tea
 deployment measured p75 latency of 245 ms for Cloudflare version `0c2432d5…` and 538 ms for version
 `01e7b428…`; the deployed Workers AI smoke traced that regression to commit `d591869…` and PR #19,
 read the pinned source, produced a structured report, and validated a no-write remediation preview.
-[Issue #12](https://github.com/alexlopashev/cloudflare-agents-demo/issues/12) is next: final clean-room
-release-readiness verification. The milestone and native blocked-by issue graph remain the executable
-delivery plan.
+The v1 clean-room bootstrap, local E2E, production build, four-platform CI, and public reviewer smoke
+are recorded in [the release-readiness evidence](RELEASE_READINESS.md). Known limitations and deferred
+work are explicit there. The milestone and native blocked-by issue graph remain the executable
+delivery record.
 
 ## License
 
