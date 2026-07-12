@@ -115,6 +115,16 @@ else
   exit 1
 fi
 
-if confirm "Run foundation verification now?"; then
+if confirm "Apply repository-local D1 migrations?"; then
+  "$MISE_INSTALL_PATH" exec -- pnpm db:migrate:local
+fi
+
+if confirm "Load deterministic local fixtures?"; then
+  "$MISE_INSTALL_PATH" exec -- pnpm scenario:reseed
+fi
+
+if confirm "Run the build and complete local verification suite now?"; then
   "$MISE_INSTALL_PATH" exec -- pnpm check
+  "$MISE_INSTALL_PATH" exec -- pnpm build
+  "$MISE_INSTALL_PATH" exec -- pnpm e2e
 fi

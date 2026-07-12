@@ -110,10 +110,11 @@ References:
 │   ├── teardown
 │   ├── teardown.fish
 │   ├── teardown.nu
+│   ├── container.mjs
 │   ├── doctor.mjs
-│   ├── dev.mjs
 │   ├── e2e.mjs
-│   └── seed-demo.mjs
+│   ├── agent-e2e.mjs
+│   └── scenario.mjs
 ├── compose.yaml
 ├── Containerfile
 ├── mise.toml
@@ -299,8 +300,7 @@ Subsequent terminal sessions can source a lightweight activation script without 
 
 Default teardown removes only repository-owned state:
 
-- Managed local Worker processes
-- Project Compose resources
+- Project Compose containers, network, and named volumes
 - The named `polylane-take-home` Colima profile, if created by this project
 - `.wrangler/state`
 - `.local/run`
@@ -314,14 +314,9 @@ It must not:
 - Delete `.dev.vars`
 - Remove the repository-local mise installation unless explicitly requested
 
-An explicit purge mode may additionally remove:
-
-- `node_modules`
-- Repository-local mise tools and cache
-- Generated local secrets
-- Project container volumes
-
-Every additional removal requires confirmation.
+The explicit `--purge-toolchain` flag additionally removes the repository-local `.local` mise tools
+and cache. Supplying that flag is the affirmative purge request; the default path preserves the
+toolchain and `node_modules`.
 
 Because bootstrap affects only the current shell, teardown does not attempt to edit the parent shell's environment. The current session ends naturally or can run the matching mise deactivation command.
 
@@ -348,6 +343,7 @@ Complex orchestration lives in cross-platform `.mjs` files rather than shell-spe
 | `mise run e2e` | Run credential-free deterministic end-to-end verification |
 | `mise run container:up` | Start the optional Colima/Compose lane |
 | `mise run container:down` | Stop project container resources |
+| `mise run container:check` | Validate the Compose model without starting a VM |
 | `mise run auth:cloudflare` | Run Cloudflare authentication and status checks |
 | `mise run auth:github` | Run GitHub authentication and status checks |
 | `mise run deploy` | Apply remote migrations and deploy |
@@ -404,12 +400,20 @@ The task uses a named Colima profile:
 polylane-take-home
 ```
 
+It starts the profile with `--activate=false`, addresses its socket directly, and therefore never
+changes the user's active Docker context. The profile receives 4 GiB of memory for Vite plus
+`workerd`, and the exact repository root is mounted explicitly so clones outside the home directory
+remain visible to the VM. Repository markers distinguish a profile created by this project from one
+that already existed. `container:down` preserves the profile and Linux-owned volumes for reuse; full
+teardown removes volumes and deletes only a profile carrying valid project ownership evidence. Failed
+starts retain their markers for deterministic recovery.
+
 Compose runs the same mise task inside one Linux container. It is not a separate application architecture.
 
 The container will:
 
-- Install mise into the container image.
-- Run `mise install`.
+- Install and checksum-verify mise 2026.6.14 in the container image.
+- Install the locked Node runtime through mise.
 - Install pnpm dependencies into Linux-owned volumes.
 - Start the same Vite and `workerd` stack.
 - Expose the same local URL.
@@ -670,6 +674,14 @@ Tests should assert structured messages, tool calls, state transitions, and evid
 - Profile files remain byte-for-byte unchanged
 - Bootstrap and teardown remain idempotent
 
+#### Container contract tests
+
+- The resolved Compose model contains exactly one application service.
+- Linux-owned volumes cover dependencies, mise runtime data, and Worker state.
+- Up/down are repeatable and never change the active Docker context.
+- Pre-existing profiles are preserved, while project-created profiles have explicit ownership.
+- Partial starts retain enough evidence for a later scoped teardown.
+
 #### End-to-end verification
 
 The deterministic fake model follows a realistic investigation path:
@@ -823,7 +835,31 @@ Acceptance criteria:
 - Repeated runs do not generate duplicate PRs.
 - Disallowed changes are rejected server-side.
 
-### Phase 7 — Deployment and evidence
+### Phase 7 — Reproducible local delivery
+
+Status: complete in issue #10. Bootstrap now offers consented D1 migration, deterministic fixture,
+build, and full credential-free verification stages. The native `mise run dev` and `mise run e2e`
+paths remain canonical. The optional Compose model runs the same dev task in one Linux service, uses
+named volumes for every platform-specific or generated path, and is validated on all four CI host
+pairs. A dedicated Colima profile is addressed without changing Docker context; runtime and ownership
+markers make repeated down, full teardown, pre-existing-profile preservation, and partial-start
+recovery deterministic.
+
+- Complete bootstrap through migration, fixtures, build, and local E2E.
+- Add one-service Colima/Compose parity.
+- Add lifecycle, isolation, failure-recovery, and Compose-model tests.
+- Document native and optional-container operations.
+
+Acceptance criteria:
+
+- Native setup remains the primary, credential-free path.
+- Container setup invokes the same `mise run dev` behavior.
+- Host `node_modules` and generated Worker state never enter the Linux container.
+- Reset and teardown affect only resources carrying verified project identity.
+
+### Phase 8 — Deployment and evidence
+
+Tracked by issue #11.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -838,16 +874,18 @@ Acceptance criteria:
 - The demo requires no reviewer login.
 - The README documents recovery if telemetry or the PR needs resetting.
 
-### Phase 8 — Optional container lane and documentation
+### Phase 9 — Release readiness
 
-- Add Colima/Compose verification.
-- Finish README, architecture, tradeoffs, and limitations.
-- Document reset and demo-recovery procedures.
+Tracked by issue #12.
+
+- Re-run a native clean-room bootstrap and the public reviewer walkthrough.
+- Reconcile README, wiki, implementation plan, issues, blockers, instructions, and skills.
+- Publish limitations, recovery guidance, and final verification evidence.
 
 Acceptance criteria:
 
-- Native setup remains the primary path.
-- Container setup reproduces it without changing application behavior.
+- Every documented command and walkthrough matches the delivered artifact.
+- All local and deployed gates pass, and the tracking issue can close with linked evidence.
 
 ## 17. Scope gates
 
@@ -859,9 +897,7 @@ Implement in this order:
 4. Guarded draft PR
 5. Reproducible local delivery
 6. Public deployment
-7. Optional Colima/Compose lane
-
-Do not delay the working public investigation for container polish.
+7. Release-readiness reconciliation
 
 Explicit non-goals:
 

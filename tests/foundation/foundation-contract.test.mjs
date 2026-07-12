@@ -278,7 +278,11 @@ test("approved bootstrap delegates every pinned setup step through repository-lo
   assert.match(calls, /exec node -- corepack prepare pnpm@10\.34\.5 --activate/);
   assert.match(calls, /exec node -- corepack enable pnpm/);
   assert.match(calls, /exec -- pnpm install --frozen-lockfile/);
+  assert.match(calls, /exec -- pnpm db:migrate:local/);
+  assert.match(calls, /exec -- pnpm scenario:reseed/);
   assert.match(calls, /exec -- pnpm check/);
+  assert.match(calls, /exec -- pnpm build/);
+  assert.match(calls, /exec -- pnpm e2e/);
 });
 
 test("teardown removes only project-owned runtime paths", () => {

@@ -4,6 +4,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   root: "apps/web",
+  server: { host: process.env.REGRESSION_SURGEON_DEV_HOST ?? "127.0.0.1" },
   plugins: [
     react(),
     cloudflare({
