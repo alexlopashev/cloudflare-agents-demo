@@ -202,6 +202,23 @@ test("container down preserves a named Colima profile that was already running",
   assert.equal(existsSync(runtime.state), true);
 });
 
+test("full teardown removes retained data after an earlier container down", () => {
+  const root = mkdtempSync(join(tmpdir(), "regression-surgeon-container-later-teardown-"));
+  createProject(root);
+  const runtime = createFakeRuntime(root);
+  const env = runtimeEnvironment(root, runtime);
+
+  runContainer(root, "up", env);
+  runContainer(root, "down", env);
+  runContainer(root, "teardown", env);
+
+  const calls = readFileSync(runtime.log, "utf8");
+  assert.equal((calls.match(/colima\|start/g) ?? []).length, 1);
+  assert.match(calls, new RegExp(`colima\\|delete --profile ${profileName} --force --data`));
+  assert.equal(existsSync(join(root, ".local/state/container-profile.json")), false);
+  assert.equal(existsSync(join(root, "colima-home", profileName)), false);
+});
+
 test("container down fails closed for an unrecognized ownership marker", () => {
   const root = mkdtempSync(join(tmpdir(), "regression-surgeon-container-marker-"));
   createProject(root);
@@ -240,7 +257,7 @@ test("teardown delegates owned container cleanup before removing runtime state",
   const calls = readFileSync(runtime.log, "utf8");
   assert.match(calls, /compose\|.* down --remove-orphans --volumes/);
   assert.match(calls, new RegExp(`colima\\|stop --profile ${profileName}`));
-  assert.match(calls, new RegExp(`colima\\|delete --profile ${profileName} --force`));
+  assert.match(calls, new RegExp(`colima\\|delete --profile ${profileName} --force --data`));
   assert.equal(existsSync(join(root, ".local/run")), false);
   assert.equal(existsSync(join(root, ".local/state/container-profile.json")), false);
 });
@@ -261,7 +278,7 @@ test("a failed Compose start keeps enough ownership evidence for safe recovery",
   runContainer(root, "teardown", runtimeEnvironment(root, runtime));
   const calls = readFileSync(runtime.log, "utf8");
   assert.match(calls, /compose\|.* down --remove-orphans --volumes/);
-  assert.match(calls, new RegExp(`colima\\|delete --profile ${profileName} --force`));
+  assert.match(calls, new RegExp(`colima\\|delete --profile ${profileName} --force --data`));
   assert.equal(existsSync(join(root, ".local/run/container.json")), false);
   assert.equal(existsSync(join(root, ".local/state/container-profile.json")), false);
 });

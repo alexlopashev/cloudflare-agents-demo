@@ -204,7 +204,7 @@ function teardown(root, runtimeMarkerPath, ownershipMarkerPath, colimaHome) {
       compose(root, colimaHome, ["down", "--remove-orphans", "--volumes"]);
       run("colima", ["stop", "--profile", profile]);
     }
-    run("colima", ["delete", "--profile", profile, "--force"]);
+    run("colima", ["delete", "--profile", profile, "--force", "--data"]);
   }
   rmSync(ownershipMarkerPath);
   console.log("Project-owned Colima profile removed.");
