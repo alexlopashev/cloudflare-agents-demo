@@ -51,6 +51,25 @@ describe("agent evidence services", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("uses SHA-gated repository evidence for a credential-free Workers AI deployment", async () => {
+    const store = telemetryStore();
+    const fetcher = vi.fn(async () => new Response("network must not be used"));
+    const services = createAgentEvidenceServices({
+      mode: "workers-ai",
+      repository: { owner: "alexlopashev", repo: "cloudflare-agents-demo" },
+      store,
+      fetcher,
+    });
+
+    await expect(
+      services.repository.inspectRelease("01e7b428-ac68-4875-b178-b1fcf7874a7c"),
+    ).resolves.toMatchObject({
+      release: { commitSha: regressionSha },
+      pullRequest: { status: "found", number: 19 },
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("fails closed for mismatched fake attribution and unsupported modes", async () => {
     const store = telemetryStore();
     store.getReleaseAttribution.mockResolvedValue({

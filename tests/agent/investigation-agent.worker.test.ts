@@ -117,11 +117,12 @@ describe("RegressionSurgeonAgent investigation policy", () => {
       actionApproval: true,
       actions: ["create_draft_pr"],
       activeTools: ["query_telemetry", "inspect_release", "read_repo_files", "create_draft_pr"],
-      maxSteps: 8,
+      maxSteps: 16,
       prompt: expect.stringMatching(/evidence[\s\S]+inference[\s\S]+confidence[\s\S]+unknowns/i),
       tools: ["query_telemetry", "inspect_release", "read_repo_files"],
       workspaceBash: false,
     });
+    expect(policy.prompt).toMatch(/do not repeat a successful tool operation/i);
     expect(policy.prompt).not.toMatch(
       /Never claim\s+that a write, deployment, rollback, or pull-request creation occurred\./,
     );
@@ -254,7 +255,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     expect(afterEviction).toEqual(beforeEviction.messages);
   });
 
-  it("stops a deterministic runaway model path at eight tool steps", async () => {
+  it("stops a deterministic runaway model path at sixteen tool steps", async () => {
     const id = env.REGRESSION_SURGEON_AGENT.idFromName("runaway-step-limit");
     const stub = env.REGRESSION_SURGEON_AGENT.get(id);
 
@@ -270,7 +271,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
       },
     );
 
-    expect(toolTypes).toHaveLength(8);
+    expect(toolTypes).toHaveLength(16);
     expect(new Set(toolTypes)).toEqual(new Set(["tool-query_telemetry"]));
   });
 

@@ -77,6 +77,11 @@ mise run scenario:reseed
 mise run dev
 mise run dev:live
 mise run e2e
+mise run auth:cloudflare
+mise run deploy
+mise run deploy:smoke
+mise run deploy:refresh
+mise run deploy:reset
 mise run container:check
 mise run container:up
 mise run container:down
@@ -96,6 +101,32 @@ correlated browser telemetry, statistically distinguishable scenario evidence, a
 five-step Project Think investigation that cites the measured trace, immutable commit, and source PR.
 It also validates an evidence-rich draft-PR preview against base/blob freshness, path, byte, line, and
 changed-line limits while proving that local mode performs no GitHub writes.
+
+### Public Cloudflare deployment
+
+The current no-login demo is
+[regression-surgeon-platform.alexlopashev.workers.dev](https://regression-surgeon-platform.alexlopashev.workers.dev/app).
+Authenticate once with `mise run auth:cloudflare`, then run `mise run deploy`. The task reuses or
+creates only the named D1 database, builds both Workers and the web app, applies remote migrations,
+deploys a concurrent baseline and measures 20 interactions, deploys the sequential regression and
+measures 20 interactions, then deploys the public GLM 4.7 Flash investigator with those exact
+Cloudflare version IDs and trace timestamps. It finishes with a keyed smoke that verifies the two
+public routes, runtime metadata, the five-step Workers AI evidence chain, a validated remediation
+preview, and the default-off GitHub write posture.
+
+`mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
+`mise run deploy:smoke` repeats the deployed verification. `mise run deploy:reset` deletes only the
+two release IDs recorded by the last deployment from remote D1; run `mise run deploy` afterward to
+recreate evidence. The deployment state and smoke key live under ignored `.local/deploy` with
+owner-only permissions. The public app requires no login and creates a durable session identifier in
+browser-local storage.
+
+No GitHub token is copied from `gh` or uploaded by the deployment task. In the credential-free public
+posture, D1 resolves the real Worker version to an immutable commit SHA and the repository boundary
+serves the committed, SHA-gated fixture for commit/PR/source evidence. A supplied scoped token selects
+the live read connector; external writes additionally require `GITHUB_WRITE_ENABLED=true`, explicit
+Project Think approval, and all repository/path/SHA/blob/size gates. The published demo deliberately
+keeps that flag false, so approval yields a preview and cannot create or merge a pull request.
 
 ### Optional Colima parity
 
@@ -138,7 +169,7 @@ After every meaningful change, contributors must reassess and align the implemen
 
 ## Current status
 
-Phases 1 through 7 are implemented and verified locally. The real known-good release at `cf25e52`
+Phases 1 through 8 are implemented and verified locally and on Cloudflare. The real known-good release at `cf25e52`
 loads three service checks concurrently; the current scenario release intentionally serializes them
 to reduce simultaneous downstream pressure. A deterministic reseed measured local p75 latency near
 127 ms versus 380 ms and stored sequential service spans on the degraded critical path. Reset and
@@ -150,10 +181,13 @@ by default, produces a credential-free local preview, and exposes no merge capab
 adapter restricts repository, path, SHA/blob freshness, request/response size, changed lines, draft
 state, and incident idempotency; deterministic branch names make partial writes recoverable.
 Native bootstrap now reaches the complete local E2E, and the optional Colima lane reproduces the same
-dev task through one isolated Linux service with ownership-safe recovery and teardown.
-[Issue #11](https://github.com/alexlopashev/cloudflare-agents-demo/issues/11) is next: it deploys the
-public Cloudflare demonstration and populates remote evidence. The milestone and native blocked-by
-issue graph remain the executable delivery plan.
+dev task through one isolated Linux service with ownership-safe recovery and teardown. The public
+deployment measured p75 latency of 245 ms for Cloudflare version `0c2432d5…` and 538 ms for version
+`01e7b428…`; the deployed Workers AI smoke traced that regression to commit `d591869…` and PR #19,
+read the pinned source, produced a structured report, and validated a no-write remediation preview.
+[Issue #12](https://github.com/alexlopashev/cloudflare-agents-demo/issues/12) is next: final clean-room
+release-readiness verification. The milestone and native blocked-by issue graph remain the executable
+delivery plan.
 
 ## License
 

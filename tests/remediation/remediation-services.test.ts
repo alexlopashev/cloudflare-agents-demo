@@ -21,12 +21,21 @@ describe("agent remediation services", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("requires an explicit supported mode and a token for the live write adapter", () => {
+  it("allows credential-free Workers AI previews but requires a token before enabling writes", async () => {
     const repository = { owner: "alexlopashev", repo: "cloudflare-agents-demo" };
 
+    const preview = createAgentRemediationService({
+      mode: "workers-ai",
+      repository,
+      writeEnabled: false,
+    });
+    await expect(preview.execute(remediationFixture)).resolves.toMatchObject({
+      status: "preview",
+      writesPerformed: false,
+    });
     expect(() =>
-      createAgentRemediationService({ mode: "workers-ai", repository, writeEnabled: false }),
-    ).toThrow();
+      createAgentRemediationService({ mode: "workers-ai", repository, writeEnabled: true }),
+    ).toThrow(/token/i);
     expect(() =>
       createAgentRemediationService({ mode: "unsupported", repository, writeEnabled: false }),
     ).toThrow("Unsupported remediation mode");

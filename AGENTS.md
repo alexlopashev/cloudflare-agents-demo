@@ -86,6 +86,16 @@ Do not assert exact natural-language output from a live model. Assert structured
 - Draft PR creation is idempotent per incident.
 - The agent has no merge capability.
 
+### Remote deployment
+
+- `mise run deploy` must preserve distinct baseline, degraded, and investigator Worker version IDs.
+- Remote evidence must come from measured requests and retain immutable version-to-SHA attribution.
+- Public deployment keeps GitHub writes disabled and never copies a local `gh` credential implicitly.
+- Deployment smoke endpoints require an unguessable repository-local key and return 404 without it.
+- Reset operations may delete only the two measured release IDs recorded in validated deployment state.
+- A deployed gate is not complete until public routes, runtime metadata, Workers AI evidence tools,
+  structured report, no-write remediation preview, and write posture all pass.
+
 ### Bootstrap and teardown
 
 - Supported hosts are macOS and Linux on ARM64 and x64.

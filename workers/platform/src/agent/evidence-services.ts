@@ -45,7 +45,7 @@ function createDeterministicRepository(
         );
       }
       const commitUrl = `https://github.com/${repository.owner}/${repository.repo}/commit/${release.commitSha}`;
-      if (versionId !== "regression-sequential") {
+      if (release.commitSha !== regressionSource.commitSha) {
         return {
           release,
           commit: {
@@ -119,6 +119,12 @@ export function createAgentEvidenceServices(
   }
   if (options.mode !== "workers-ai") {
     throw new TypeError(`Unsupported evidence mode: ${options.mode}`);
+  }
+  if (options.token === undefined) {
+    return {
+      telemetry: options.store,
+      repository: createDeterministicRepository(options.store, options.repository),
+    };
   }
 
   const api = new GitHubFetchApi({

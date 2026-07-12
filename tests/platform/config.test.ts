@@ -46,6 +46,11 @@ describe("Cloudflare configuration", () => {
       },
     ]);
     expect(config.vars).toEqual({
+      DEPLOY_SMOKE_KEY: "",
+      EVIDENCE_BASELINE_RELEASE_ID: "",
+      EVIDENCE_DEGRADED_RELEASE_ID: "",
+      EVIDENCE_DEGRADED_SINCE_MS: "",
+      EVIDENCE_DEGRADED_UNTIL_MS: "",
       GIT_SHA: "0000000000000000000000000000000000000000",
       GITHUB_OWNER: "alexlopashev",
       GITHUB_REPO: "cloudflare-agents-demo",
@@ -61,6 +66,11 @@ describe("Cloudflare configuration", () => {
 
     expect(config.ai).toEqual({ binding: "AI" });
     expect(config.vars).toEqual({
+      DEPLOY_SMOKE_KEY: "",
+      EVIDENCE_BASELINE_RELEASE_ID: "",
+      EVIDENCE_DEGRADED_RELEASE_ID: "",
+      EVIDENCE_DEGRADED_SINCE_MS: "",
+      EVIDENCE_DEGRADED_UNTIL_MS: "",
       GIT_SHA: "0000000000000000000000000000000000000000",
       GITHUB_OWNER: "alexlopashev",
       GITHUB_REPO: "cloudflare-agents-demo",

@@ -54,7 +54,7 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
   readonly #allowedPaths: ReadonlySet<string>;
   readonly #owner: string;
   readonly #repo: string;
-  readonly #token: string;
+  readonly #token: string | undefined;
 
   constructor(options: GitHubDraftPrApiOptions) {
     const repository = repositorySchema.safeParse(options.repository);
@@ -67,9 +67,7 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
       options.allowedPaths.length > 16 ||
       options.allowedPaths.some((path) => !isSafeRepositoryPath(path)) ||
       new Set(options.allowedPaths).size !== options.allowedPaths.length ||
-      options.token === undefined ||
-      options.token.length < 1 ||
-      options.token.length > 4_096
+      (options.token !== undefined && (options.token.length < 1 || options.token.length > 4_096))
     ) {
       throw inputError("GitHub draft-PR API policy is invalid.");
     }
@@ -309,11 +307,17 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
       `/repos/${encodeURIComponent(this.#owner)}/${encodeURIComponent(this.#repo)}${endpoint}`,
       "https://api.github.com",
     );
+    if (method === "POST" && this.#token === undefined) {
+      throw new RepositoryConnectorError(
+        "not-allowed",
+        "GitHub writes require an explicit scoped token.",
+      );
+    }
     const headers = new Headers({
       accept: "application/vnd.github+json",
-      authorization: `Bearer ${this.#token}`,
       "x-github-api-version": "2022-11-28",
     });
+    if (this.#token !== undefined) headers.set("authorization", `Bearer ${this.#token}`);
     let serializedBody: string | undefined;
     if (body !== undefined) {
       serializedBody = JSON.stringify(body);

@@ -6,11 +6,13 @@ import { Deployboard } from "./deployboard/Deployboard";
 import { resolveExperience } from "./experience";
 import { ApprovalPanel, buildApprovalRequests } from "./investigator/ApprovalPanel";
 import { messageText } from "./investigator/messages";
+import { resolveInvestigatorSession } from "./investigator/session";
 import { buildToolTimeline, ToolTimeline } from "./investigator/ToolTimeline";
 
 function Investigator() {
   const [input, setInput] = useState("");
-  const agent = useAgent({ agent: "RegressionSurgeonAgent", name: "local-investigation" });
+  const [session] = useState(() => resolveInvestigatorSession(window.localStorage));
+  const agent = useAgent({ agent: "RegressionSurgeonAgent", name: session });
   const { addToolApprovalResponse, messages, sendMessage, status } = useAgentChat({ agent });
   const toolTimeline = buildToolTimeline(messages);
   const approvals = buildApprovalRequests(messages);
@@ -33,16 +35,16 @@ function Investigator() {
         <h1>Regression Investigator</h1>
         <p className="lede">
           Ask for an evidence-backed investigation. The session is durable and reconnects to the
-          same local case without duplicating messages.
+          same browser-local case without duplicating messages. No account or login is required.
         </p>
         <dl>
           <div className="composer-fields">
             <dt>Mode</dt>
-            <dd>Credential-free fake model</dd>
+            <dd>Project Think investigator</dd>
           </div>
           <div>
             <dt>Session</dt>
-            <dd>local-investigation</dd>
+            <dd>{session}</dd>
           </div>
           <div>
             <dt>State</dt>

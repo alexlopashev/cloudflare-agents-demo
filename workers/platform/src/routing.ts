@@ -12,6 +12,11 @@ export interface PlatformBindings {
   AI?: Ai;
   ASSETS: FetchBinding;
   CF_VERSION_METADATA: { id: string; timestamp?: string };
+  DEPLOY_SMOKE_KEY?: string;
+  EVIDENCE_BASELINE_RELEASE_ID: string;
+  EVIDENCE_DEGRADED_RELEASE_ID: string;
+  EVIDENCE_DEGRADED_SINCE_MS: string;
+  EVIDENCE_DEGRADED_UNTIL_MS: string;
   GIT_SHA: string;
   GITHUB_OWNER: string;
   GITHUB_REPO: string;
@@ -115,7 +120,40 @@ export async function handlePlatformRequest(
       mode: bindings.MODEL_MODE,
       versionId: bindings.CF_VERSION_METADATA.id,
       gitSha: bindings.GIT_SHA,
+      evidence: {
+        baselineReleaseId: bindings.EVIDENCE_BASELINE_RELEASE_ID,
+        degradedReleaseId: bindings.EVIDENCE_DEGRADED_RELEASE_ID,
+      },
+      githubWriteEnabled: bindings.GITHUB_WRITE_ENABLED === "true",
     });
+  }
+
+  if (url.pathname === "/api/deployment-smoke") {
+    if (
+      request.method !== "POST" ||
+      bindings.DEPLOY_SMOKE_KEY === undefined ||
+      bindings.DEPLOY_SMOKE_KEY.length < 20 ||
+      request.headers.get("x-deploy-smoke-key") !== bindings.DEPLOY_SMOKE_KEY
+    ) {
+      return Response.json({ error: { code: "not-found" } }, { status: 404 });
+    }
+    let session: unknown;
+    try {
+      const body = (await request.json()) as { session?: unknown };
+      session = body.session;
+    } catch {
+      return Response.json({ error: { code: "invalid-request" } }, { status: 400 });
+    }
+    if (typeof session !== "string" || !/^deployment-smoke-[A-Za-z0-9-]{10,100}$/.test(session)) {
+      return Response.json({ error: { code: "invalid-request" } }, { status: 400 });
+    }
+    const agent = bindings.REGRESSION_SURGEON_AGENT.getByName(session) as unknown as {
+      runLocalInvestigation(): Promise<{ toolTypes: string[]; report: string }>;
+      runLocalRemediationPreview(): Promise<unknown>;
+    };
+    const investigation = await agent.runLocalInvestigation();
+    const remediation = await agent.runLocalRemediationPreview();
+    return Response.json({ investigation, remediation });
   }
 
   if (url.pathname === "/app" || url.pathname === "/investigator") {

@@ -58,4 +58,16 @@ describe("RegressionSurgeonAgent persistence", () => {
 
     expect(modelId).toBe("regression-surgeon-deterministic");
   });
+
+  it("bounds a complete evidence chain without truncating the final report", async () => {
+    const id = env.REGRESSION_SURGEON_AGENT.idFromName("step-budget-contract");
+    const stub = env.REGRESSION_SURGEON_AGENT.get(id);
+
+    const maxSteps = await runInDurableObject<RegressionSurgeonAgent, number>(
+      stub,
+      async (instance) => instance.maxSteps,
+    );
+
+    expect(maxSteps).toBe(16);
+  });
 });
