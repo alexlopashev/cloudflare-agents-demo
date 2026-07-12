@@ -9,6 +9,7 @@ export default defineConfig({
     cloudflare({
       configPath: "../../wrangler.jsonc",
       inspectorPort: false,
+      persistState: { path: "../../.wrangler/state" },
       auxiliaryWorkers: [{ configPath: "../../workers/health-service/wrangler.jsonc" }],
     }),
   ],

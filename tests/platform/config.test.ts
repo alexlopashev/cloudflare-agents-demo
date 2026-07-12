@@ -9,6 +9,10 @@ function readJson(path: string) {
   return JSON.parse(readFileSync(resolve(repositoryRoot, path), "utf8")) as Record<string, unknown>;
 }
 
+function readText(path: string) {
+  return readFileSync(resolve(repositoryRoot, path), "utf8");
+}
+
 describe("Cloudflare configuration", () => {
   it.each([
     "wrangler.jsonc",
@@ -41,13 +45,32 @@ describe("Cloudflare configuration", () => {
         service: "regression-surgeon-health-service",
       },
     ]);
-    expect(config.vars).toEqual({ MODEL_MODE: "fake" });
+    expect(config.vars).toEqual({
+      GIT_SHA: "0000000000000000000000000000000000000000",
+      MODEL_MODE: "fake",
+    });
   });
 
   it("isolates the remote Workers AI binding in the explicit live environment", () => {
     const config = readJson("wrangler.live.jsonc");
 
     expect(config.ai).toEqual({ binding: "AI" });
-    expect(config.vars).toEqual({ MODEL_MODE: "workers-ai" });
+    expect(config.vars).toEqual({
+      GIT_SHA: "0000000000000000000000000000000000000000",
+      MODEL_MODE: "workers-ai",
+    });
+  });
+
+  it("shares one local persistence directory and applies D1 migrations before serving", () => {
+    expect(readText("vite.config.ts")).toContain('persistState: { path: "../../.wrangler/state" }');
+    const packageJson = readJson("package.json") as {
+      scripts?: Record<string, string>;
+    };
+    expect(packageJson.scripts?.["db:migrate:local"]).toBe(
+      "CI=1 wrangler d1 migrations apply regression-surgeon-telemetry --local --config wrangler.jsonc",
+    );
+    expect(packageJson.scripts?.dev).toBe("pnpm db:migrate:local && vite dev");
+    expect(packageJson.scripts?.e2e).toContain("pnpm db:migrate:local");
+    expect(readText("mise.toml")).toContain('[tasks."db:migrate"]');
   });
 });

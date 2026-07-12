@@ -5,12 +5,15 @@ import {
   type HealthReport,
   type ServiceHealthResult,
 } from "../../../../packages/contracts/src/health";
+import type { SpanRecord } from "../telemetry/store";
 
 type Fetcher = (request: Request) => Promise<Response>;
 
 export type HealthAggregatorOptions = {
   fetcher: Fetcher;
   createTraceId: () => string;
+  now?: () => number;
+  observeSpan?: (span: SpanRecord) => void;
 };
 
 export class HealthAggregationError extends Error {
@@ -35,6 +38,8 @@ export function createHealthAggregator(options: HealthAggregatorOptions) {
 
       const services = await Promise.all(
         serviceDefinitions.map(async (service): Promise<ServiceHealthResult> => {
+          const startedAtMs = (options.now ?? Date.now)();
+          let spanStatus: SpanRecord["status"] = "error";
           const unavailable = {
             ...service,
             status: "unavailable" as const,
@@ -63,9 +68,25 @@ export function createHealthAggregator(options: HealthAggregatorOptions) {
             }
             const health = dependencyHealthResponseSchema.safeParse(payload);
             if (!health.success || health.data.serviceId !== service.id) return unavailable;
+            spanStatus = "success";
             return { ...service, status: "healthy" };
           } catch {
             return unavailable;
+          } finally {
+            const endedAtMs = (options.now ?? Date.now)();
+            try {
+              options.observeSpan?.({
+                traceId: traceId.data,
+                spanId: `service-${service.id}`,
+                parentSpanId: "request",
+                serviceId: service.id,
+                startedAtMs,
+                durationMs: Math.max(0, endedAtMs - startedAtMs),
+                status: spanStatus,
+              });
+            } catch {
+              // Instrumentation observers cannot alter the health result.
+            }
           }
         }),
       );

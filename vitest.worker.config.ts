@@ -6,7 +6,10 @@ export default defineConfig({
     cloudflareTest({
       main: "./workers/platform/src/index.ts",
       miniflare: {
-        bindings: { MODEL_MODE: "fake" },
+        bindings: {
+          GIT_SHA: "0000000000000000000000000000000000000000",
+          MODEL_MODE: "fake",
+        },
         compatibilityDate: "2026-07-11",
         compatibilityFlags: ["nodejs_compat"],
         d1Databases: ["TELEMETRY_DB"],
@@ -20,6 +23,6 @@ export default defineConfig({
     }),
   ],
   test: {
-    include: ["tests/platform/**/*.worker.test.ts"],
+    include: ["tests/**/*.worker.test.ts"],
   },
 });

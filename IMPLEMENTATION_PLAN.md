@@ -458,20 +458,19 @@ Primary D1 tables:
 
 ```text
 releases
-  version_id, git_sha, deployed_at, source_pr
+  release_id, git_sha, deployed_at_ms
 
 ux_events
-  id, occurred_at, metric, duration_ms,
-  route, trace_id, version_id, git_sha
+  event_id, interaction_id, trace_id, release_id,
+  metric_name, duration_ms, outcome, recorded_at_ms
 
 traces
-  trace_id, started_at, duration_ms,
-  status, route, version_id, git_sha
+  trace_id, interaction_id, release_id,
+  started_at_ms, duration_ms, outcome
 
 spans
-  span_id, trace_id, parent_span_id,
-  service, operation, offset_ms,
-  duration_ms, status, error
+  trace_id, span_id, parent_span_id, service_id,
+  started_at_ms, duration_ms, status
 ```
 
 Telemetry comes from measured application requests:
@@ -728,10 +727,10 @@ Acceptance criteria:
 
 ### Phase 3 — Supervised application
 
-Status: the known-good Deployboard experience is complete in issue #4. One browser refresh fans out
-to three concurrent auxiliary Worker checks, preserves stable service order, returns bounded partial
-failures, and carries interaction, trace, and Worker release identifiers. Browser performance
-storage lands in issue #5; the intentional sequential regression and repeatable scenario remain in
+Status: the known-good Deployboard experience is complete in issues #4 and #5. One browser refresh
+fans out to three concurrent auxiliary Worker checks, preserves stable service order, returns bounded
+partial failures, carries interaction, trace, Worker release, and Git identifiers, and records the
+browser-ready measurement. The intentional sequential regression and repeatable scenario remain in
 issue #6.
 
 - Build Deployboard.
@@ -745,6 +744,12 @@ Acceptance criteria:
 - Both browser and server measurements carry release metadata.
 
 ### Phase 4 — Telemetry
+
+Status: the telemetry foundation is complete in issue #5. D1 stores immutable releases, UX events,
+traces, and spans from real application requests. Fixed query methods enforce time, row, and
+serialized-result bounds; comparisons use equivalent release-relative windows and minimum samples;
+trace detail handles missing parents and overlapping spans. Issue #6 supplies the baseline and
+regression traffic needed to demonstrate first-bad-release selection end to end.
 
 - Add D1 migrations.
 - Record UX events, traces, spans, and releases.

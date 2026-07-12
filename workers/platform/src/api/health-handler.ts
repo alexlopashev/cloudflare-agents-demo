@@ -1,5 +1,6 @@
 import { evidenceIdSchema } from "../../../../packages/contracts/src/health";
 import { createHealthAggregator } from "./health";
+import type { SpanRecord, TraceRecord } from "../telemetry/store";
 
 type Fetcher = (request: Request) => Promise<Response>;
 
@@ -7,6 +8,14 @@ export type HealthApiOptions = {
   fetcher: Fetcher;
   releaseId: string;
   createTraceId: () => string;
+  gitSha?: string;
+  deployedAtMs?: number;
+  now?: () => number;
+  recordTrace?: (input: {
+    release: { releaseId: string; gitSha: string; deployedAtMs: number };
+    trace: TraceRecord;
+    spans: readonly SpanRecord[];
+  }) => Promise<void>;
 };
 
 const bodyLimit = 2_048;
@@ -98,10 +107,47 @@ export async function handleHealthApiRequest(
   }
 
   try {
+    const now = options.now ?? Date.now;
+    const startedAtMs = now();
+    const spans: SpanRecord[] = [];
     const report = await createHealthAggregator({
       fetcher: options.fetcher,
       createTraceId: options.createTraceId,
+      now,
+      observeSpan: (span) => spans.push(span),
     }).collect({ interactionId: parsed.data, releaseId: options.releaseId });
+    const endedAtMs = now();
+    const outcome =
+      report.outcome === "healthy" ? "success" : report.outcome === "partial" ? "partial" : "error";
+    if (options.recordTrace) {
+      await options.recordTrace({
+        release: {
+          releaseId: report.releaseId,
+          gitSha: options.gitSha ?? "",
+          deployedAtMs: options.deployedAtMs ?? 0,
+        },
+        trace: {
+          traceId: report.traceId,
+          interactionId: report.interactionId,
+          releaseId: report.releaseId,
+          startedAtMs,
+          durationMs: Math.max(0, endedAtMs - startedAtMs),
+          outcome,
+        },
+        spans: [
+          {
+            traceId: report.traceId,
+            spanId: "request",
+            parentSpanId: null,
+            serviceId: "platform",
+            startedAtMs,
+            durationMs: Math.max(0, endedAtMs - startedAtMs),
+            status: outcome === "error" ? "error" : "success",
+          },
+          ...spans,
+        ],
+      });
+    }
     return Response.json(report, { headers: { "cache-control": "no-store" } });
   } catch {
     return errorResponse(500, "health-unavailable", "Health report could not be created.");

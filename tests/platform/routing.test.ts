@@ -12,20 +12,35 @@ function createBindings() {
   const assetFetch = vi.fn(async (request: Request) =>
     Response.json({ path: new URL(request.url).pathname }),
   );
+  const recordTrace = vi.fn(async () => undefined);
+  const recordUxEvent = vi.fn(async () => undefined);
+  const telemetryStoreFactory = vi.fn(() => ({ recordTrace, recordUxEvent }));
   const bindings = {
     AI: {},
     ASSETS: { fetch: assetFetch },
-    CF_VERSION_METADATA: { id: "version-good" },
+    CF_VERSION_METADATA: {
+      id: "version-good",
+      timestamp: "2026-07-11T12:00:00.000Z",
+    },
+    GIT_SHA: "0123456789abcdef0123456789abcdef01234567",
     HEALTH_SERVICE: { fetch: healthFetch },
     MODEL_MODE: "fake",
+    TELEMETRY_DB: {},
   } as unknown as PlatformBindings;
 
-  return { assetFetch, bindings, healthFetch };
+  return {
+    assetFetch,
+    bindings,
+    healthFetch,
+    recordTrace,
+    recordUxEvent,
+    telemetryStoreFactory,
+  };
 }
 
 describe("platform routing", () => {
   it("delegates health requests to the auxiliary Worker binding", async () => {
-    const { bindings, healthFetch } = createBindings();
+    const { bindings, healthFetch, recordTrace, telemetryStoreFactory } = createBindings();
     const response = await handlePlatformRequest(
       new Request("https://example.test/api/health", {
         method: "POST",
@@ -35,6 +50,7 @@ describe("platform routing", () => {
       bindings,
       async () => null,
       () => "trace-1",
+      telemetryStoreFactory,
     );
 
     expect(response.status).toBe(200);
@@ -50,6 +66,41 @@ describe("platform routing", () => {
       "/health/jobs",
       "/health/storage",
     ]);
+    expect(recordTrace).toHaveBeenCalledOnce();
+    expect(recordTrace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        release: {
+          releaseId: "version-good",
+          gitSha: "0123456789abcdef0123456789abcdef01234567",
+          deployedAtMs: Date.parse("2026-07-11T12:00:00.000Z"),
+        },
+      }),
+    );
+  });
+
+  it("persists the fixed UX telemetry contract through D1", async () => {
+    const { bindings, recordUxEvent, telemetryStoreFactory } = createBindings();
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/api/telemetry/ux", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          interactionId: "interaction-1",
+          traceId: "trace-1",
+          releaseId: "version-good",
+          metricName: "service_grid_ready_ms",
+          durationMs: 125,
+          outcome: "success",
+        }),
+      }),
+      bindings,
+      async () => null,
+      () => "unused-trace",
+      telemetryStoreFactory,
+    );
+
+    expect(response.status).toBe(204);
+    expect(recordUxEvent).toHaveBeenCalledOnce();
   });
 
   it.each(["/app", "/investigator"])("serves %s through the asset binding", async (path) => {
@@ -89,6 +140,10 @@ describe("platform routing", () => {
       async () => null,
     );
 
-    expect(await response.json()).toEqual({ mode: "fake", versionId: "version-good" });
+    expect(await response.json()).toEqual({
+      gitSha: "0123456789abcdef0123456789abcdef01234567",
+      mode: "fake",
+      versionId: "version-good",
+    });
   });
 });
