@@ -25,16 +25,32 @@ describe("Deployboard refresh client", () => {
   it("posts the interaction and emits exactly one validated completion", async () => {
     const fetcher = vi.fn(async (_request: Request) => Response.json(report()));
     const emitCompletion = vi.fn();
+    let now = 1_000;
 
     await expect(
-      runDeployboardRefresh({ interactionId: "interaction-1", fetcher, emitCompletion }),
+      runDeployboardRefresh({
+        interactionId: "interaction-1",
+        fetcher,
+        emitCompletion,
+        now: () => (now += 25),
+      }),
     ).resolves.toEqual(report());
 
-    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher).toHaveBeenCalledTimes(2);
     const request = fetcher.mock.calls[0]?.[0];
     expect(request?.method).toBe("POST");
     expect(request?.headers.get("content-type")).toBe("application/json");
     expect(await request?.json()).toEqual({ interactionId: "interaction-1" });
+    const telemetryRequest = fetcher.mock.calls[1]?.[0];
+    expect(new URL(telemetryRequest?.url ?? "http://invalid").pathname).toBe("/api/telemetry/ux");
+    expect(await telemetryRequest?.json()).toEqual({
+      interactionId: "interaction-1",
+      traceId: "trace-1",
+      releaseId: "release-good",
+      metricName: "service_grid_ready_ms",
+      durationMs: 25,
+      outcome: "success",
+    });
     expect(emitCompletion).toHaveBeenCalledOnce();
     expect(emitCompletion).toHaveBeenCalledWith({ status: "completed", report: report() });
   });
@@ -124,5 +140,22 @@ describe("Deployboard refresh client", () => {
       }),
     ).resolves.toEqual(report());
     expect(emitCompletion).toHaveBeenCalledOnce();
+  });
+
+  it("does not delay or fail a valid refresh when UX telemetry rejects", async () => {
+    const fetcher = vi
+      .fn<(request: Request) => Promise<Response>>()
+      .mockResolvedValueOnce(Response.json(report()))
+      .mockRejectedValueOnce(new Error("telemetry unavailable"));
+
+    await expect(
+      runDeployboardRefresh({
+        interactionId: "interaction-1",
+        fetcher,
+        emitCompletion: vi.fn(),
+        now: vi.fn().mockReturnValueOnce(10).mockReturnValueOnce(42),
+      }),
+    ).resolves.toEqual(report());
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });

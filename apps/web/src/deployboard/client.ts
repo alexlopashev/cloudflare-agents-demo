@@ -18,6 +18,7 @@ export type DeployboardRefreshOptions = {
   interactionId: string;
   fetcher: Fetcher;
   emitCompletion: (completion: DeployboardCompletion) => void;
+  now?: () => number;
 };
 
 export class DeployboardRefreshError extends Error {
@@ -71,6 +72,8 @@ export async function runDeployboardRefresh(
   const interactionId = evidenceIdSchema.safeParse(options.interactionId);
   if (!interactionId.success) throw new DeployboardRefreshError("Health refresh failed.");
 
+  const now = options.now ?? performance.now.bind(performance);
+  const startedAtMs = now();
   let report: HealthReport;
   try {
     const origin = typeof location === "undefined" ? "http://localhost" : location.origin;
@@ -97,6 +100,26 @@ export async function runDeployboardRefresh(
     throw new DeployboardRefreshError("Health refresh failed.");
   }
 
+  const durationMs = Math.max(0, now() - startedAtMs);
+  const outcome =
+    report.outcome === "healthy" ? "success" : report.outcome === "partial" ? "partial" : "error";
+  const origin = typeof location === "undefined" ? "http://localhost" : location.origin;
+  void options
+    .fetcher(
+      new Request(new URL("/api/telemetry/ux", origin), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          interactionId: report.interactionId,
+          traceId: report.traceId,
+          releaseId: report.releaseId,
+          metricName: "service_grid_ready_ms",
+          durationMs,
+          outcome,
+        }),
+      }),
+    )
+    .catch(() => undefined);
   emitSafely(options.emitCompletion, { status: "completed", report });
   return report;
 }

@@ -61,4 +61,47 @@ describe("health API", () => {
       expect(JSON.stringify(body)).not.toContain("invalid trace");
     }
   });
+
+  it("records release-attributed request and service spans before returning evidence", async () => {
+    const recordTrace = vi.fn(async () => undefined);
+    let now = 1_000;
+    const response = await handleHealthApiRequest(
+      new Request("https://example.test/api/health", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ interactionId: "interaction-telemetry" }),
+      }),
+      {
+        fetcher: async (request) =>
+          Response.json({ serviceId: request.headers.get("x-service-id"), status: "healthy" }),
+        releaseId: "release-good",
+        createTraceId: () => "trace-telemetry",
+        gitSha: "0123456789abcdef0123456789abcdef01234567",
+        deployedAtMs: 900,
+        now: () => (now += 10),
+        recordTrace,
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(recordTrace).toHaveBeenCalledOnce();
+    expect(recordTrace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        release: {
+          releaseId: "release-good",
+          gitSha: "0123456789abcdef0123456789abcdef01234567",
+          deployedAtMs: 900,
+        },
+        trace: expect.objectContaining({
+          traceId: "trace-telemetry",
+          interactionId: "interaction-telemetry",
+          outcome: "success",
+        }),
+        spans: expect.arrayContaining([
+          expect.objectContaining({ spanId: "request", serviceId: "platform" }),
+          expect.objectContaining({ spanId: "service-api", serviceId: "api" }),
+        ]),
+      }),
+    );
+  });
 });

@@ -47,6 +47,10 @@ run = "pnpm test"
 description = "Run tests continuously during TDD"
 run = "pnpm test:watch"
 
+[tasks."db:migrate"]
+description = "Apply pending migrations to the repository-local D1 database"
+run = "pnpm db:migrate:local"
+
 [tasks.e2e]
 description = "Run the currently implemented credential-free E2E scope"
 run = "pnpm e2e"

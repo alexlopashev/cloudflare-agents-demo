@@ -15,7 +15,7 @@ try {
   }
   const result = await verifyLocalStack(`http://127.0.0.1:${address.port}`);
   console.log(
-    `Local stack verified: ${result.routes.join(", ")}; auxiliary health ${result.health}.`,
+    `Local stack verified: ${result.routes.join(", ")}; auxiliary health ${result.health}; telemetry ${result.telemetry}.`,
   );
 } finally {
   await server.close();

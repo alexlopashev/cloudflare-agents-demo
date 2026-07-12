@@ -4,6 +4,7 @@ export type StackVerification = {
   health: "healthy";
   mode: "fake";
   routes: ["/app", "/investigator"];
+  telemetry: "accepted";
 };
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -49,6 +50,24 @@ export async function verifyLocalStack(
     throw new Error("health report did not prove the auxiliary Worker aggregation");
   }
 
+  const telemetryResponse = await fetcher(
+    new Request(new URL("/api/telemetry/ux", baseUrl), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        interactionId: parsedHealth.data.interactionId,
+        traceId: parsedHealth.data.traceId,
+        releaseId: parsedHealth.data.releaseId,
+        metricName: "service_grid_ready_ms",
+        durationMs: 1,
+        outcome: "success",
+      }),
+    }),
+  );
+  if (telemetryResponse.status !== 204) {
+    throw new Error(`UX telemetry returned HTTP ${telemetryResponse.status}`);
+  }
+
   const runtime = await requireJson(
     await fetcher(new URL("/api/runtime", baseUrl)),
     "runtime metadata",
@@ -56,5 +75,5 @@ export async function verifyLocalStack(
   if (runtime.mode !== "fake")
     throw new Error("local runtime must default to credential-free fake mode");
 
-  return { health: "healthy", mode: "fake", routes: [...routes] };
+  return { health: "healthy", mode: "fake", routes: [...routes], telemetry: "accepted" };
 }

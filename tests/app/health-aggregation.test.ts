@@ -104,4 +104,43 @@ describe("health aggregation", () => {
     ).rejects.toMatchObject({ code: "invalid-input" });
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it("observes one bounded service span for every successful or failed binding call", async () => {
+    const spans: unknown[] = [];
+    let now = 100;
+    const aggregator = createHealthAggregator({
+      fetcher: async (request) => {
+        if (request.headers.get("x-service-id") === "jobs") throw new Error("private failure");
+        return healthy(request.headers.get("x-service-id") ?? "");
+      },
+      createTraceId: () => "trace-spans",
+      now: () => (now += 10),
+      observeSpan: (span) => spans.push(span),
+    });
+
+    await aggregator.collect({ interactionId: "interaction-spans", releaseId: "release-good" });
+
+    expect(spans).toHaveLength(3);
+    expect(spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          spanId: "service-api",
+          parentSpanId: "request",
+          serviceId: "api",
+          status: "success",
+          traceId: "trace-spans",
+        }),
+        expect.objectContaining({
+          spanId: "service-jobs",
+          parentSpanId: "request",
+          serviceId: "jobs",
+          status: "error",
+          traceId: "trace-spans",
+        }),
+      ]),
+    );
+    for (const span of spans as { durationMs: number }[]) {
+      expect(span.durationMs).toBeGreaterThanOrEqual(0);
+    }
+  });
 });

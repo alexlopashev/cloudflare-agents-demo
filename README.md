@@ -34,8 +34,8 @@ The initial product supports one controlled repository, one supervised applicati
 
 Bootstrap is repository-local and affects only the active shell. It never edits a shell profile, installs tools into a system path, or inherits tools from a user's global mise configuration.
 
-The reproducible foundation and Cloudflare application skeleton are implemented. The supervised
-Deployboard behavior arrives in the next delivery phase.
+The reproducible foundation, Cloudflare application skeleton, supervised Deployboard, immutable
+repository connector, and measured telemetry pipeline are implemented.
 
 ### Bootstrap
 
@@ -63,17 +63,20 @@ source ./scripts/bootstrap.nu
 mise run doctor
 mise run build
 mise run check
+mise run db:migrate
 mise run dev
 mise run dev:live
 mise run e2e
 mise run teardown
 ```
 
-`mise run dev` starts the complete local Cloudflare stack in deterministic fake-model mode, with no
-credentials or remote AI usage. It serves Deployboard at `/app`, the durable Project Think session at
-`/investigator`, and the platform APIs from one URL. `mise run dev:live` builds the app and starts the
-same Worker with the explicit Workers AI configuration; Cloudflare authentication and remote usage
-apply. `mise run e2e` verifies both public routes, runtime metadata, and the auxiliary service binding.
+`mise run dev` first applies pending migrations to the repository-local D1 database, then starts the
+complete Cloudflare stack in deterministic fake-model mode, with no credentials or remote AI usage.
+It serves Deployboard at `/app`, the durable Project Think session at `/investigator`, and the
+platform APIs from one URL. `mise run dev:live` builds the app and starts the same Worker with the
+explicit Workers AI configuration; Cloudflare authentication and remote usage apply. `mise run e2e`
+verifies both public routes, runtime metadata, the auxiliary service binding, trace persistence, and
+correlated browser telemetry.
 
 ## Engineering method
 
@@ -94,13 +97,14 @@ After every meaningful change, contributors must reassess and align the implemen
 
 ## Current status
 
-Phases 1 and 2 are implemented and verified locally: the mise-native foundation, React/Vite shell,
-platform Worker, auxiliary Worker, D1 binding, and persistent Project Think agent all run through the
-Cloudflare-native local stack. The independently sequenced read-only repository connector is also
-implemented with deterministic GitHub fixtures and strict immutable-read limits. Deployboard now
-performs its known-good concurrent service-health refresh with bounded partial failures and stable
-interaction, trace, and release evidence. Telemetry in issue #5 is next; the milestone and native
-blocked-by issue graph remain the executable delivery plan.
+Phases 1 and 2 and the known-good portions of phases 3 and 4 are implemented and verified locally.
+Deployboard emits one measured `service_grid_ready_ms` event per completed refresh; the platform
+records release-attributed request and service-binding spans in D1; and bounded queries compare
+equivalent release windows, rank slow traces, and reconstruct trace trees and critical paths. The
+independently sequenced read-only repository connector is also complete. Issue #6 is next: it adds the
+intentional sequential regression and deterministic good-versus-bad traffic scenario that exercises
+this telemetry foundation. The milestone and native blocked-by issue graph remain the executable
+delivery plan.
 
 ## License
 

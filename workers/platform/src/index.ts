@@ -7,7 +7,6 @@ import { handlePlatformRequest, type PlatformBindings } from "./routing";
 
 export interface PlatformEnvironment extends PlatformBindings {
   REGRESSION_SURGEON_AGENT: DurableObjectNamespace<RegressionSurgeonAgent>;
-  TELEMETRY_DB: D1Database;
 }
 
 export class RegressionSurgeonAgent extends Think<PlatformEnvironment> {

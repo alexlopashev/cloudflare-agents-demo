@@ -26,6 +26,18 @@ describe("local stack contract", () => {
           services: serviceDefinitions.map((service) => ({ ...service, status: "healthy" })),
         });
       }
+      if (path === "/api/telemetry/ux") {
+        expect(request.method).toBe("POST");
+        expect(await request.json()).toEqual({
+          interactionId: "e2e-interaction",
+          traceId: "e2e-trace",
+          releaseId: "local",
+          metricName: "service_grid_ready_ms",
+          durationMs: 1,
+          outcome: "success",
+        });
+        return new Response(null, { status: 204 });
+      }
       if (path === "/api/runtime") return Response.json({ mode: "fake", versionId: "local" });
       return new Response("Not found", { status: 404 });
     });
@@ -34,6 +46,7 @@ describe("local stack contract", () => {
       health: "healthy",
       mode: "fake",
       routes: ["/app", "/investigator"],
+      telemetry: "accepted",
     });
   });
 
