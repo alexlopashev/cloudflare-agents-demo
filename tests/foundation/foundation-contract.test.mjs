@@ -6,6 +6,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   writeFileSync,
@@ -62,11 +63,33 @@ test("foundation exposes the committed developer entrypoints", () => {
     "scripts/activate.fish",
     "scripts/activate.nu",
     "scripts/teardown",
-    "scripts/doctor.mjs",
+    "scripts/doctor.ts",
     ".github/workflows/ci.yml",
   ]) {
     assert.doesNotThrow(() => readRepo(path), `missing ${path}`);
   }
+});
+
+test("repository Node automation uses native TypeScript entrypoints", () => {
+  const scriptFiles = readdirSync(join(repoRoot, "scripts"));
+  assert.deepEqual(
+    scriptFiles.filter((path) => path.endsWith(".mjs")),
+    [],
+  );
+  for (const path of [
+    "agent-e2e.ts",
+    "container.ts",
+    "doctor.ts",
+    "e2e.ts",
+    "lint-shells.ts",
+    "run-worker-tests.ts",
+    "scenario.ts",
+  ]) {
+    assert.equal(scriptFiles.includes(path), true, `missing scripts/${path}`);
+  }
+  assert.doesNotMatch(readRepo("package.json"), /node scripts\/[^"]+\.mjs/);
+  assert.doesNotMatch(readRepo("mise.toml"), /node scripts\/[^"]+\.mjs/);
+  assert.match(readRepo("tsconfig.json"), /"erasableSyntaxOnly": true/);
 });
 
 test("mise pins the agreed runtime and external tools", () => {
@@ -91,7 +114,7 @@ test("mise pins the agreed runtime and external tools", () => {
 });
 
 test("shell syntax validation cannot invoke the real bootstrap", () => {
-  const syntaxGate = readRepo("scripts/lint-shells.mjs");
+  const syntaxGate = readRepo("scripts/lint-shells.ts");
 
   assert.match(syntaxGate, /REGRESSION_SURGEON_BOOTSTRAP_TEST/);
 });

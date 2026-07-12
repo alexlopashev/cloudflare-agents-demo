@@ -11,7 +11,7 @@ describe("scenario source attribution", () => {
       pullRequestNumber: 19,
     });
 
-    const script = await readFile(new URL("../../scripts/scenario.mjs", import.meta.url), "utf8");
+    const script = await readFile(new URL("../../scripts/scenario.ts", import.meta.url), "utf8");
     expect(script).not.toContain('execFileSync("git", ["rev-parse", "HEAD"]');
     expect(script).toContain("regressionSource.commitSha");
   });

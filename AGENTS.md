@@ -147,6 +147,10 @@ Do not bypass pinned tools with globally installed alternatives. Do not replace 
 ## TypeScript standards
 
 - Enable strict TypeScript compiler options.
+- Keep repository Node automation in `scripts/*.ts`; `.mjs` automation entrypoints are forbidden.
+- Directly executed scripts must use only erasable TypeScript syntax supported by the pinned Node 24
+  runtime. `erasableSyntaxOnly` stays enabled, and `tsc --noEmit` remains the type-safety gate because
+  Node strips types without checking them.
 - Preserve concrete types across Worker bindings, tools, D1 records, and GitHub responses.
 - Do not introduce `any` when `unknown` plus validation is possible.
 - Validate all external data at the boundary.

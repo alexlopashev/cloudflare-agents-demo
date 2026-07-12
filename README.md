@@ -33,6 +33,8 @@ The initial product supports one controlled repository, one supervised applicati
 - sh, Bash, Zsh, Fish, and Nu
 
 Bootstrap is repository-local and affects only the active shell. It never edits a shell profile, installs tools into a system path, or inherits tools from a user's global mise configuration.
+Repository automation uses `scripts/*.ts`, executed directly through Node 24.18's stable type
+stripping with `erasableSyntaxOnly`; `tsc --noEmit` remains the separate strict type-checking gate.
 
 The reproducible foundation, Cloudflare application skeleton, supervised Deployboard, immutable
 repository connector, measured telemetry pipeline, and evidence-driven investigation are

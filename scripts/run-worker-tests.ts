@@ -4,20 +4,18 @@ import { pathToFileURL } from "node:url";
 const auditedIncompleteMap =
   /^Sourcemap for ".*[\\/]node_modules[\\/]\.pnpm[\\/](?:@workflow\+serde@4\.1\.0-beta\.2|@modelcontextprotocol\+sdk@1\.29\.0_[^\\/]+|cron-schedule@6\.0\.0)[\\/]node_modules[\\/](?:@workflow[\\/]serde|@modelcontextprotocol[\\/]sdk|cron-schedule)[\\/].*" points to missing source files$/;
 
-/** @param {string} line */
-export function isKnownIncompleteDependencySourcemap(line) {
+export function isKnownIncompleteDependencySourcemap(line: string): boolean {
   return auditedIncompleteMap.test(line);
 }
 
-/** @param {string} output */
-function filterAuditedWarnings(output) {
+function filterAuditedWarnings(output: string): string {
   return output
     .split("\n")
     .filter((line) => !isKnownIncompleteDependencySourcemap(line))
     .join("\n");
 }
 
-function run() {
+function run(): void {
   const vitestEntrypoint = new URL("../node_modules/vitest/vitest.mjs", import.meta.url).pathname;
   const result = spawnSync(
     process.execPath,

@@ -1,35 +1,37 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawnSync, type ExecFileSyncOptions } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-const project = "regression-surgeon";
+const project = "regression-surgeon" as const;
 const profile = "polylane-take-home";
 const supportedPlatforms = new Set(["darwin", "linux"]);
 const supportedArchitectures = new Set(["arm64", "x64"]);
 
-/** @typedef {{ createdProfile: boolean, profile: string, project: string, startedProfile: boolean }} RuntimeMarker */
-/** @typedef {{ profile: string, project: string }} OwnershipMarker */
+type RuntimeMarker = {
+  createdProfile: boolean;
+  profile: typeof profile;
+  project: typeof project;
+  startedProfile: boolean;
+};
 
-/** @param {string} message @returns {never} */
-function fail(message) {
+type OwnershipMarker = {
+  profile: typeof profile;
+  project: typeof project;
+};
+
+function fail(message: string): never {
   throw new Error(message);
 }
 
-/** @param {string} root */
-function requireRepositoryRoot(root) {
+function requireRepositoryRoot(root: string): void {
   for (const path of ["mise.toml", "compose.yaml"]) {
     if (!existsSync(join(root, path)))
       fail(`Run the container task from the repository root (${path} is missing).`);
   }
 }
 
-/**
- * @param {string} executable
- * @param {string[]} args
- * @param {import("node:child_process").ExecFileSyncOptions} [options]
- */
-function run(executable, args, options = {}) {
+function run(executable: string, args: string[], options: ExecFileSyncOptions = {}): void {
   try {
     execFileSync(executable, args, { stdio: "inherit", ...options });
   } catch (error) {
@@ -40,7 +42,7 @@ function run(executable, args, options = {}) {
   }
 }
 
-function profileIsRunning() {
+function profileIsRunning(): boolean {
   const result = spawnSync("colima", ["status", "--profile", profile], { stdio: "ignore" });
   if (result.error) {
     if ("code" in result.error && result.error.code === "ENOENT") {
@@ -51,12 +53,11 @@ function profileIsRunning() {
   return result.status === 0;
 }
 
-/** @param {unknown} value @returns {RuntimeMarker} */
-function validateRuntimeMarker(value) {
+function validateRuntimeMarker(value: unknown): RuntimeMarker {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     fail("Refusing container cleanup because the ownership marker is invalid.");
   }
-  const candidate = /** @type {Record<string, unknown>} */ (value);
+  const candidate = value as Record<string, unknown>;
   if (
     candidate.project !== project ||
     candidate.profile !== profile ||
@@ -66,15 +67,19 @@ function validateRuntimeMarker(value) {
   ) {
     fail("Refusing container cleanup because the ownership marker is invalid.");
   }
-  return /** @type {RuntimeMarker} */ (candidate);
+  return {
+    createdProfile: candidate.createdProfile,
+    profile: candidate.profile,
+    project: candidate.project,
+    startedProfile: candidate.startedProfile,
+  };
 }
 
-/** @param {unknown} value @returns {OwnershipMarker} */
-function validateOwnershipMarker(value) {
+function validateOwnershipMarker(value: unknown): OwnershipMarker {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     fail("Refusing container cleanup because the profile ownership marker is invalid.");
   }
-  const candidate = /** @type {Record<string, unknown>} */ (value);
+  const candidate = value as Record<string, unknown>;
   if (
     candidate.project !== project ||
     candidate.profile !== profile ||
@@ -82,11 +87,10 @@ function validateOwnershipMarker(value) {
   ) {
     fail("Refusing container cleanup because the profile ownership marker is invalid.");
   }
-  return /** @type {OwnershipMarker} */ (candidate);
+  return { profile: candidate.profile, project: candidate.project };
 }
 
-/** @template T @param {string} markerPath @param {(value: unknown) => T} validate @returns {T} */
-function readMarker(markerPath, validate) {
+function readMarker<T>(markerPath: string, validate: (value: unknown) => T): T {
   try {
     return validate(JSON.parse(readFileSync(markerPath, "utf8")));
   } catch (error) {
@@ -97,8 +101,11 @@ function readMarker(markerPath, validate) {
   }
 }
 
-/** @param {string} markerPath @param {boolean} createdProfile @param {boolean} startedProfile */
-function writeRuntimeMarker(markerPath, createdProfile, startedProfile) {
+function writeRuntimeMarker(
+  markerPath: string,
+  createdProfile: boolean,
+  startedProfile: boolean,
+): void {
   mkdirSync(dirname(markerPath), { recursive: true });
   writeFileSync(
     markerPath,
@@ -107,8 +114,7 @@ function writeRuntimeMarker(markerPath, createdProfile, startedProfile) {
   );
 }
 
-/** @param {string} markerPath */
-function writeOwnershipMarker(markerPath) {
+function writeOwnershipMarker(markerPath: string): void {
   mkdirSync(dirname(markerPath), { recursive: true });
   writeFileSync(markerPath, `${JSON.stringify({ profile, project }, null, 2)}\n`, {
     flag: "w",
@@ -116,8 +122,7 @@ function writeOwnershipMarker(markerPath) {
   });
 }
 
-/** @param {string} root @param {string} colimaHome @param {string[]} args */
-function compose(root, colimaHome, args) {
+function compose(root: string, colimaHome: string, args: string[]): void {
   run(
     "docker-cli-plugin-docker-compose",
     ["--project-name", project, "--file", "compose.yaml", ...args],
@@ -131,8 +136,12 @@ function compose(root, colimaHome, args) {
   );
 }
 
-/** @param {string} root @param {string} runtimeMarkerPath @param {string} ownershipMarkerPath @param {string} colimaHome */
-function start(root, runtimeMarkerPath, ownershipMarkerPath, colimaHome) {
+function start(
+  root: string,
+  runtimeMarkerPath: string,
+  ownershipMarkerPath: string,
+  colimaHome: string,
+): void {
   const existingMarker = existsSync(runtimeMarkerPath)
     ? readMarker(runtimeMarkerPath, validateRuntimeMarker)
     : undefined;
@@ -169,8 +178,12 @@ function start(root, runtimeMarkerPath, ownershipMarkerPath, colimaHome) {
   console.log("Optional container stack is ready at http://127.0.0.1:5173.");
 }
 
-/** @param {string} root @param {string} runtimeMarkerPath @param {string} colimaHome @param {boolean} [removeVolumes] */
-function stop(root, runtimeMarkerPath, colimaHome, removeVolumes = false) {
+function stop(
+  root: string,
+  runtimeMarkerPath: string,
+  colimaHome: string,
+  removeVolumes = false,
+): void {
   if (!existsSync(runtimeMarkerPath)) {
     console.log("No project-owned container runtime is active.");
     return;
@@ -189,8 +202,12 @@ function stop(root, runtimeMarkerPath, colimaHome, removeVolumes = false) {
   console.log("Project-owned container runtime stopped.");
 }
 
-/** @param {string} root @param {string} runtimeMarkerPath @param {string} ownershipMarkerPath @param {string} colimaHome */
-function teardown(root, runtimeMarkerPath, ownershipMarkerPath, colimaHome) {
+function teardown(
+  root: string,
+  runtimeMarkerPath: string,
+  ownershipMarkerPath: string,
+  colimaHome: string,
+): void {
   if (existsSync(runtimeMarkerPath)) stop(root, runtimeMarkerPath, colimaHome, true);
   if (!existsSync(ownershipMarkerPath)) {
     console.log("No project-owned Colima profile remains.");
@@ -218,7 +235,7 @@ if (!supportedPlatforms.has(process.platform) || !supportedArchitectures.has(pro
 
 const operation = process.argv[2];
 if (operation !== "up" && operation !== "down" && operation !== "teardown") {
-  fail("Usage: node scripts/container.mjs <up|down|teardown>");
+  fail("Usage: node scripts/container.ts <up|down|teardown>");
 }
 
 const root = process.cwd();

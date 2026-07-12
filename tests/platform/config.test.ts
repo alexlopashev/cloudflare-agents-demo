@@ -82,13 +82,13 @@ describe("Cloudflare configuration", () => {
     expect(packageJson.scripts?.dev).toBe("pnpm db:migrate:local && vite dev");
     expect(packageJson.scripts?.e2e).toContain("pnpm db:migrate:local");
     expect(packageJson.scripts?.["scenario:reset"]).toBe(
-      "pnpm db:migrate:local && node scripts/scenario.mjs reset",
+      "pnpm db:migrate:local && node scripts/scenario.ts reset",
     );
     expect(packageJson.scripts?.["scenario:reseed"]).toBe(
-      "pnpm db:migrate:local && node scripts/scenario.mjs reseed",
+      "pnpm db:migrate:local && node scripts/scenario.ts reseed",
     );
-    expect(packageJson.scripts?.e2e).toContain("node scripts/scenario.mjs reseed");
-    expect(packageJson.scripts?.e2e).toContain("node scripts/agent-e2e.mjs");
+    expect(packageJson.scripts?.e2e).toContain("node scripts/scenario.ts reseed");
+    expect(packageJson.scripts?.e2e).toContain("node scripts/agent-e2e.ts");
     expect(readText("mise.toml")).toContain('[tasks."db:migrate"]');
     expect(readText("mise.toml")).toContain('[tasks."scenario:reseed"]');
   });

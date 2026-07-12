@@ -110,11 +110,11 @@ References:
 │   ├── teardown
 │   ├── teardown.fish
 │   ├── teardown.nu
-│   ├── container.mjs
-│   ├── doctor.mjs
-│   ├── e2e.mjs
-│   ├── agent-e2e.mjs
-│   └── scenario.mjs
+│   ├── container.ts
+│   ├── doctor.ts
+│   ├── e2e.ts
+│   ├── agent-e2e.ts
+│   └── scenario.ts
 ├── compose.yaml
 ├── Containerfile
 ├── mise.toml
@@ -322,7 +322,9 @@ Because bootstrap affects only the current shell, teardown does not attempt to e
 
 ## 9. mise tasks
 
-Complex orchestration lives in cross-platform `.mjs` files rather than shell-specific task bodies.
+Complex orchestration lives in cross-platform `.ts` files executed directly by the pinned Node 24
+runtime rather than in shell-specific task bodies. These scripts use only erasable TypeScript syntax,
+which Node can type-strip without a loader; `tsc --noEmit` remains the separate type-safety gate.
 
 | Task | Purpose |
 | --- | --- |

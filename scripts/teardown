@@ -10,7 +10,7 @@ fi
 root=$PWD
 
 if [ -f "$root/.local/run/container.json" ] || [ -f "$root/.local/state/container-profile.json" ]; then
-  node "$root/scripts/container.mjs" teardown
+  node "$root/scripts/container.ts" teardown
 fi
 
 remove_project_path() {

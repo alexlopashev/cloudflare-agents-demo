@@ -85,11 +85,11 @@ run = "docker-cli-plugin-docker-compose --file compose.yaml config --quiet"
 
 [tasks."container:up"]
 description = "Start the optional named Colima and Compose stack"
-run = "node scripts/container.mjs up"
+run = "node scripts/container.ts up"
 
 [tasks."container:down"]
 description = "Stop only project-owned Compose and Colima resources"
-run = "node scripts/container.mjs down"
+run = "node scripts/container.ts down"
 
 [tasks.teardown]
 description = "Remove project-owned local runtime state"

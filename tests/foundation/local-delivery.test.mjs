@@ -77,7 +77,7 @@ function createProject(root) {
 
 /** @param {string} root @param {string} operation @param {NodeJS.ProcessEnv} env */
 function runContainer(root, operation, env) {
-  execFileSync(process.execPath, [join(repoRoot, "scripts/container.mjs"), operation], {
+  execFileSync(process.execPath, [join(repoRoot, "scripts/container.ts"), operation], {
     cwd: root,
     env,
     stdio: "pipe",
@@ -85,7 +85,7 @@ function runContainer(root, operation, env) {
 }
 
 test("optional container artifacts define one Linux service over isolated volumes", () => {
-  for (const path of ["Containerfile", "compose.yaml", ".dockerignore", "scripts/container.mjs"]) {
+  for (const path of ["Containerfile", "compose.yaml", ".dockerignore", "scripts/container.ts"]) {
     assert.doesNotThrow(() => readRepo(path), `missing ${path}`);
   }
 
@@ -245,7 +245,7 @@ test("teardown delegates owned container cleanup before removing runtime state",
   createProject(root);
   const scripts = join(root, "scripts");
   mkdirSync(scripts);
-  copyFileSync(join(repoRoot, "scripts/container.mjs"), join(scripts, "container.mjs"));
+  copyFileSync(join(repoRoot, "scripts/container.ts"), join(scripts, "container.ts"));
   copyFileSync(join(repoRoot, "scripts/teardown"), join(scripts, "teardown"));
   chmodSync(join(scripts, "teardown"), 0o755);
   const runtime = createFakeRuntime(root);
