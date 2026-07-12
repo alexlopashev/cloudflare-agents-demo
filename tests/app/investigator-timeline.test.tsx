@@ -25,6 +25,11 @@ const messages = [
         toolCallId: "call-3",
         errorText: "private detail",
       },
+      {
+        type: "tool-create_draft_pr",
+        state: "approval-requested",
+        toolCallId: "call-4",
+      },
     ],
   },
 ];
@@ -33,22 +38,28 @@ describe("investigator tool timeline", () => {
   it("projects ordered, bounded tool status without leaking raw errors", () => {
     expect(buildToolTimeline(messages)).toEqual([
       {
-        id: "call-1",
+        id: "assistant-1-call-1",
         label: "Query telemetry",
         state: "completed",
         summary: "Evidence received",
       },
       {
-        id: "call-2",
+        id: "assistant-1-call-2",
         label: "Inspect release",
         state: "completed",
         summary: "Evidence received (truncated to context limit)",
       },
       {
-        id: "call-3",
+        id: "assistant-1-call-3",
         label: "Read repository files",
         state: "failed",
         summary: "Evidence lookup failed",
+      },
+      {
+        id: "assistant-1-call-4",
+        label: "Create draft PR",
+        state: "running",
+        summary: "Awaiting human approval",
       },
     ]);
     expect(JSON.stringify(buildToolTimeline(messages))).not.toContain("private");
@@ -61,6 +72,7 @@ describe("investigator tool timeline", () => {
     expect(markup).toContain("Query telemetry");
     expect(markup).toContain("Inspect release");
     expect(markup).toContain("Read repository files");
+    expect(markup).toContain("Create draft PR");
     expect(markup.indexOf("Query telemetry")).toBeLessThan(markup.indexOf("Inspect release"));
   });
 });
