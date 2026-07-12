@@ -3,14 +3,16 @@ import { describe, expect, it } from "vitest";
 import { resolveExperience } from "../../apps/web/src/experience";
 
 describe("web experience routing", () => {
-  it("maps the two public product paths to distinct experiences", () => {
+  it("maps both public paths to Deployboard and deep-links the investigator open state", () => {
     expect(resolveExperience("/app")).toEqual({
-      kind: "deployboard",
+      kind: "product",
       title: "Deployboard",
+      investigatorInitiallyOpen: false,
     });
     expect(resolveExperience("/investigator")).toEqual({
-      kind: "investigator",
+      kind: "product",
       title: "Regression Investigator",
+      investigatorInitiallyOpen: true,
     });
   });
 

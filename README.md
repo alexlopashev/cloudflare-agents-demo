@@ -6,12 +6,13 @@ The project is a take-home exercise for building and deploying a genuine multi-s
 
 ## Intended demonstration
 
-1. Open Deployboard and refresh its service-health grid.
-2. Observe a measurable latency regression.
-3. Ask Regression Surgeon to investigate it.
-4. Watch the Project Think agent compare releases, inspect traces, and read repository evidence.
-5. Review its structured Markdown report, identified commit, and source PR.
-6. Approve a bounded draft-PR proposal.
+1. Open Deployboard and generate a bounded batch of measured interactions.
+2. Watch acknowledged progress and inspect the latest trace and release evidence.
+3. Open Regression Investigator from its floating support launcher.
+4. Ask it to investigate the seeded latency regression.
+5. Watch Project Think compare releases, inspect traces, and read repository evidence.
+6. Review its structured Markdown report, identified commit, and source PR.
+7. Approve a bounded draft-PR proposal.
 
 ## Architecture
 
@@ -40,9 +41,12 @@ The reproducible foundation, Cloudflare application skeleton, supervised Deployb
 repository connector, measured telemetry pipeline, and evidence-driven investigation are
 implemented, including guarded remediation preview and write boundaries.
 
-The investigator renders generated reports as safe GitHub-flavored Markdown while keeping user
-requests literal. On mobile, the request controls stack and the send action remains a full-width
-44px touch target.
+Deployboard can generate fixed batches of 5, 10, or 20 real current-release interactions. Samples
+run sequentially and count only after UX telemetry is stored; refresh and generation cannot overlap.
+The investigator remains mounted as a collapsible support-style dialog with a floating launcher,
+attention and availability badges, safe GitHub-flavored Markdown, and literal user requests. The
+desktop panel is bounded, while the mobile panel fills the viewport with a full-width 44px send
+action. `/investigator` opens the same Deployboard experience with the widget expanded.
 
 ### Bootstrap
 
@@ -166,6 +170,8 @@ Read [AGENTS.md](AGENTS.md) before changing code. It defines the required TDD wo
 - [v1 release-readiness evidence](RELEASE_READINESS.md)
 - [GitHub wiki](https://github.com/alexlopashev/cloudflare-agents-demo/wiki)
 - [v1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/1)
+- [v1.1 interactive-demo milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/2)
+- [Interactive demo UX issue](https://github.com/alexlopashev/cloudflare-agents-demo/issues/25)
 - [Delivery tracking issue](https://github.com/alexlopashev/cloudflare-agents-demo/issues/1)
 - [Open delivery issues](https://github.com/alexlopashev/cloudflare-agents-demo/issues?q=is%3Aissue%20state%3Aopen%20milestone%3A%22v1%20%E2%80%94%20Regression%20Surgeon%22)
 - [Project alignment skill](.agents/skills/align-project-system/SKILL.md)

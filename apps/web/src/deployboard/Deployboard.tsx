@@ -1,7 +1,13 @@
 import { useRef, useState } from "react";
 
 import { serviceDefinitions, type HealthReport } from "../../../../packages/contracts/src/health";
-import { runDeployboardRefresh, type DeployboardCompletion } from "./client";
+import {
+  metricSampleCounts,
+  runDeployboardMetricBatch,
+  runDeployboardRefresh,
+  type DeployboardCompletion,
+  type MetricSampleCount,
+} from "./client";
 
 export type DeployboardViewState =
   | { status: "idle" }
@@ -9,9 +15,19 @@ export type DeployboardViewState =
   | { status: "ready"; report: HealthReport }
   | { status: "error" };
 
+export type MetricGenerationState =
+  | { status: "idle" }
+  | { status: "generating"; completed: number; total: MetricSampleCount }
+  | { status: "ready"; completed: number; total: MetricSampleCount }
+  | { status: "error"; completed: number; total: MetricSampleCount };
+
 type DeployboardViewProps = {
   state: DeployboardViewState;
+  metrics: MetricGenerationState;
+  sampleCount: MetricSampleCount;
   onRefresh: () => void;
+  onGenerateMetrics: () => void;
+  onSampleCountChange: (sampleCount: MetricSampleCount) => void;
 };
 
 type VisibleService = {
@@ -52,8 +68,37 @@ function summary(state: DeployboardViewState): string {
   return `${healthy} of ${state.report.services.length} services healthy`;
 }
 
-export function DeployboardView({ state, onRefresh }: DeployboardViewProps) {
+function metricStatus(metrics: MetricGenerationState) {
+  if (metrics.status === "idle") {
+    return <p>Each sample records one release-attributed UX event and distributed trace.</p>;
+  }
+  if (metrics.status === "error") {
+    return (
+      <p role="alert">
+        Stopped after {metrics.completed} of {metrics.total} measured interactions. Existing samples
+        remain available.
+      </p>
+    );
+  }
+  const label = `${metrics.completed} of ${metrics.total} measured interactions recorded`;
+  return (
+    <div aria-live="polite" className="metric-progress">
+      <progress max={metrics.total} value={metrics.completed} />
+      <p>{metrics.status === "ready" ? `${label}.` : label}</p>
+    </div>
+  );
+}
+
+export function DeployboardView({
+  state,
+  metrics,
+  sampleCount,
+  onRefresh,
+  onGenerateMetrics,
+  onSampleCountChange,
+}: DeployboardViewProps) {
   const services = visibleServices(state);
+  const isBusy = state.status === "loading" || metrics.status === "generating";
   const shouldAlert =
     state.status === "error" || (state.status === "ready" && state.report.outcome === "failed");
   return (
@@ -67,22 +112,44 @@ export function DeployboardView({ state, onRefresh }: DeployboardViewProps) {
             carries the release and trace evidence needed for investigation.
           </p>
         </div>
-        <button
-          className="refresh-button"
-          disabled={state.status === "loading"}
-          onClick={onRefresh}
-          type="button"
-        >
+        <button className="refresh-button" disabled={isBusy} onClick={onRefresh} type="button">
           {state.status === "loading" ? "Refreshing…" : "Refresh services"}
         </button>
       </section>
 
-      <section
-        aria-busy={state.status === "loading"}
-        aria-live="polite"
-        className="health-results"
-        role="status"
-      >
+      <section className="metrics-generator panel" aria-labelledby="metrics-generator-title">
+        <div>
+          <p className="eyebrow">Measured traffic</p>
+          <h2 id="metrics-generator-title">Generate metrics data</h2>
+          <p>
+            Run a bounded sequence of real service-grid interactions. Samples execute one at a time
+            and count only after telemetry is stored.
+          </p>
+        </div>
+        <div className="metric-generator-actions">
+          <label htmlFor="metric-sample-count">Batch size</label>
+          <select
+            disabled={isBusy}
+            id="metric-sample-count"
+            onChange={(event) =>
+              onSampleCountChange(Number(event.currentTarget.value) as MetricSampleCount)
+            }
+            value={sampleCount}
+          >
+            {metricSampleCounts.map((count) => (
+              <option key={count} value={count}>
+                {count} samples
+              </option>
+            ))}
+          </select>
+          <button disabled={isBusy} onClick={onGenerateMetrics} type="button">
+            {metrics.status === "generating" ? "Generating…" : "Generate metrics"}
+          </button>
+        </div>
+        <div className="metric-generator-status">{metricStatus(metrics)}</div>
+      </section>
+
+      <section aria-busy={isBusy} aria-live="polite" className="health-results" role="status">
         <div className="results-heading">
           <div>
             <p className="eyebrow">Current interaction</p>
@@ -132,6 +199,8 @@ function emitCompletion(completion: DeployboardCompletion) {
 
 export function Deployboard() {
   const [state, setState] = useState<DeployboardViewState>({ status: "idle" });
+  const [metrics, setMetrics] = useState<MetricGenerationState>({ status: "idle" });
+  const [sampleCount, setSampleCount] = useState<MetricSampleCount>(5);
   const inFlight = useRef(false);
 
   async function refresh() {
@@ -152,5 +221,44 @@ export function Deployboard() {
     }
   }
 
-  return <DeployboardView onRefresh={() => void refresh()} state={state} />;
+  async function generateMetrics() {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    let completed = 0;
+    setMetrics({ status: "generating", completed, total: sampleCount });
+    try {
+      const result = await runDeployboardMetricBatch({
+        sampleCount,
+        createInteractionId: () => `metric-${crypto.randomUUID()}`,
+        fetcher: (request) => fetch(request),
+        emitCompletion,
+        onProgress: (progress) => {
+          completed = progress.completed;
+          setState({ status: "ready", report: progress.latestReport });
+          setMetrics({
+            status: "generating",
+            completed: progress.completed,
+            total: progress.total,
+          });
+        },
+      });
+      setState({ status: "ready", report: result.latestReport });
+      setMetrics({ status: "ready", completed: result.sampleCount, total: result.sampleCount });
+    } catch {
+      setMetrics({ status: "error", completed, total: sampleCount });
+    } finally {
+      inFlight.current = false;
+    }
+  }
+
+  return (
+    <DeployboardView
+      metrics={metrics}
+      onGenerateMetrics={() => void generateMetrics()}
+      onRefresh={() => void refresh()}
+      onSampleCountChange={setSampleCount}
+      sampleCount={sampleCount}
+      state={state}
+    />
+  );
 }
