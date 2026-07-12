@@ -20,7 +20,8 @@ The project is a take-home exercise for building and deploying a genuine multi-s
 - SQLite-backed Durable Object state for conversations
 - D1 for measured UX events, traces, spans, and releases
 - An auxiliary health-service Worker reached through a service binding
-- A constrained GitHub REST adapter for repository inspection and draft PR creation
+- A constrained, read-only GitHub REST adapter for immutable repository evidence
+- A planned approval-gated GitHub adapter for bounded draft PR creation
 - React, TypeScript, pnpm, and a mise-managed toolchain
 
 The initial product supports one controlled repository, one supervised application, one latency-regression scenario, and one guarded remediation path. It is intentionally not a general-purpose coding agent.
@@ -95,8 +96,10 @@ After every meaningful change, contributors must reassess and align the implemen
 
 Phases 1 and 2 are implemented and verified locally: the mise-native foundation, React/Vite shell,
 platform Worker, auxiliary Worker, D1 binding, and persistent Project Think agent all run through the
-Cloudflare-native local stack. The supervised application in issue #4 is next; the milestone and
-native blocked-by issue graph remain the executable delivery plan.
+Cloudflare-native local stack. The independently sequenced read-only repository connector is also
+implemented with deterministic GitHub fixtures and strict immutable-read limits. The supervised
+application in issue #4 is next; the milestone and native blocked-by issue graph remain the
+executable delivery plan.
 
 ## License
 

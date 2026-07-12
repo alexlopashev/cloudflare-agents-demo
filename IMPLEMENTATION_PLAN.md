@@ -752,6 +752,11 @@ Acceptance criteria:
 
 ### Phase 5 — Read-only agent
 
+Status: the bounded repository connector prerequisite is complete in issue #7. It resolves configured
+release evidence to immutable commits and associated PR metadata, returns explicit unknowns, and
+enforces repository, path, pagination, response, diff, file-count, and byte limits. The phase remains
+open until issue #8 wires this connector and telemetry into the Project Think tool loop.
+
 - Add `query_telemetry`, `inspect_release`, and `read_repo_files`.
 - Configure prompt, step limits, and tool-event UI.
 - Add deterministic fake-model E2E.
