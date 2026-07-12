@@ -360,10 +360,80 @@ h1 {
   font-weight: 700;
   text-transform: uppercase;
 }
-.message p {
+.message-content {
   margin: 7px 0 0;
   line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.plain-message {
   white-space: pre-wrap;
+}
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  margin: 1.1em 0 0.45em;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+.markdown-content p,
+.markdown-content ul,
+.markdown-content ol,
+.markdown-content blockquote,
+.markdown-content pre,
+.markdown-content table {
+  margin: 0.7em 0;
+}
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 1.35em;
+}
+.markdown-content blockquote {
+  padding-left: 12px;
+  border-left: 3px solid #879591;
+  color: #596562;
+}
+.markdown-content code {
+  border-radius: 5px;
+  padding: 0.12em 0.35em;
+  background: #17232912;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em;
+}
+.markdown-content pre {
+  overflow-x: auto;
+  border-radius: 10px;
+  padding: 12px;
+  background: #192529;
+  color: #f7f4ec;
+}
+.markdown-content pre code {
+  padding: 0;
+  background: transparent;
+}
+.markdown-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.markdown-content th,
+.markdown-content td {
+  padding: 7px 9px;
+  border: 1px solid #17232925;
+  text-align: left;
+}
+.composer-controls {
+  display: flex;
+  gap: 10px;
 }
 .composer {
   padding: 20px;
@@ -389,6 +459,8 @@ h1 {
   background: #fff;
 }
 .composer button {
+  min-width: 124px;
+  min-height: 44px;
   border: 0;
   border-radius: 13px;
   padding: 0 18px;
@@ -439,5 +511,12 @@ h1 {
   }
   .evidence-strip div:last-child {
     border-bottom: 0;
+  }
+  .composer-controls {
+    flex-direction: column;
+  }
+  .composer input,
+  .composer button {
+    width: 100%;
   }
 }

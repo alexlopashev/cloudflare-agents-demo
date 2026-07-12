@@ -901,6 +901,25 @@ Acceptance criteria:
 - Every documented command and walkthrough matches the delivered artifact.
 - All local and deployed gates pass, and the tracking issue can close with linked evidence.
 
+### Phase 10 — Investigator UI polish
+
+Status: active in issue #25. The investigator renders assistant reports as safe GitHub-flavored
+Markdown while leaving user requests literal. The renderer omits raw HTML and loads as a separate
+client chunk. The mobile composer stacks its controls below 760px and gives the submit action the
+full available width with a 44px minimum touch target.
+
+- Render generated report structure, lists, links, code, and tables semantically.
+- Keep model-provided raw HTML inert and user-authored requests literal.
+- Preserve a usable request action on narrow mobile screens.
+
+Acceptance criteria:
+
+- Generated reports expose semantic Markdown without arbitrary HTML injection.
+- At mobile widths, the request controls stack and the submit button is full-width and at least
+  44px tall.
+- Focused UI tests, the complete local E2E, aggregate quality gates, container contract, and build
+  pass.
+
 ## 17. Scope gates
 
 Implement in this order:
@@ -912,6 +931,7 @@ Implement in this order:
 5. Reproducible local delivery
 6. Public deployment
 7. Release-readiness reconciliation
+8. Post-v1 investigator readability and responsive polish
 
 Explicit non-goals:
 
@@ -937,7 +957,8 @@ The intended five-minute demonstration is:
 3. Open Regression Surgeon.
 4. Submit **Investigate the current dashboard latency regression**.
 5. Watch the agent compare releases and inspect traces.
-6. Review its identification of the first bad commit and source PR.
+6. Review its Markdown-formatted evidence, inference, confidence, and unknowns, including the first
+   bad commit and source PR.
 7. Inspect the proposed bounded-concurrency fix.
 8. Approve draft PR creation.
 9. Follow the returned GitHub link to the evidence-backed PR.

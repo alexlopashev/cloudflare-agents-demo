@@ -10,7 +10,7 @@ The project is a take-home exercise for building and deploying a genuine multi-s
 2. Observe a measurable latency regression.
 3. Ask Regression Surgeon to investigate it.
 4. Watch the Project Think agent compare releases, inspect traces, and read repository evidence.
-5. Review the identified commit and source PR.
+5. Review its structured Markdown report, identified commit, and source PR.
 6. Approve a bounded draft-PR proposal.
 
 ## Architecture
@@ -39,6 +39,10 @@ stripping with `erasableSyntaxOnly`; `tsc --noEmit` remains the separate strict 
 The reproducible foundation, Cloudflare application skeleton, supervised Deployboard, immutable
 repository connector, measured telemetry pipeline, and evidence-driven investigation are
 implemented, including guarded remediation preview and write boundaries.
+
+The investigator renders generated reports as safe GitHub-flavored Markdown while keeping user
+requests literal. On mobile, the request controls stack and the send action remains a full-width
+44px touch target.
 
 ### Bootstrap
 

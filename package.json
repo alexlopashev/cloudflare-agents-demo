@@ -9,14 +9,16 @@
     "pnpm": "10.34.5"
   },
   "dependencies": {
+    "@ai-sdk/provider": "3.0.14",
     "@cloudflare/ai-chat": "0.9.3",
     "@cloudflare/shell": "0.4.1",
     "@cloudflare/think": "0.12.1",
-    "@ai-sdk/provider": "3.0.14",
     "agents": "0.17.3",
     "ai": "6.0.224",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "react-markdown": "catalog:",
+    "remark-gfm": "catalog:",
     "workers-ai-provider": "3.3.1",
     "zod": "4.4.3"
   },

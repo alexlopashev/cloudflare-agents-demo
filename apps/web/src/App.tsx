@@ -1,5 +1,5 @@
 import { useAgentChat } from "@cloudflare/ai-chat/react";
-import { useState, type FormEvent } from "react";
+import { lazy, Suspense, useState, type FormEvent } from "react";
 import { useAgent } from "agents/react";
 
 import { Deployboard } from "./deployboard/Deployboard";
@@ -8,6 +8,8 @@ import { ApprovalPanel, buildApprovalRequests } from "./investigator/ApprovalPan
 import { messageText } from "./investigator/messages";
 import { resolveInvestigatorSession } from "./investigator/session";
 import { buildToolTimeline, ToolTimeline } from "./investigator/ToolTimeline";
+
+const InvestigatorMessage = lazy(() => import("./investigator/InvestigatorMessage"));
 
 function Investigator() {
   const [input, setInput] = useState("");
@@ -65,14 +67,16 @@ function Investigator() {
             visibleMessages.map(({ message, text }) => (
               <article className={`message ${message.role}`} key={message.id}>
                 <span>{message.role === "user" ? "You" : "Investigator"}</span>
-                <p>{text}</p>
+                <Suspense fallback={<p className="message-content plain-message">{text}</p>}>
+                  <InvestigatorMessage messageRole={message.role} text={text} />
+                </Suspense>
               </article>
             ))
           )}
         </div>
         <form className="composer" onSubmit={submit}>
           <label htmlFor="investigation-prompt">Investigation request</label>
-          <div>
+          <div className="composer-controls">
             <input
               id="investigation-prompt"
               onChange={(event) => setInput(event.currentTarget.value)}
