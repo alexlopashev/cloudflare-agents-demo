@@ -61,7 +61,11 @@ export async function handleHealthApiRequest(
       allow: "POST",
     });
   }
-  if (!(request.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json")) {
+  const mediaType = (request.headers.get("content-type") ?? "")
+    .split(";", 1)[0]
+    ?.trim()
+    .toLowerCase();
+  if (mediaType !== "application/json") {
     return errorResponse(415, "unsupported-media-type", "Use an application/json request body.");
   }
 

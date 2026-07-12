@@ -68,4 +68,19 @@ describe("DeployboardView", () => {
     expect(markup).toContain("Refresh failed");
     expect(markup.match(/Unavailable/g)).toHaveLength(3);
   });
+
+  it("announces an all-dependency failure from a completed report", () => {
+    const failed = partialReport();
+    failed.outcome = "failed";
+    failed.services = failed.services.map((service) => ({
+      id: service.id,
+      label: service.label,
+      status: "unavailable",
+      error: { code: "dependency-unavailable", message: "Health check unavailable." },
+    }));
+    const markup = render({ status: "ready", report: failed });
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain("0 of 3 services healthy");
+  });
 });

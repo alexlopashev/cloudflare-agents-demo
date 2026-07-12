@@ -35,6 +35,11 @@ describe("health API", () => {
       new Request("https://example.test/api/health", { method: "POST", body: "{}" }),
       new Request("https://example.test/api/health", {
         method: "POST",
+        headers: { "content-type": "application/jsonp" },
+        body: JSON.stringify({ interactionId: "interaction-1" }),
+      }),
+      new Request("https://example.test/api/health", {
+        method: "POST",
         headers: { "content-type": "application/json", "content-length": "2049" },
         body: "{}",
       }),
@@ -48,7 +53,7 @@ describe("health API", () => {
     const responses = await Promise.all(
       cases.map((request) => handleHealthApiRequest(request, options)),
     );
-    expect(responses.map((response) => response.status)).toEqual([405, 415, 413, 400]);
+    expect(responses.map((response) => response.status)).toEqual([405, 415, 415, 413, 400]);
     expect(fetcher).not.toHaveBeenCalled();
     for (const response of responses) {
       const body = (await response.json()) as { error: { code: string; message: string } };

@@ -54,6 +54,8 @@ function summary(state: DeployboardViewState): string {
 
 export function DeployboardView({ state, onRefresh }: DeployboardViewProps) {
   const services = visibleServices(state);
+  const shouldAlert =
+    state.status === "error" || (state.status === "ready" && state.report.outcome === "failed");
   return (
     <main className="deployboard-layout">
       <section className="hero panel deployboard-hero">
@@ -86,11 +88,7 @@ export function DeployboardView({ state, onRefresh }: DeployboardViewProps) {
             <p className="eyebrow">Current interaction</p>
             <h2>Service health</h2>
           </div>
-          {state.status === "error" ? (
-            <p role="alert">{summary(state)}</p>
-          ) : (
-            <p>{summary(state)}</p>
-          )}
+          {shouldAlert ? <p role="alert">{summary(state)}</p> : <p>{summary(state)}</p>}
         </div>
         <ul className="service-grid">
           {services.map((service) => (
