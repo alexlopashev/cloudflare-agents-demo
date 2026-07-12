@@ -23,6 +23,7 @@ describe("health aggregation", () => {
     const aggregator = createHealthAggregator({
       fetcher,
       createTraceId: () => "trace-1",
+      loadingMode: "concurrent",
     });
 
     const reportPromise = aggregator.collect({
@@ -47,6 +48,38 @@ describe("health aggregation", () => {
       expect(request.headers.get("x-interaction-id")).toBe("interaction-1");
       expect(request.headers.get("x-trace-id")).toBe("trace-1");
     }
+  });
+
+  it("can serialize dependency calls to reduce simultaneous downstream pressure", async () => {
+    const pending = new Map(
+      serviceDefinitions.map((service) => [service.id, Promise.withResolvers<Response>()]),
+    );
+    const started: string[] = [];
+    const aggregator = createHealthAggregator({
+      fetcher: (request) => {
+        const serviceId = request.headers.get("x-service-id") ?? "";
+        started.push(serviceId);
+        const deferred = pending.get(serviceId as (typeof serviceDefinitions)[number]["id"]);
+        if (!deferred) throw new Error("unexpected service");
+        return deferred.promise;
+      },
+      createTraceId: () => "trace-sequential",
+      loadingMode: "sequential",
+    });
+
+    const reportPromise = aggregator.collect({
+      interactionId: "interaction-sequential",
+      releaseId: "release-bad",
+    });
+    expect(started).toEqual(["api"]);
+
+    pending.get("api")?.resolve(healthy("api"));
+    await vi.waitFor(() => expect(started).toEqual(["api", "jobs"]));
+    pending.get("jobs")?.resolve(healthy("jobs"));
+    await vi.waitFor(() => expect(started).toEqual(["api", "jobs", "storage"]));
+    pending.get("storage")?.resolve(healthy("storage"));
+
+    await expect(reportPromise).resolves.toMatchObject({ outcome: "healthy" });
   });
 
   it("returns a bounded partial result for thrown, HTTP, and malformed dependency failures", async () => {

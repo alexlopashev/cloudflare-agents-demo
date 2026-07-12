@@ -231,4 +231,18 @@ describe("D1 telemetry store", () => {
       TelemetryBoundsError,
     );
   });
+
+  it("resets only scenario evidence idempotently", async () => {
+    const store = createTelemetryStore(env.TELEMETRY_DB);
+    await store.recordTrace(traceInput("baseline-concurrent", 1_000, 1, 120));
+    await store.recordTrace(traceInput("unrelated-release", 2_000, 1, 80));
+
+    await store.resetScenarioEvidence(["baseline-concurrent", "regression-sequential"]);
+    await store.resetScenarioEvidence(["baseline-concurrent", "regression-sequential"]);
+
+    const releases = await env.TELEMETRY_DB.prepare(
+      "SELECT release_id FROM releases ORDER BY release_id",
+    ).all<{ release_id: string }>();
+    expect(releases.results).toEqual([{ release_id: "unrelated-release" }]);
+  });
 });

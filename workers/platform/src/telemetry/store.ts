@@ -234,6 +234,25 @@ export function createTelemetryStore(database: D1Database, options: TelemetrySto
         .run();
     },
 
+    async resetScenarioEvidence(releaseIds: readonly string[]) {
+      if (releaseIds.length < 1 || releaseIds.length > 10) {
+        throw new TelemetryBoundsError("Scenario reset is outside the release row bound.");
+      }
+      for (const releaseId of releaseIds) requireId(releaseId, "Release identifier");
+      await database.batch(
+        releaseIds.flatMap((releaseId) => [
+          database.prepare("DELETE FROM ux_events WHERE release_id = ?1").bind(releaseId),
+          database
+            .prepare(
+              "DELETE FROM spans WHERE trace_id IN (SELECT trace_id FROM traces WHERE release_id = ?1)",
+            )
+            .bind(releaseId),
+          database.prepare("DELETE FROM traces WHERE release_id = ?1").bind(releaseId),
+          database.prepare("DELETE FROM releases WHERE release_id = ?1").bind(releaseId),
+        ]),
+      );
+    },
+
     async compareReleases(input: {
       baselineReleaseId: string;
       candidateReleaseId: string;

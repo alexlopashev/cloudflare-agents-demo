@@ -51,6 +51,14 @@ run = "pnpm test:watch"
 description = "Apply pending migrations to the repository-local D1 database"
 run = "pnpm db:migrate:local"
 
+[tasks."scenario:reset"]
+description = "Remove only the controlled regression evidence from local D1"
+run = "pnpm scenario:reset"
+
+[tasks."scenario:reseed"]
+description = "Reset and regenerate measured good-versus-bad local evidence"
+run = "pnpm scenario:reseed"
+
 [tasks.e2e]
 description = "Run the currently implemented credential-free E2E scope"
 run = "pnpm e2e"

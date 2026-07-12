@@ -420,6 +420,12 @@ The native path remains the documented default. The Compose lane exists for Linu
 
 ## 11. Supervised application and intentional regression
 
+Status: implemented in issue #6. Commit `cf25e52` is the real known-good concurrent release. The
+issue #6 pull request introduces the sequential transition with the stated intent of reducing
+simultaneous downstream pressure. Local scenario controls are available only when explicitly enabled
+in fake mode, addressed through a loopback host, and presented with the fixed local key; live mode
+disables them.
+
 Deployboard displays health data for a collection of software services.
 
 The initial implementation loads health statuses concurrently:
@@ -451,6 +457,12 @@ This produces:
 The expected surgical fix uses batching or bounded concurrency rather than blindly reverting the change.
 
 The regression exists as a real commit associated with a real PR in repository history.
+
+`mise run scenario:reseed` removes only the two controlled releases, sends 20 concurrent and 20
+sequential interactions through the real local service binding, stores their measured D1 evidence,
+then verifies a ready comparison and sequential slow-trace critical path. `mise run scenario:reset`
+performs the scoped deletion independently. Neither operation writes an agent conclusion or modifies
+unrelated telemetry.
 
 ## 12. Telemetry model
 
@@ -727,11 +739,10 @@ Acceptance criteria:
 
 ### Phase 3 — Supervised application
 
-Status: the known-good Deployboard experience is complete in issues #4 and #5. One browser refresh
-fans out to three concurrent auxiliary Worker checks, preserves stable service order, returns bounded
-partial failures, carries interaction, trace, Worker release, and Git identifiers, and records the
-browser-ready measurement. The intentional sequential regression and repeatable scenario remain in
-issue #6.
+Status: complete in issues #4 through #6. The known-good commit fans out to three concurrent
+auxiliary Worker checks. The issue #6 transition intentionally serializes those checks, preserves
+stable service order and bounded partial failures, and records the resulting browser, request, span,
+release, and Git evidence.
 
 - Build Deployboard.
 - Implement concurrent health loading.
@@ -745,11 +756,11 @@ Acceptance criteria:
 
 ### Phase 4 — Telemetry
 
-Status: the telemetry foundation is complete in issue #5. D1 stores immutable releases, UX events,
-traces, and spans from real application requests. Fixed query methods enforce time, row, and
-serialized-result bounds; comparisons use equivalent release-relative windows and minimum samples;
-trace detail handles missing parents and overlapping spans. Issue #6 supplies the baseline and
-regression traffic needed to demonstrate first-bad-release selection end to end.
+Status: complete in issues #5 and #6. D1 stores immutable releases, UX events, traces, and spans from
+real application requests. Fixed query methods enforce time, row, and serialized-result bounds;
+comparisons use equivalent release-relative windows and minimum samples; trace detail handles
+missing parents and overlapping spans. The scoped local reseed supplies measured baseline and
+regression traffic and verifies the degraded release and sequential critical path.
 
 - Add D1 migrations.
 - Record UX events, traces, spans, and releases.
