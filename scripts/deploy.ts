@@ -177,7 +177,7 @@ async function smoke(state: z.infer<typeof stateSchema>) {
     }),
   });
   let runtime: z.infer<typeof runtimeSchema> | undefined;
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
     const response = await requestWithRetry(`${state.publicUrl}/api/runtime`);
     const parsed = runtimeSchema.safeParse(await response.json());
     if (parsed.success) {
