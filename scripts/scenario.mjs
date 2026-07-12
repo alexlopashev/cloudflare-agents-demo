@@ -1,6 +1,6 @@
-import { execFileSync } from "node:child_process";
-
 import { createServer } from "vite";
+
+import { regressionSource } from "../packages/test-fixtures/src/scenario.ts";
 
 const action = process.argv[2];
 if (action !== "reset" && action !== "reseed") {
@@ -25,15 +25,12 @@ try {
     if (response.status !== 204) throw new Error(`Scenario reset returned HTTP ${response.status}`);
     console.log("Controlled regression evidence reset.");
   } else {
-    const badGitSha = execFileSync("git", ["rev-parse", "HEAD"], {
-      encoding: "utf8",
-    }).trim();
     const response = await fetch(`${baseUrl}/api/scenario/reseed`, {
       method: "POST",
       headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify({
         goodGitSha: "cf25e5253b106b1e7514340abe94bd42fd748725",
-        badGitSha,
+        badGitSha: regressionSource.commitSha,
       }),
     });
     if (!response.ok) throw new Error(`Scenario reseed returned HTTP ${response.status}`);
@@ -47,7 +44,9 @@ try {
       result.comparison.candidate?.p75Ms < result.comparison.baseline?.p75Ms * 2 ||
       result.slowTrace?.criticalPath?.durationMs < 300
     ) {
-      throw new Error("Scenario evidence did not prove the controlled regression");
+      throw new Error(
+        `Scenario evidence did not prove the controlled regression: ${JSON.stringify(result)}`,
+      );
     }
     console.log(
       `Controlled regression reseeded: p75 ${result.comparison.baseline.p75Ms}ms -> ${result.comparison.candidate.p75Ms}ms; slow trace ${result.slowTrace.traceId}.`,

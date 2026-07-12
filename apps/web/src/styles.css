@@ -268,6 +268,38 @@ h1 {
   flex-direction: column;
   overflow: hidden;
 }
+.tool-timeline {
+  padding: 22px 28px 0;
+  border-bottom: 1px solid #17232918;
+}
+.tool-timeline ol {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+.tool-timeline li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  border-left: 3px solid #b7bfbc;
+  padding: 7px 10px;
+}
+.tool-timeline li.completed {
+  border-left-color: #3faf6e;
+}
+.tool-timeline li.failed {
+  border-left-color: #ce684f;
+}
+.tool-timeline-label {
+  font-weight: 700;
+}
+.tool-timeline li small {
+  color: #697479;
+  text-align: right;
+}
 .messages {
   flex: 1;
   padding: 28px;

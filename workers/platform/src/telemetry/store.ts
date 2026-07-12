@@ -253,6 +253,17 @@ export function createTelemetryStore(database: D1Database, options: TelemetrySto
       );
     },
 
+    async getReleaseAttribution(releaseId: string) {
+      requireId(releaseId, "Release identifier");
+      const release = await database
+        .prepare("SELECT release_id, git_sha FROM releases WHERE release_id = ?1 LIMIT 1")
+        .bind(releaseId)
+        .first<{ release_id: string; git_sha: string }>();
+      return release === null
+        ? null
+        : { versionId: release.release_id, commitSha: release.git_sha };
+    },
+
     async compareReleases(input: {
       baselineReleaseId: string;
       candidateReleaseId: string;

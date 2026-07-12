@@ -33,6 +33,10 @@ function options() {
   const getTraceDetail = vi.fn(async () => ({
     criticalPath: { durationMs: 360, spanIds: ["service-api", "service-jobs", "service-storage"] },
   }));
+  const investigate = vi.fn(async () => ({
+    report: "## Evidence\nComplete",
+    toolTypes: ["tool-query_telemetry", "tool-inspect_release", "tool-read_repo_files"],
+  }));
   return {
     options: {
       enabled: true,
@@ -41,9 +45,11 @@ function options() {
       compareReleases,
       findSlowTraces,
       getTraceDetail,
+      investigate,
     },
     resetScenarioEvidence,
     generate,
+    investigate,
   };
 }
 
@@ -77,6 +83,12 @@ describe("local scenario control", () => {
     });
     expect(fixture.resetScenarioEvidence).toHaveBeenCalledTimes(2);
     expect(fixture.generate).toHaveBeenCalledExactlyOnceWith({ goodGitSha, badGitSha });
+    expect(fixture.options.findSlowTraces).toHaveBeenCalledExactlyOnceWith({
+      releaseId: "regression-sequential",
+      sinceMs: 1_700_000_000_000,
+      untilMs: 1_700_086_460_000,
+      limit: 10,
+    });
   });
 
   it("stays invisible when disabled, deployed, unauthenticated, malformed, or off-route", async () => {
@@ -115,5 +127,21 @@ describe("local scenario control", () => {
     const response = await handleScenarioRequest(localRequest, fixture.options);
 
     expect(response.status).toBe(204);
+  });
+
+  it("runs the credential-free investigation through the local Think binding", async () => {
+    const fixture = options();
+
+    const response = await handleScenarioRequest(
+      request("/api/scenario/investigate"),
+      fixture.options,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      report: "## Evidence\nComplete",
+      toolTypes: ["tool-query_telemetry", "tool-inspect_release", "tool-read_repo_files"],
+    });
+    expect(fixture.investigate).toHaveBeenCalledOnce();
   });
 });

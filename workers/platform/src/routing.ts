@@ -13,9 +13,13 @@ export interface PlatformBindings {
   ASSETS: FetchBinding;
   CF_VERSION_METADATA: { id: string; timestamp?: string };
   GIT_SHA: string;
+  GITHUB_OWNER: string;
+  GITHUB_REPO: string;
+  GITHUB_TOKEN?: string;
   HEALTH_LOADING_MODE: "concurrent" | "sequential";
   HEALTH_SERVICE: FetchBinding;
   MODEL_MODE: string;
+  REGRESSION_SURGEON_AGENT: DurableObjectNamespace;
   SCENARIO_CONTROL_ENABLED: string;
   TELEMETRY_DB: D1Database;
 }
@@ -48,6 +52,7 @@ export async function handlePlatformRequest(
 
   if (url.pathname.startsWith("/api/scenario/")) {
     const store = createTelemetryStore(bindings.TELEMETRY_DB);
+    let scenarioTraceSequence = 0;
     return scenarioRequestHandler(request, {
       enabled: bindings.SCENARIO_CONTROL_ENABLED === "true",
       resetScenarioEvidence: store.resetScenarioEvidence,
@@ -56,13 +61,21 @@ export async function handlePlatformRequest(
           ...input,
           sampleCount: 20,
           fetcher: (healthRequest) => bindings.HEALTH_SERVICE.fetch(healthRequest),
-          createTraceId: () => crypto.randomUUID(),
+          createTraceId: () => `scenario-trace-${++scenarioTraceSequence}`,
           now: Date.now,
           store,
         }),
       compareReleases: store.compareReleases,
       findSlowTraces: store.findSlowTraces,
       getTraceDetail: store.getTraceDetail,
+      investigate: async () => {
+        const agent = bindings.REGRESSION_SURGEON_AGENT.getByName(
+          "local-e2e-investigation",
+        ) as unknown as {
+          runLocalInvestigation(): Promise<{ toolTypes: string[]; report: string }>;
+        };
+        return agent.runLocalInvestigation();
+      },
     });
   }
 

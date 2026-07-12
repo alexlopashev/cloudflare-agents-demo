@@ -8,6 +8,8 @@ export default defineConfig({
       miniflare: {
         bindings: {
           GIT_SHA: "0000000000000000000000000000000000000000",
+          GITHUB_OWNER: "alexlopashev",
+          GITHUB_REPO: "cloudflare-agents-demo",
           HEALTH_LOADING_MODE: "sequential",
           MODEL_MODE: "fake",
           SCENARIO_CONTROL_ENABLED: "false",
