@@ -97,9 +97,10 @@ After every meaningful change, contributors must reassess and align the implemen
 Phases 1 and 2 are implemented and verified locally: the mise-native foundation, React/Vite shell,
 platform Worker, auxiliary Worker, D1 binding, and persistent Project Think agent all run through the
 Cloudflare-native local stack. The independently sequenced read-only repository connector is also
-implemented with deterministic GitHub fixtures and strict immutable-read limits. The supervised
-application in issue #4 is next; the milestone and native blocked-by issue graph remain the
-executable delivery plan.
+implemented with deterministic GitHub fixtures and strict immutable-read limits. Deployboard now
+performs its known-good concurrent service-health refresh with bounded partial failures and stable
+interaction, trace, and release evidence. Telemetry in issue #5 is next; the milestone and native
+blocked-by issue graph remain the executable delivery plan.
 
 ## License
 

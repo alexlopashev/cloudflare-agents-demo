@@ -2,36 +2,8 @@ import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { useState, type FormEvent } from "react";
 import { useAgent } from "agents/react";
 
+import { Deployboard } from "./deployboard/Deployboard";
 import { resolveExperience } from "./experience";
-
-function Deployboard() {
-  return (
-    <main className="page-grid">
-      <section className="hero panel">
-        <p className="eyebrow">Supervised application</p>
-        <h1>Deployboard</h1>
-        <p className="lede">
-          A deliberately observable product surface. Upcoming scenarios will make a release slower,
-          preserve its telemetry, and let the investigator trace the regression to code.
-        </p>
-        <div className="status-row" role="status" aria-label="Local stack status">
-          <span className="status-dot" />
-          Platform runtime connected
-        </div>
-      </section>
-      <section className="panel metric-card">
-        <p className="eyebrow">Experience budget</p>
-        <strong>&lt; 800 ms</strong>
-        <span>p75 interaction latency target</span>
-      </section>
-      <section className="panel metric-card">
-        <p className="eyebrow">Release evidence</p>
-        <strong>Immutable</strong>
-        <span>Every version maps to an exact commit</span>
-      </section>
-    </main>
-  );
-}
 
 function messageText(parts: ReadonlyArray<{ type: string; text?: string }>): string {
   return parts

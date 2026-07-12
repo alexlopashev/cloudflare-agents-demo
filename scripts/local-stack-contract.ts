@@ -1,5 +1,7 @@
+import { healthReportSchema } from "../packages/contracts/src/health.ts";
+
 export type StackVerification = {
-  health: "ok";
+  health: "healthy";
   mode: "fake";
   routes: ["/app", "/investigator"];
 };
@@ -33,11 +35,18 @@ export async function verifyLocalStack(
   }
 
   const health = await requireJson(
-    await fetcher(new URL("/api/health", baseUrl)),
-    "health-service",
+    await fetcher(
+      new Request(new URL("/api/health", baseUrl), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ interactionId: "e2e-interaction" }),
+      }),
+    ),
+    "health report",
   );
-  if (health.service !== "health-service" || health.status !== "ok") {
-    throw new Error("health-service did not prove the auxiliary Worker binding");
+  const parsedHealth = healthReportSchema.safeParse(health);
+  if (!parsedHealth.success || parsedHealth.data.outcome !== "healthy") {
+    throw new Error("health report did not prove the auxiliary Worker aggregation");
   }
 
   const runtime = await requireJson(
@@ -47,5 +56,5 @@ export async function verifyLocalStack(
   if (runtime.mode !== "fake")
     throw new Error("local runtime must default to credential-free fake mode");
 
-  return { health: "ok", mode: "fake", routes: [...routes] };
+  return { health: "healthy", mode: "fake", routes: [...routes] };
 }

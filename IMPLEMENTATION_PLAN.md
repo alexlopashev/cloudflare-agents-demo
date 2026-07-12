@@ -728,6 +728,12 @@ Acceptance criteria:
 
 ### Phase 3 — Supervised application
 
+Status: the known-good Deployboard experience is complete in issue #4. One browser refresh fans out
+to three concurrent auxiliary Worker checks, preserves stable service order, returns bounded partial
+failures, and carries interaction, trace, and Worker release identifiers. Browser performance
+storage lands in issue #5; the intentional sequential regression and repeatable scenario remain in
+issue #6.
+
 - Build Deployboard.
 - Implement concurrent health loading.
 - Add browser performance measurement.
