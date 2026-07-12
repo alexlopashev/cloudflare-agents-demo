@@ -21,7 +21,7 @@ The project is a take-home exercise for building and deploying a genuine multi-s
 - D1 for measured UX events, traces, spans, and releases
 - An auxiliary health-service Worker reached through a service binding
 - A constrained, read-only GitHub REST adapter for immutable repository evidence
-- A planned approval-gated GitHub adapter for bounded draft PR creation
+- An approval-gated GitHub adapter for bounded, idempotent draft PR creation
 - React, TypeScript, pnpm, and a mise-managed toolchain
 
 The initial product supports one controlled repository, one supervised application, one latency-regression scenario, and one guarded remediation path. It is intentionally not a general-purpose coding agent.
@@ -36,7 +36,7 @@ Bootstrap is repository-local and affects only the active shell. It never edits 
 
 The reproducible foundation, Cloudflare application skeleton, supervised Deployboard, immutable
 repository connector, measured telemetry pipeline, and evidence-driven investigation are
-implemented.
+implemented, including guarded remediation preview and write boundaries.
 
 ### Bootstrap
 
@@ -84,6 +84,8 @@ explicit Workers AI configuration; Cloudflare authentication and remote usage ap
 verifies both public routes, runtime metadata, the auxiliary service binding, trace persistence,
 correlated browser telemetry, statistically distinguishable scenario evidence, and a credential-free
 five-step Project Think investigation that cites the measured trace, immutable commit, and source PR.
+It also validates an evidence-rich draft-PR preview against base/blob freshness, path, byte, line, and
+changed-line limits while proving that local mode performs no GitHub writes.
 
 ## Engineering method
 
@@ -104,15 +106,20 @@ After every meaningful change, contributors must reassess and align the implemen
 
 ## Current status
 
-Phases 1 through 5 are implemented and verified locally. The real known-good release at `cf25e52`
+Phases 1 through 6 are implemented and verified locally. The real known-good release at `cf25e52`
 loads three service checks concurrently; the current scenario release intentionally serializes them
 to reduce simultaneous downstream pressure. A deterministic reseed measured local p75 latency near
 127 ms versus 380 ms and stored sequential service spans on the degraded critical path. Reset and
 reseed are idempotent and preserve unrelated telemetry. Project Think now performs five bounded
 evidence steps, reports measured latency and trace evidence, resolves commit `d591869…` and PR #19,
-and survives browser reconnection without duplicating messages or tool effects. Issue #9 is next: it
-adds the approval-gated, guarded draft-PR remediation path. The milestone and native blocked-by issue
-graph remain the executable delivery plan.
+and survives browser reconnection without duplicating messages or tool effects. The guarded
+`create_draft_pr` action now requires explicit Project Think approval, is disabled for external writes
+by default, produces a credential-free local preview, and exposes no merge capability. Its live REST
+adapter restricts repository, path, SHA/blob freshness, request/response size, changed lines, draft
+state, and incident idempotency; deterministic branch names make partial writes recoverable.
+[Issue #10](https://github.com/alexlopashev/cloudflare-agents-demo/issues/10) is next: it completes
+local delivery and optional Colima parity. The milestone and native blocked-by issue graph remain the
+executable delivery plan.
 
 ## License
 

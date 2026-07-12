@@ -3,6 +3,7 @@ import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import { createWorkersAI } from "workers-ai-provider";
 
+import { remediationFixture } from "../../../../packages/test-fixtures/src/remediation";
 import { regressionSource } from "../../../../packages/test-fixtures/src/scenario";
 
 export const WORKERS_AI_MODEL = "@cf/moonshotai/kimi-k2.6";
@@ -86,6 +87,67 @@ export function createDeterministicModel(): LanguageModel {
     return found;
   };
   const next = (prompt: unknown) => {
+    const serializedPrompt = JSON.stringify(prompt);
+    const remediationRequested = serializedPrompt
+      .toLowerCase()
+      .includes("prepare the guarded remediation preview");
+    if (remediationRequested) {
+      if (serializedPrompt.includes('"status":"preview"')) {
+        return {
+          type: "text" as const,
+          text: `## Remediation
+The guarded change passed repository, path, SHA, blob, byte, line, and changed-line validation.
+
+## Result
+A validated preview is ready. No GitHub write occurred because writes are disabled in this mode.
+
+## Safety
+The preview grants no merge, deployment, or rollback capability.`,
+        };
+      }
+      if (
+        serializedPrompt.includes('"status":"created"') ||
+        serializedPrompt.includes('"status":"reused"')
+      ) {
+        return {
+          type: "text" as const,
+          text: `## Remediation
+The guarded draft pull request was created or safely reused after explicit approval.
+
+## Safety
+No merge, deployment, or rollback capability was granted.`,
+        };
+      }
+      if (serializedPrompt.includes('"status":"recoverable"')) {
+        return {
+          type: "text" as const,
+          text: `## Remediation
+GitHub returned a recoverable partial state on the deterministic incident branch. Retry the same
+approved action to reconcile or create the draft pull request without creating another branch.`,
+        };
+      }
+      const evidencePresent =
+        serializedPrompt.includes("## Evidence") &&
+        serializedPrompt.includes(regressionSource.commitSha) &&
+        serializedPrompt.includes(`PR #${regressionSource.pullRequestNumber}`);
+      if (!evidencePresent) {
+        return {
+          type: "text" as const,
+          text: "Remediation refused: trace, release, commit, and pull-request evidence are required first.",
+        };
+      }
+      const reportTrace =
+        /Representative trace: ([A-Za-z0-9_-]+)/.exec(serializedPrompt)?.[1] ??
+        remediationFixture.incident.traceId;
+      const proposal = {
+        ...remediationFixture,
+        incident: { ...remediationFixture.incident, traceId: reportTrace },
+        expectedBlobSha: findProperty(prompt, "blobSha") ?? remediationFixture.expectedBlobSha,
+      };
+      step += 1;
+      return { type: "tool" as const, toolName: "create_draft_pr" as const, input: proposal };
+    }
+
     const traceId = findProperty(prompt, "traceId") ?? "regression-trace-unknown";
     const sequence = [
       {
@@ -126,7 +188,7 @@ export function createDeterministicModel(): LanguageModel {
     const toolCall = sequence[step];
     step += 1;
     if (toolCall !== undefined) return { type: "tool" as const, ...toolCall };
-    if (JSON.stringify(prompt).includes('"status":"error"')) {
+    if (serializedPrompt.includes('"status":"error"')) {
       return {
         type: "text" as const,
         text: `## Evidence

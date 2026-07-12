@@ -1,4 +1,5 @@
 import { regressionSource } from "../../../../packages/test-fixtures/src/scenario";
+import { regressionHealthSource } from "../../../../packages/test-fixtures/src/remediation";
 import { GitHubFetchApi, RepositoryConnector, RepositoryConnectorError } from "../github";
 import type { InvestigationEvidenceServices } from "./tools";
 
@@ -17,20 +18,11 @@ type EvidenceServiceOptions = {
   token?: string;
 };
 
-const regressionFileContent = `const services: ServiceHealthResult[] = [];
-if (options.loadingMode === "sequential") {
-  for (const service of serviceDefinitions) {
-    services.push(await loadService(service));
-  }
-} else {
-  services.push(...(await Promise.all(serviceDefinitions.map(loadService))));
-}`;
-
 const regressionFile = {
   path: "workers/platform/src/api/health.ts",
   blobSha: "3333333333333333333333333333333333333333",
-  byteLength: new TextEncoder().encode(regressionFileContent).byteLength,
-  content: regressionFileContent,
+  byteLength: new TextEncoder().encode(regressionHealthSource).byteLength,
+  content: regressionHealthSource,
 } as const;
 
 function createDeterministicRepository(

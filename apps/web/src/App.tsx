@@ -4,20 +4,19 @@ import { useAgent } from "agents/react";
 
 import { Deployboard } from "./deployboard/Deployboard";
 import { resolveExperience } from "./experience";
+import { ApprovalPanel, buildApprovalRequests } from "./investigator/ApprovalPanel";
+import { messageText } from "./investigator/messages";
 import { buildToolTimeline, ToolTimeline } from "./investigator/ToolTimeline";
-
-function messageText(parts: ReadonlyArray<{ type: string; text?: string }>): string {
-  return parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text ?? "")
-    .join("");
-}
 
 function Investigator() {
   const [input, setInput] = useState("");
   const agent = useAgent({ agent: "RegressionSurgeonAgent", name: "local-investigation" });
-  const { messages, sendMessage, status } = useAgentChat({ agent });
+  const { addToolApprovalResponse, messages, sendMessage, status } = useAgentChat({ agent });
   const toolTimeline = buildToolTimeline(messages);
+  const approvals = buildApprovalRequests(messages);
+  const visibleMessages = messages
+    .map((message) => ({ message, text: messageText(message.parts) }))
+    .filter(({ text }) => text.length > 0);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -53,14 +52,18 @@ function Investigator() {
       </section>
       <section className="panel chat-panel" aria-label="Investigation chat">
         <ToolTimeline entries={toolTimeline} />
+        <ApprovalPanel
+          requests={approvals}
+          onDecision={(id, approved) => addToolApprovalResponse({ id, approved })}
+        />
         <div className="messages" aria-live="polite">
-          {messages.length === 0 ? (
+          {visibleMessages.length === 0 ? (
             <p className="empty-state">Describe a latency regression to begin.</p>
           ) : (
-            messages.map((message) => (
+            visibleMessages.map(({ message, text }) => (
               <article className={`message ${message.role}`} key={message.id}>
                 <span>{message.role === "user" ? "You" : "Investigator"}</span>
-                <p>{messageText(message.parts)}</p>
+                <p>{text}</p>
               </article>
             ))
           )}

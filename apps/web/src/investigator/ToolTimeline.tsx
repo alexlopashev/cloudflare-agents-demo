@@ -11,6 +11,7 @@ const labels: Record<string, string> = {
   query_telemetry: "Query telemetry",
   inspect_release: "Inspect release",
   read_repo_files: "Read repository files",
+  create_draft_pr: "Create draft PR",
 };
 
 function stringProperty(value: object, property: string): string | undefined {
@@ -36,16 +37,18 @@ export function buildToolTimeline(messages: readonly TimelineMessage[]): ToolTim
       const failed = state === "output-error" || outputStatus === "error";
       const completed = state === "output-available" && !failed;
       entries.push({
-        id: stringProperty(part, "toolCallId") ?? `${message.id}-${index}`,
+        id: `${message.id}-${stringProperty(part, "toolCallId") ?? index}`,
         label: labels[toolName] ?? toolName,
         state: failed ? "failed" : completed ? "completed" : "running",
         summary: failed
           ? "Evidence lookup failed"
-          : outputStatus === "truncated"
-            ? "Evidence received (truncated to context limit)"
-            : completed
-              ? "Evidence received"
-              : "Gathering evidence",
+          : state === "approval-requested"
+            ? "Awaiting human approval"
+            : outputStatus === "truncated"
+              ? "Evidence received (truncated to context limit)"
+              : completed
+                ? "Evidence received"
+                : "Gathering evidence",
       });
     }
   }

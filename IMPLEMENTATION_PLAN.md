@@ -385,8 +385,8 @@ Workers AI bindings execute remotely even when Worker code runs locally. The pro
 - Commit and PR correlation
 - Structured evidence, inference, confidence, and unknowns
 
-It never calls a live model or writes to GitHub. Phase 6 extends this path with a validated draft-PR
-preview and explicit approval behavior.
+It never calls a live model or writes to GitHub. The same E2E now validates an evidence-rich draft-PR
+preview, while rendered-browser verification covers the native approval request and continuation.
 
 `mise run dev:live` uses Workers AI and requires Cloudflare authentication.
 
@@ -554,10 +554,13 @@ The PR tool enforces:
 - No `.github`, secrets, agent code, or deployment configuration changes
 - Telemetry evidence IDs in the PR body
 - Incident-fingerprint idempotency
+- Deterministic branch recovery after uncertain write responses
 - `GITHUB_WRITE_ENABLED=false` by default
 - No merge capability
 
-Local execution returns a validated PR preview. Production write behavior is enabled only for the final demonstration environment.
+Local execution returns a validated PR preview after the same server-side proposal checks and never
+constructs a write-capable adapter. Live mode requires a scoped `GITHUB_TOKEN`; production write
+behavior additionally requires `GITHUB_WRITE_ENABLED=true` and explicit approval of the action.
 
 ## 15. Strict TDD and test strategy
 
@@ -680,7 +683,9 @@ The deterministic fake model follows a realistic investigation path:
 The E2E runner starts the actual local Worker stack, waits for readiness, loads measured scenario
 evidence, submits the investigation prompt through a local-only Durable Object RPC, observes the five
 tool events, and validates the trace-, commit-, and PR-backed report. Browser verification separately
-proves the rendered timeline and reconnect behavior. Phase 6 adds the guarded PR preview.
+proves the rendered timeline and reconnect behavior. The E2E then validates a same-trace remediation
+preview with zero external writes. Rendered-browser verification proves that the action parks before
+execution, exposes one file and its evidence trace, and continues only after explicit approval.
 
 End-to-end tests must not depend on a live LLM, GitHub writes, wall-clock sleeps, unseeded randomness, or shared mutable remote data.
 
@@ -795,6 +800,16 @@ Acceptance criteria:
 - Tool failures produce bounded, understandable recovery behavior.
 
 ### Phase 6 — Draft PR
+
+Status: complete in issue #9. `create_draft_pr` is a native Project Think action with explicit
+high-risk approval, a narrow permission, and preview/write-scoped incident idempotency. The
+server-side service validates configured repository and path, matching regression/base SHA, current
+blob SHA, replacement byte and line bounds, changed-line count, draft-only output, evidence-rich body,
+and deterministic branch state. Fake mode always returns a validated preview without network access.
+The live GitHub REST adapter requires a token and remains write-disabled until the explicit flag is
+set. Existing PRs are reused, and uncertain branch or PR responses return deterministic recoverable
+state without creating another branch. Recovery accepts only a branch exactly one commit ahead of
+the evidenced base with exactly the approved file changed. No merge endpoint or tool exists.
 
 - Add guarded PR proposal creation.
 - Add Project Think approval interaction.

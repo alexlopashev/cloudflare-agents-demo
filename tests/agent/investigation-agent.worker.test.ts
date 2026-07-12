@@ -11,6 +11,62 @@ declare global {
   }
 }
 
+async function seedRegressionEvidence() {
+  const store = createTelemetryStore(env.TELEMETRY_DB);
+  for (const [releaseId, gitSha, deployedAtMs, durationMs] of [
+    ["baseline-concurrent", "cf25e5253b106b1e7514340abe94bd42fd748725", 1_700_000_000_000, 130],
+    ["regression-sequential", "d591869a8ef995f1835ef80152f4de085b10255b", 1_700_086_400_000, 381],
+  ] as const) {
+    for (let sequence = 1; sequence <= 20; sequence += 1) {
+      const traceId = `${releaseId}-trace-${sequence}`;
+      const interactionId = `${releaseId}-interaction-${sequence}`;
+      const startedAtMs = deployedAtMs + sequence * 1_000;
+      const serviceDuration = releaseId === "regression-sequential" ? 127 : 125;
+      await store.recordTrace({
+        release: { releaseId, gitSha, deployedAtMs },
+        trace: {
+          traceId,
+          interactionId,
+          releaseId,
+          startedAtMs,
+          durationMs,
+          outcome: "success",
+        },
+        spans: [
+          {
+            traceId,
+            spanId: "request",
+            parentSpanId: null,
+            serviceId: "platform",
+            startedAtMs,
+            durationMs,
+            status: "success",
+          },
+          ...["api", "jobs", "storage"].map((serviceId, index) => ({
+            traceId,
+            spanId: `service-${serviceId}`,
+            parentSpanId: "request",
+            serviceId,
+            startedAtMs:
+              startedAtMs + (releaseId === "regression-sequential" ? serviceDuration * index : 0),
+            durationMs: serviceDuration,
+            status: "success" as const,
+          })),
+        ],
+      });
+      await store.recordUxEvent({
+        interactionId,
+        traceId,
+        releaseId,
+        metricName: "service_grid_ready_ms",
+        durationMs,
+        outcome: "success",
+        recordedAtMs: startedAtMs + durationMs,
+      });
+    }
+  }
+}
+
 describe("RegressionSurgeonAgent investigation policy", () => {
   beforeEach(async () => {
     await env.TELEMETRY_DB.exec(
@@ -34,6 +90,8 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     const policy = await runInDurableObject<
       RegressionSurgeonAgent,
       {
+        actionApproval: unknown;
+        actions: string[];
         activeTools: unknown;
         maxSteps: number;
         prompt: string;
@@ -43,7 +101,10 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     >(stub, async (instance) => {
       await instance.onStart();
       const turn = await instance.beforeTurn({} as never);
+      const actions = await instance.getActions();
       return {
+        actionApproval: actions.create_draft_pr?.config.approval,
+        actions: Object.keys(actions),
         activeTools: turn?.activeTools,
         maxSteps: instance.maxSteps,
         prompt: instance.getSystemPrompt(),
@@ -53,12 +114,17 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     });
 
     expect(policy).toEqual({
-      activeTools: ["query_telemetry", "inspect_release", "read_repo_files"],
+      actionApproval: true,
+      actions: ["create_draft_pr"],
+      activeTools: ["query_telemetry", "inspect_release", "read_repo_files", "create_draft_pr"],
       maxSteps: 8,
       prompt: expect.stringMatching(/evidence[\s\S]+inference[\s\S]+confidence[\s\S]+unknowns/i),
       tools: ["query_telemetry", "inspect_release", "read_repo_files"],
       workspaceBash: false,
     });
+    expect(policy.prompt).not.toMatch(
+      /Never claim\s+that a write, deployment, rollback, or pull-request creation occurred\./,
+    );
   });
 
   it("exposes the deterministic investigation through its local RPC boundary", async () => {
@@ -206,5 +272,50 @@ describe("RegressionSurgeonAgent investigation policy", () => {
 
     expect(toolTypes).toHaveLength(8);
     expect(new Set(toolTypes)).toEqual(new Set(["tool-query_telemetry"]));
+  });
+
+  it("parks the guarded remediation action until explicit human approval", async () => {
+    await seedRegressionEvidence();
+    const id = env.REGRESSION_SURGEON_AGENT.idFromName("approval-gated-remediation");
+    const stub = env.REGRESSION_SURGEON_AGENT.get(id);
+
+    const pending = await runInDurableObject<
+      RegressionSurgeonAgent,
+      {
+        approvalId: string | undefined;
+        output: unknown;
+        state: string | undefined;
+      }
+    >(stub, async (instance) => {
+      await instance.onStart();
+      await instance.runTurn({ input: "Investigate the measured latency regression." });
+      await instance.runTurn({ input: "Prepare the guarded remediation preview." });
+      const messages = await instance.getMessages();
+      const part = messages
+        .flatMap((message) => message.parts)
+        .find((candidate) => candidate.type === "tool-create_draft_pr");
+      if (part === undefined || !("state" in part)) {
+        return {
+          approvalId: undefined,
+          output: undefined,
+          state: undefined,
+        };
+      }
+      const approval = "approval" in part ? part.approval : undefined;
+      return {
+        approvalId:
+          approval !== undefined && typeof approval === "object" && approval !== null
+            ? Reflect.get(approval, "id")
+            : undefined,
+        output: "output" in part ? part.output : undefined,
+        state: typeof part.state === "string" ? part.state : undefined,
+      };
+    });
+
+    expect(pending).toEqual({
+      approvalId: expect.any(String),
+      output: undefined,
+      state: "approval-requested",
+    });
   });
 });

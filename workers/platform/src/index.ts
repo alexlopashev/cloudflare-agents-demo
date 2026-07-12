@@ -5,6 +5,9 @@ import { routeAgentRequest } from "agents";
 
 import { createAgentModel } from "./agent/model";
 import { createAgentEvidenceServices } from "./agent/evidence-services";
+import { createRemediationAction } from "./agent/remediation-action";
+import { createAgentRemediationService } from "./agent/remediation-services";
+import { remediationFixture } from "../../../packages/test-fixtures/src/remediation";
 import { createInvestigationTools } from "./agent/tools";
 import { handlePlatformRequest, type PlatformBindings } from "./routing";
 import { createTelemetryStore } from "./telemetry/store";
@@ -23,15 +26,20 @@ export class RegressionSurgeonAgent extends Think<PlatformEnvironment> {
 
   override getSystemPrompt(): string {
     return `You are Regression Surgeon, an evidence-first latency investigator.
-Use only the three active evidence tools. First compare measured releases, then inspect slow traces
+Use only the active bounded tools. First compare measured releases, then inspect slow traces
 and one representative trace, then resolve the degraded release to an immutable commit and pull
 request, and finally read only the relevant allowlisted source at that commit. Do not propose a cause
 or fix before trace, release, commit, and pull-request evidence are present.
 
+Only after that evidence is present may you propose one surgical source change through
+create_draft_pr. That action always requires explicit human approval. Never represent a preview as a
+GitHub write, and never claim a branch, commit, or draft PR exists unless the action result says so.
+
 Your final report must contain four explicit sections: Evidence (identifiers and measurements),
 Inference (reasoning derived from that evidence), Confidence (high, medium, or low with rationale),
 and Unknowns (remaining uncertainty). Clearly distinguish observed facts from inference. Never claim
-that a write, deployment, rollback, or pull-request creation occurred.`;
+that a write occurred unless the action result proves it. Never claim a merge, deployment, or
+rollback occurred.`;
   }
 
   override getTools(): ToolSet {
@@ -46,8 +54,26 @@ that a write, deployment, rollback, or pull-request creation occurred.`;
     );
   }
 
+  override getActions() {
+    const writeEnabled =
+      this.env.MODEL_MODE === "workers-ai" && this.env.GITHUB_WRITE_ENABLED === "true";
+    const service = createAgentRemediationService({
+      mode: this.env.MODEL_MODE,
+      repository: { owner: this.env.GITHUB_OWNER, repo: this.env.GITHUB_REPO },
+      writeEnabled,
+      ...(this.env.GITHUB_TOKEN === undefined ? {} : { token: this.env.GITHUB_TOKEN }),
+    });
+    return {
+      create_draft_pr: createRemediationAction(service, {
+        idempotencyScope: writeEnabled ? "write" : "preview",
+      }),
+    };
+  }
+
   override beforeTurn(_context: TurnContext): TurnConfig {
-    return { activeTools: ["query_telemetry", "inspect_release", "read_repo_files"] };
+    return {
+      activeTools: ["query_telemetry", "inspect_release", "read_repo_files", "create_draft_pr"],
+    };
   }
 
   async runLocalInvestigation() {
@@ -65,6 +91,28 @@ that a write, deployment, rollback, or pull-request creation occurred.`;
       .map((part) => part.text)
       .join("\n");
     return { toolTypes, report };
+  }
+
+  async runLocalRemediationPreview() {
+    await this.onStart();
+    const messages = await this.getMessages();
+    const report = messages
+      .filter((message) => message.role === "assistant")
+      .flatMap((message) => message.parts)
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join("\n");
+    const traceId = /Representative trace: ([A-Za-z0-9_-]+)/.exec(report)?.[1];
+    if (traceId === undefined) throw new Error("Investigation trace evidence is unavailable.");
+    const action = this.getActions().create_draft_pr;
+    if (action === undefined) throw new Error("Remediation action is unavailable.");
+    return action.config.execute(
+      {
+        ...remediationFixture,
+        incident: { ...remediationFixture.incident, traceId },
+      },
+      {} as never,
+    );
   }
 }
 

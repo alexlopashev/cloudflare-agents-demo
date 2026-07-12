@@ -1,8 +1,9 @@
 import { stepCountIs, streamText, tool } from "ai";
 import { z } from "zod";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createDeterministicModel } from "../../workers/platform/src/agent/model";
+import { remediationFixture } from "../../packages/test-fixtures/src/remediation";
 
 describe("deterministic investigation model", () => {
   it("performs the complete evidence sequence before producing a structured report", async () => {
@@ -93,5 +94,41 @@ describe("deterministic investigation model", () => {
 
     expect(text).toMatch(/Evidence[\s\S]+unavailable[\s\S]+Confidence[\s\S]+Low/i);
     expect(text).not.toMatch(/likely cause/i);
+  });
+
+  it("proposes the bounded fix only after existing evidence and reports preview-only execution", async () => {
+    const execute = vi.fn(async () => ({
+      status: "preview" as const,
+      writesPerformed: false as const,
+      branch: "regression-surgeon/0123456789abcdef",
+    }));
+    const result = streamText({
+      model: createDeterministicModel(),
+      prompt: `Existing report:
+## Evidence
+Representative trace: scenario-trace-39. Immutable source: commit ${remediationFixture.expectedBaseSha}; PR #19.
+Prepare the guarded remediation preview.`,
+      tools: {
+        create_draft_pr: tool({
+          inputSchema: z.object({}).passthrough(),
+          execute,
+        }),
+      },
+      stopWhen: stepCountIs(8),
+    });
+
+    const text = await result.text;
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...remediationFixture,
+        incident: expect.objectContaining({ traceId: "scenario-trace-39" }),
+      }),
+      expect.anything(),
+    );
+    expect(text).toMatch(/validated preview/i);
+    expect(text).toMatch(/no GitHub write/i);
+    expect(text).not.toMatch(/created draft PR/i);
   });
 });

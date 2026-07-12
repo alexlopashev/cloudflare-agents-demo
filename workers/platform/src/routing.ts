@@ -16,6 +16,7 @@ export interface PlatformBindings {
   GITHUB_OWNER: string;
   GITHUB_REPO: string;
   GITHUB_TOKEN?: string;
+  GITHUB_WRITE_ENABLED: string;
   HEALTH_LOADING_MODE: "concurrent" | "sequential";
   HEALTH_SERVICE: FetchBinding;
   MODEL_MODE: string;
@@ -75,6 +76,14 @@ export async function handlePlatformRequest(
           runLocalInvestigation(): Promise<{ toolTypes: string[]; report: string }>;
         };
         return agent.runLocalInvestigation();
+      },
+      previewRemediation: async () => {
+        const agent = bindings.REGRESSION_SURGEON_AGENT.getByName(
+          "local-e2e-investigation",
+        ) as unknown as {
+          runLocalRemediationPreview(): Promise<unknown>;
+        };
+        return agent.runLocalRemediationPreview();
       },
     });
   }

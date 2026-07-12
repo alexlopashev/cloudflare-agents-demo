@@ -37,6 +37,11 @@ function options() {
     report: "## Evidence\nComplete",
     toolTypes: ["tool-query_telemetry", "tool-inspect_release", "tool-read_repo_files"],
   }));
+  const previewRemediation = vi.fn(async () => ({
+    status: "preview",
+    writesPerformed: false,
+    body: "## Evidence\nscenario-trace-34\n## Risk\n## Validation",
+  }));
   return {
     options: {
       enabled: true,
@@ -46,10 +51,12 @@ function options() {
       findSlowTraces,
       getTraceDetail,
       investigate,
+      previewRemediation,
     },
     resetScenarioEvidence,
     generate,
     investigate,
+    previewRemediation,
   };
 }
 
@@ -143,5 +150,22 @@ describe("local scenario control", () => {
       toolTypes: ["tool-query_telemetry", "tool-inspect_release", "tool-read_repo_files"],
     });
     expect(fixture.investigate).toHaveBeenCalledOnce();
+  });
+
+  it("returns a validated remediation preview without external writes", async () => {
+    const fixture = options();
+
+    const response = await handleScenarioRequest(
+      request("/api/scenario/remediation-preview"),
+      fixture.options,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      status: "preview",
+      writesPerformed: false,
+      body: "## Evidence\nscenario-trace-34\n## Risk\n## Validation",
+    });
+    expect(fixture.previewRemediation).toHaveBeenCalledOnce();
   });
 });

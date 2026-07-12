@@ -33,6 +33,7 @@ export type ScenarioControlOptions = {
     criticalPath: { durationMs: number; spanIds: string[] };
   } | null>;
   investigate(): Promise<unknown>;
+  previewRemediation(): Promise<unknown>;
 };
 
 const seedSchema = z
@@ -99,6 +100,11 @@ export async function handleScenarioRequest(
   }
   if (path === "/api/scenario/investigate") {
     return Response.json(await options.investigate(), {
+      headers: { "cache-control": "no-store" },
+    });
+  }
+  if (path === "/api/scenario/remediation-preview") {
+    return Response.json(await options.previewRemediation(), {
       headers: { "cache-control": "no-store" },
     });
   }

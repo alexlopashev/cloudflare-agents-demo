@@ -300,6 +300,39 @@ h1 {
   color: #697479;
   text-align: right;
 }
+.approval-panel {
+  padding: 22px 28px;
+  border-bottom: 1px solid #17232918;
+  background: #fff8e8;
+}
+.approval-panel article {
+  padding: 18px;
+  border: 1px solid #d6b25b;
+  border-radius: 14px;
+  background: #fffdf7;
+}
+.approval-panel h2 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+}
+.approval-panel dl div {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 10px;
+}
+.approval-panel dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.approval-actions {
+  display: flex;
+  gap: 10px;
+}
+.approval-actions button:last-child {
+  border-color: #95533f;
+  background: transparent;
+  color: #7b3f2f;
+}
 .messages {
   flex: 1;
   padding: 28px;
