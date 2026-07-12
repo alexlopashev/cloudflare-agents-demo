@@ -6,7 +6,10 @@ import { createWorkersAI } from "workers-ai-provider";
 import { remediationFixture } from "../../../../packages/test-fixtures/src/remediation";
 import { regressionSource } from "../../../../packages/test-fixtures/src/scenario";
 
-export const WORKERS_AI_MODEL = "@cf/moonshotai/kimi-k2.6";
+export const WORKERS_AI_MODEL = "@cf/zai-org/glm-4.7-flash";
+export const WORKERS_AI_MODEL_SETTINGS = {
+  parallel_tool_calls: false,
+} as const;
 
 export interface ModelEnvironment<TBinding = Ai> {
   AI?: TBinding;
@@ -15,7 +18,7 @@ export interface ModelEnvironment<TBinding = Ai> {
 
 export interface ModelFactories<T, TBinding = Ai> {
   fake(): T;
-  workersAI(binding: TBinding, modelId: string): T;
+  workersAI(binding: TBinding, modelId: string, settings: typeof WORKERS_AI_MODEL_SETTINGS): T;
 }
 
 export function selectAgentModel<T, TBinding>(
@@ -26,7 +29,7 @@ export function selectAgentModel<T, TBinding>(
 
   if (environment.MODEL_MODE === "workers-ai") {
     if (!environment.AI) throw new Error("Workers AI mode requires the AI binding.");
-    return factories.workersAI(environment.AI, WORKERS_AI_MODEL);
+    return factories.workersAI(environment.AI, WORKERS_AI_MODEL, WORKERS_AI_MODEL_SETTINGS);
   }
 
   throw new Error(`Unsupported model mode: ${environment.MODEL_MODE}`);
@@ -304,6 +307,6 @@ has been performed.`,
 export function createAgentModel(environment: ModelEnvironment): LanguageModel {
   return selectAgentModel(environment, {
     fake: createDeterministicModel,
-    workersAI: (binding, modelId) => createWorkersAI({ binding })(modelId),
+    workersAI: (binding, modelId, settings) => createWorkersAI({ binding })(modelId, settings),
   });
 }

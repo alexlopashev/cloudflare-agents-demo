@@ -349,6 +349,9 @@ which Node can type-strip without a loader; `tsc --noEmit` remains the separate 
 | `mise run auth:cloudflare` | Run Cloudflare authentication and status checks |
 | `mise run auth:github` | Run GitHub authentication and status checks |
 | `mise run deploy` | Apply remote migrations and deploy |
+| `mise run deploy:refresh` | Redeploy only the investigator while preserving measured evidence |
+| `mise run deploy:smoke` | Verify public routes, runtime, agent evidence, preview, and write posture |
+| `mise run deploy:reset` | Remove only the last measured release pair from remote D1 |
 | `mise run teardown` | Remove repository-owned local state |
 
 ## 10. Local development strategy
@@ -861,18 +864,23 @@ Acceptance criteria:
 
 ### Phase 8 — Deployment and evidence
 
-Tracked by issue #11.
+Status: complete in issue #11. The deployment task creates or reuses the named D1 database, applies
+remote migrations, measures 20 concurrent and 20 sequential interactions under distinct Cloudflare
+version IDs, and deploys the public GLM 4.7 Flash Project Think investigator. The final configuration
+injects the exact evidence IDs and bounded degraded trace window. A keyed smoke invokes the real
+Durable Object and Workers AI model, verifies the five evidence tools and structured report, validates
+a remediation preview, and proves GitHub writes remain disabled.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
 - Deploy the regression and generate incident traffic.
-- Configure the GitHub secret and write flag.
+- Keep GitHub writes off by default; select live reads only when a scoped token is supplied.
 - Deploy the public investigator.
 - Perform the complete reviewer walkthrough.
 
 Acceptance criteria:
 
-- The public URL demonstrates symptom → trace → commit/PR → draft fix.
+- The public URL demonstrates symptom → trace → commit/PR → validated draft-fix preview.
 - The demo requires no reviewer login.
 - The README documents recovery if telemetry or the PR needs resetting.
 

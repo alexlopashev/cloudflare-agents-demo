@@ -22,6 +22,11 @@ function createBindings() {
       id: "version-good",
       timestamp: "2026-07-11T12:00:00.000Z",
     },
+    DEPLOY_SMOKE_KEY: "",
+    EVIDENCE_BASELINE_RELEASE_ID: "baseline-version",
+    EVIDENCE_DEGRADED_RELEASE_ID: "degraded-version",
+    EVIDENCE_DEGRADED_SINCE_MS: "1000",
+    EVIDENCE_DEGRADED_UNTIL_MS: "2000",
     GIT_SHA: "0123456789abcdef0123456789abcdef01234567",
     GITHUB_OWNER: "alexlopashev",
     GITHUB_REPO: "cloudflare-agents-demo",
@@ -44,6 +49,45 @@ function createBindings() {
 }
 
 describe("platform routing", () => {
+  it("keeps the deployed-agent smoke route keyed and invokes one isolated agent", async () => {
+    const { bindings } = createBindings();
+    const runLocalInvestigation = vi.fn(async () => ({
+      toolTypes: ["tool-query_telemetry"],
+      report: "Evidence Inference Confidence Unknowns",
+    }));
+    const runLocalRemediationPreview = vi.fn(async () => ({
+      status: "preview",
+      writesPerformed: false,
+    }));
+    const getByName = vi.fn(() => ({ runLocalInvestigation, runLocalRemediationPreview }));
+    bindings.DEPLOY_SMOKE_KEY = "deployment-smoke-key-123456";
+    bindings.REGRESSION_SURGEON_AGENT = { getByName } as unknown as DurableObjectNamespace;
+
+    const denied = await handlePlatformRequest(
+      new Request("https://example.test/api/deployment-smoke", { method: "POST" }),
+      bindings,
+      async () => null,
+    );
+    expect(denied.status).toBe(404);
+
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/api/deployment-smoke", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-deploy-smoke-key": "deployment-smoke-key-123456",
+        },
+        body: JSON.stringify({ session: "deployment-smoke-1234567890" }),
+      }),
+      bindings,
+      async () => null,
+    );
+    expect(response.status).toBe(200);
+    expect(getByName).toHaveBeenCalledExactlyOnceWith("deployment-smoke-1234567890");
+    expect(runLocalInvestigation).toHaveBeenCalledOnce();
+    expect(runLocalRemediationPreview).toHaveBeenCalledOnce();
+  });
+
   it("delegates health requests to the auxiliary Worker binding", async () => {
     const { bindings, healthFetch, recordTrace, telemetryStoreFactory } = createBindings();
     const response = await handlePlatformRequest(
@@ -146,7 +190,12 @@ describe("platform routing", () => {
     );
 
     expect(await response.json()).toEqual({
+      evidence: {
+        baselineReleaseId: "baseline-version",
+        degradedReleaseId: "degraded-version",
+      },
       gitSha: "0123456789abcdef0123456789abcdef01234567",
+      githubWriteEnabled: false,
       mode: "fake",
       versionId: "version-good",
     });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { selectAgentModel } from "../../workers/platform/src/agent/model";
+import { WORKERS_AI_MODEL_SETTINGS } from "../../workers/platform/src/agent/model";
 
 describe("agent model selection", () => {
   it("uses the deterministic model without reading the Workers AI binding", () => {
@@ -27,7 +28,11 @@ describe("agent model selection", () => {
     expect(
       selectAgentModel({ AI: binding, MODEL_MODE: "workers-ai" }, { fake: vi.fn(), workersAI }),
     ).toBe(liveModel);
-    expect(workersAI).toHaveBeenCalledWith(binding, "@cf/moonshotai/kimi-k2.6");
+    expect(workersAI).toHaveBeenCalledWith(
+      binding,
+      "@cf/zai-org/glm-4.7-flash",
+      WORKERS_AI_MODEL_SETTINGS,
+    );
   });
 
   it("fails closed for an unsupported model mode", () => {

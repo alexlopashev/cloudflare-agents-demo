@@ -181,15 +181,21 @@ describe("GitHubDraftPrApi", () => {
     expect(Object.getOwnPropertyNames(GitHubDraftPrApi.prototype)).not.toContain("merge");
   });
 
-  it("fails closed on missing tokens, unsafe paths, oversized responses, and non-draft PRs", async () => {
-    expect(
-      () =>
-        new GitHubDraftPrApi({
-          repository: { owner: "example", repo: "supervised" },
-          allowedPaths: ["workers/platform/src/api/health.ts"],
-          maxResponseBytes: 100,
-        }),
-    ).toThrow();
+  it("allows anonymous reads but fails closed on unauthenticated writes and unsafe input", async () => {
+    const anonymousFetcher = vi.fn(async (request: Request) => {
+      expect(request.headers.has("authorization")).toBe(false);
+      return Response.json({ object: { sha: baseSha } });
+    });
+    const anonymous = new GitHubDraftPrApi({
+      fetcher: anonymousFetcher,
+      repository: { owner: "example", repo: "supervised" },
+      allowedPaths: ["workers/platform/src/api/health.ts"],
+      maxResponseBytes: 100,
+    });
+    await expect(anonymous.createBlob("replacement")).rejects.toMatchObject({
+      code: "not-allowed",
+    });
+    expect(anonymousFetcher).not.toHaveBeenCalled();
 
     const fetcher = vi.fn(async () => Response.json({ body: "x".repeat(200) }));
     const api = new GitHubDraftPrApi({

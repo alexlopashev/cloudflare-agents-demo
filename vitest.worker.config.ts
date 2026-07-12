@@ -7,6 +7,11 @@ export default defineConfig({
       main: "./workers/platform/src/index.ts",
       miniflare: {
         bindings: {
+          DEPLOY_SMOKE_KEY: "",
+          EVIDENCE_BASELINE_RELEASE_ID: "",
+          EVIDENCE_DEGRADED_RELEASE_ID: "",
+          EVIDENCE_DEGRADED_SINCE_MS: "",
+          EVIDENCE_DEGRADED_UNTIL_MS: "",
           GIT_SHA: "0000000000000000000000000000000000000000",
           GITHUB_OWNER: "alexlopashev",
           GITHUB_REPO: "cloudflare-agents-demo",

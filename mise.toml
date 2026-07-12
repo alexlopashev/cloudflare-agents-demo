@@ -79,6 +79,26 @@ run = "pnpm dev"
 description = "Build and run locally with the live Workers AI binding"
 run = "pnpm dev:live"
 
+[tasks."auth:cloudflare"]
+description = "Authenticate Wrangler for remote Cloudflare operations"
+run = "wrangler login"
+
+[tasks.deploy]
+description = "Deploy measured evidence and the public Workers AI investigator"
+run = "pnpm run deploy"
+
+[tasks."deploy:smoke"]
+description = "Verify the last public deployment and its safe runtime posture"
+run = "pnpm run deploy:smoke"
+
+[tasks."deploy:refresh"]
+description = "Redeploy only the public investigator while preserving measured evidence"
+run = "pnpm run deploy:refresh"
+
+[tasks."deploy:reset"]
+description = "Remove only the measured baseline and regression evidence from remote D1"
+run = "pnpm run deploy:reset"
+
 [tasks."container:check"]
 description = "Validate the optional single-container Compose model"
 run = "docker-cli-plugin-docker-compose --file compose.yaml config --quiet"
