@@ -1,3 +1,8 @@
+import {
+  configuredIncidentReference,
+  type IncidentEnvironment,
+  type IncidentReference,
+} from "../../../packages/contracts/src/incident";
 import { handleHealthApiRequest } from "./api/health-handler";
 import { generateRegressionScenario } from "./scenario/generator";
 import { handleScenarioRequest } from "./scenario/handler";
@@ -8,15 +13,11 @@ export interface FetchBinding {
   fetch(request: Request): Promise<Response>;
 }
 
-export interface PlatformBindings {
+export interface PlatformBindings extends IncidentEnvironment {
   AI?: Ai;
   ASSETS: FetchBinding;
   CF_VERSION_METADATA: { id: string; timestamp?: string };
   DEPLOY_SMOKE_KEY?: string;
-  EVIDENCE_BASELINE_RELEASE_ID: string;
-  EVIDENCE_DEGRADED_RELEASE_ID: string;
-  EVIDENCE_DEGRADED_SINCE_MS: string;
-  EVIDENCE_DEGRADED_UNTIL_MS: string;
   GIT_SHA: string;
   GITHUB_OWNER: string;
   GITHUB_REPO: string;
@@ -78,7 +79,11 @@ export async function handlePlatformRequest(
         const agent = bindings.REGRESSION_SURGEON_AGENT.getByName(
           "local-e2e-investigation",
         ) as unknown as {
-          runLocalInvestigation(): Promise<{ toolTypes: string[]; report: string }>;
+          runLocalInvestigation(): Promise<{
+            incident: IncidentReference;
+            toolTypes: string[];
+            report: string;
+          }>;
         };
         return agent.runLocalInvestigation();
       },
@@ -116,14 +121,17 @@ export async function handlePlatformRequest(
   }
 
   if (url.pathname === "/api/runtime") {
+    let incident: IncidentReference;
+    try {
+      incident = configuredIncidentReference(bindings);
+    } catch {
+      return Response.json({ error: { code: "invalid-incident-configuration" } }, { status: 503 });
+    }
     return Response.json({
       mode: bindings.MODEL_MODE,
       versionId: bindings.CF_VERSION_METADATA.id,
       gitSha: bindings.GIT_SHA,
-      evidence: {
-        baselineReleaseId: bindings.EVIDENCE_BASELINE_RELEASE_ID,
-        degradedReleaseId: bindings.EVIDENCE_DEGRADED_RELEASE_ID,
-      },
+      incident,
       githubWriteEnabled: bindings.GITHUB_WRITE_ENABLED === "true",
     });
   }
@@ -148,7 +156,11 @@ export async function handlePlatformRequest(
       return Response.json({ error: { code: "invalid-request" } }, { status: 400 });
     }
     const agent = bindings.REGRESSION_SURGEON_AGENT.getByName(session) as unknown as {
-      runLocalInvestigation(): Promise<{ toolTypes: string[]; report: string }>;
+      runLocalInvestigation(): Promise<{
+        incident: IncidentReference;
+        toolTypes: string[];
+        report: string;
+      }>;
       runLocalRemediationPreview(): Promise<unknown>;
     };
     const investigation = await agent.runLocalInvestigation();

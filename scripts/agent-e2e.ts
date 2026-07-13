@@ -1,7 +1,10 @@
 import { createServer } from "vite";
 import { z } from "zod";
 
+import { incidentReferenceSchema } from "../packages/contracts/src/incident.ts";
+
 const investigationResultSchema = z.object({
+  incident: incidentReferenceSchema,
   report: z.string(),
   toolTypes: z.array(z.string()),
 });
@@ -39,7 +42,9 @@ try {
   ];
   if (
     !result.success ||
+    result.data.incident.incidentId !== "configured-latency-regression" ||
     JSON.stringify(result.data.toolTypes) !== JSON.stringify(expectedTools) ||
+    !result.data.report.includes(result.data.incident.incidentId) ||
     !/Evidence[\s\S]+scenario-trace-[0-9]+[\s\S]+d591869[\s\S]+PR #19/.test(result.data.report) ||
     !/Inference[\s\S]+Confidence[\s\S]+Unknowns/.test(result.data.report)
   ) {
@@ -68,6 +73,7 @@ try {
     !preview.success ||
     !/^regression-surgeon\/[0-9a-f]{16}$/.test(preview.data.branch) ||
     !preview.data.body.includes(investigatedTraceId) ||
+    !preview.data.body.includes(result.data.incident.incidentId) ||
     !/Evidence[\s\S]+d591869[\s\S]+PR #19/.test(preview.data.body) ||
     !/Risk[\s\S]+Validation/.test(preview.data.body)
   ) {

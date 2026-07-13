@@ -48,11 +48,20 @@ function textContent(message: unknown): string {
 
 export function evidenceInvestigationRequested(messages: readonly unknown[]): boolean {
   const lastUserMessage = messages.findLast((message) => property(message, "role") === "user");
-  return lastUserMessage === undefined
-    ? false
-    : /\b(?:investigat\w*|latency|regression|root cause|slow(?:down|er|ness)?)\b/i.test(
-        textContent(lastUserMessage),
-      );
+  return lastUserMessage !== undefined && messageRequestsInvestigation(lastUserMessage);
+}
+
+function messageRequestsInvestigation(message: unknown): boolean {
+  return /\b(?:investigat\w*|latency|regression|root cause|slow(?:down|er|ness)?)\b/i.test(
+    textContent(message),
+  );
+}
+
+export function messagesForCurrentInvestigation(messages: readonly unknown[]): readonly unknown[] {
+  const start = messages.findLastIndex(
+    (message) => property(message, "role") === "user" && messageRequestsInvestigation(message),
+  );
+  return start < 0 ? messages : messages.slice(start);
 }
 
 function unwrapModelToolOutput(output: unknown): unknown {

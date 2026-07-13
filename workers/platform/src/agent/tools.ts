@@ -1,6 +1,10 @@
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 
+import {
+  parseIncidentReference,
+  type IncidentReference,
+} from "../../../../packages/contracts/src/incident";
 import { RepositoryConnectorError } from "../github";
 import { TelemetryBoundsError } from "../telemetry/store";
 
@@ -119,12 +123,23 @@ async function executeBounded(
 
 export function createInvestigationTools(
   services: InvestigationEvidenceServices,
-  options: { maxResultBytes?: number } = {},
+  options: { incident?: IncidentReference; maxResultBytes?: number } = {},
 ): ToolSet {
   const maxResultBytes = options.maxResultBytes ?? 16_384;
   if (!Number.isSafeInteger(maxResultBytes) || maxResultBytes < 256 || maxResultBytes > 32_768) {
     throw new TypeError("Tool result byte policy is invalid.");
   }
+  const incident =
+    options.incident === undefined ? undefined : parseIncidentReference(options.incident);
+  const incidentMismatch = () =>
+    truncateResult(
+      {
+        status: "error" as const,
+        code: "incident-mismatch" as const,
+        message: "Evidence request does not match the configured incident." as const,
+      },
+      maxResultBytes,
+    );
 
   return {
     query_telemetry: tool({
@@ -134,10 +149,25 @@ export function createInvestigationTools(
       execute: async (rawInput) => {
         const input = queryTelemetrySchema.parse(rawInput);
         if (input.operation === "compare-releases") {
+          if (
+            incident !== undefined &&
+            (input.baselineReleaseId !== incident.baselineReleaseId ||
+              input.candidateReleaseId !== incident.degradedReleaseId)
+          ) {
+            return incidentMismatch();
+          }
           return executeBounded(() => services.telemetry.compareReleases(input), maxResultBytes);
         }
         if (input.operation === "find-slow-traces") {
           if (input.untilMs <= input.sinceMs) throw new TypeError("Trace time window is invalid.");
+          if (
+            incident !== undefined &&
+            (input.releaseId !== incident.degradedReleaseId ||
+              input.sinceMs !== incident.traceWindow.sinceMs ||
+              input.untilMs !== incident.traceWindow.untilMs)
+          ) {
+            return incidentMismatch();
+          }
           const query = {
             sinceMs: input.sinceMs,
             untilMs: input.untilMs,
@@ -158,6 +188,9 @@ export function createInvestigationTools(
       inputSchema: inspectReleaseSchema,
       execute: async (rawInput) => {
         const input = inspectReleaseSchema.parse(rawInput);
+        if (incident !== undefined && input.versionId !== incident.degradedReleaseId) {
+          return incidentMismatch();
+        }
         return executeBounded(
           () => services.repository.inspectRelease(input.versionId),
           maxResultBytes,

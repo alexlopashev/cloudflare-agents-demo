@@ -1036,7 +1036,7 @@ Acceptance criteria:
 
 ### Phase 13 — Reviewer-ready evidence contract and simplification
 
-Status: planned in the
+Status: in progress in the
 [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3), coordinated by
 [issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48). Completion means a
 credential-free measured investigation and validated write-disabled remediation preview. Live
@@ -1044,7 +1044,9 @@ GitHub write proof remains the optional operator workflow in issue #30.
 
 Work packages:
 
-- Make incident identity explicit and keep metric ingestion separate from incident selection (#38).
+- Incident identity is explicit and validated across runtime metadata, persisted investigation
+  state, bounded evidence tools, structured reports, remediation preparation, fixtures, and deploy
+  state; metric generation is labeled and enforced as ingestion-only (#38).
 - Replace inferred tool-history completion with one typed evidence receipt and mechanically gate
   remediation on it (#39).
 - Reject conflicting telemetry retries and cross-release attribution atomically (#40).

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { parseIncidentReference } from "../packages/contracts/src/incident.ts";
+
 const shaSchema = z.string().regex(/^[0-9a-f]{40}$/);
 const uuidSchema = z.string().uuid();
 
@@ -32,6 +34,7 @@ export type DeploymentStage =
   | { kind: "regression"; gitSha: string }
   | {
       kind: "investigator";
+      incidentId: string;
       gitSha: string;
       baselineReleaseId: string;
       degradedReleaseId: string;
@@ -52,23 +55,26 @@ export function buildPlatformDeploymentConfig(options: DeploymentConfigOptions) 
   const gitSha = shaSchema.parse(options.stage.gitSha);
   const evidence =
     options.stage.kind === "investigator"
-      ? {
-          EVIDENCE_BASELINE_RELEASE_ID: parseVersionId(options.stage.baselineReleaseId),
-          EVIDENCE_DEGRADED_RELEASE_ID: parseVersionId(options.stage.degradedReleaseId),
-          EVIDENCE_DEGRADED_SINCE_MS: z
-            .number()
-            .int()
-            .nonnegative()
-            .parse(options.stage.degradedSinceMs)
-            .toString(),
-          EVIDENCE_DEGRADED_UNTIL_MS: z
-            .number()
-            .int()
-            .positive()
-            .parse(options.stage.degradedUntilMs)
-            .toString(),
-        }
+      ? (() => {
+          const incident = parseIncidentReference({
+            incidentId: options.stage.incidentId,
+            baselineReleaseId: parseVersionId(options.stage.baselineReleaseId),
+            degradedReleaseId: parseVersionId(options.stage.degradedReleaseId),
+            traceWindow: {
+              sinceMs: options.stage.degradedSinceMs,
+              untilMs: options.stage.degradedUntilMs,
+            },
+          });
+          return {
+            EVIDENCE_INCIDENT_ID: incident.incidentId,
+            EVIDENCE_BASELINE_RELEASE_ID: incident.baselineReleaseId,
+            EVIDENCE_DEGRADED_RELEASE_ID: incident.degradedReleaseId,
+            EVIDENCE_DEGRADED_SINCE_MS: incident.traceWindow.sinceMs.toString(),
+            EVIDENCE_DEGRADED_UNTIL_MS: incident.traceWindow.untilMs.toString(),
+          };
+        })()
       : {
+          EVIDENCE_INCIDENT_ID: "",
           EVIDENCE_BASELINE_RELEASE_ID: "",
           EVIDENCE_DEGRADED_RELEASE_ID: "",
           EVIDENCE_DEGRADED_SINCE_MS: "",

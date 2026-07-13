@@ -195,6 +195,7 @@ approved action to reconcile or create the draft pull request without creating a
       return {
         type: "text" as const,
         text: `## Evidence
+- Incident: ${remediationFixture.incident.incidentId}.
 One or more evidence tools returned a bounded unavailable error. The required trace, release,
 commit, pull-request, and source chain is incomplete.
 
@@ -219,6 +220,7 @@ evidence operation before remediation. No write or deployment has been performed
     return {
       type: "text" as const,
       text: `## Evidence
+- Incident: ${remediationFixture.incident.incidentId}; trace window ${remediationFixture.incident.traceWindow.sinceMs}–${remediationFixture.incident.traceWindow.untilMs} ms.
 - Release comparison: baseline-concurrent p75 ${baselineP75} ms; regression-sequential p75 ${candidateP75} ms.
 - Representative trace: ${traceId}; its critical path is approximately ${criticalPathMs} ms with sequential service spans.
 - Immutable source: commit ${regressionSource.commitSha}; PR #${regressionSource.pullRequestNumber}.

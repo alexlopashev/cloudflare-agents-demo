@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   evidenceInvestigationRequested,
   evidenceStepsFromModelMessages,
+  messagesForCurrentInvestigation,
   nextRequiredEvidenceTool,
 } from "../../workers/platform/src/agent/evidence-step-policy";
 
@@ -133,5 +134,19 @@ describe("Project Think evidence step policy", () => {
     expect(nextRequiredEvidenceTool([compare, slow, trace, release, failedRead, failedRead])).toBe(
       "read_repo_files",
     );
+  });
+
+  it("starts a new investigation after the latest matching user request", () => {
+    const messages = [
+      { role: "user", content: [{ type: "text", text: "Investigate the latency regression" }] },
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "Earlier evidence and conclusion" }],
+      },
+      { role: "user", content: [{ type: "text", text: "Investigate the regression again" }] },
+      { role: "assistant", content: [{ type: "text", text: "Current investigation" }] },
+    ];
+
+    expect(messagesForCurrentInvestigation(messages)).toEqual(messages.slice(2));
   });
 });

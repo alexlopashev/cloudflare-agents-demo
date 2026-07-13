@@ -70,6 +70,46 @@ describe("investigation tools", () => {
     expect(evidence.telemetry.findSlowTraces).not.toHaveBeenCalled();
   });
 
+  it("rejects evidence queries outside the active incident reference", async () => {
+    const evidence = services();
+    const tools = createInvestigationTools(evidence, {
+      incident: {
+        incidentId: "configured-latency-regression",
+        baselineReleaseId: "baseline-concurrent",
+        degradedReleaseId: "regression-sequential",
+        traceWindow: { sinceMs: 1_000, untilMs: 2_000 },
+      },
+    });
+
+    await expect(
+      execute(tools.query_telemetry, {
+        operation: "compare-releases",
+        baselineReleaseId: "generated-current-release",
+        candidateReleaseId: "regression-sequential",
+        windowMs: 60_000,
+      }),
+    ).resolves.toEqual({
+      status: "error",
+      code: "incident-mismatch",
+      message: "Evidence request does not match the configured incident.",
+    });
+    await expect(
+      execute(tools.query_telemetry, {
+        operation: "find-slow-traces",
+        releaseId: "regression-sequential",
+        sinceMs: 1_001,
+        untilMs: 2_000,
+        limit: 5,
+      }),
+    ).resolves.toMatchObject({ status: "error", code: "incident-mismatch" });
+    await expect(
+      execute(tools.inspect_release, { versionId: "generated-current-release" }),
+    ).resolves.toMatchObject({ status: "error", code: "incident-mismatch" });
+    expect(evidence.telemetry.compareReleases).not.toHaveBeenCalled();
+    expect(evidence.telemetry.findSlowTraces).not.toHaveBeenCalled();
+    expect(evidence.repository.inspectRelease).not.toHaveBeenCalled();
+  });
+
   it("truncates oversized tool results deterministically before model context", async () => {
     const evidence = services();
     evidence.repository.readFiles.mockResolvedValue([

@@ -2,12 +2,18 @@ import type { PrepareStepContext, TurnConfig, TurnContext } from "@cloudflare/th
 import { Think } from "@cloudflare/think";
 import { routeAgentRequest } from "agents";
 import type { LanguageModel, ToolSet } from "ai";
+import {
+  configuredIncidentReference,
+  parseIncidentReference,
+  type IncidentReference,
+} from "../../../packages/contracts/src/incident";
 import { remediationFixture } from "../../../packages/test-fixtures/src/remediation";
 import { findRepresentativeTraceId } from "./agent/evidence-identifiers";
 import { createAgentEvidenceServices } from "./agent/evidence-services";
 import {
   evidenceInvestigationRequested,
   evidenceStepsFromModelMessages,
+  messagesForCurrentInvestigation,
   nextRequiredEvidenceTool,
 } from "./agent/evidence-step-policy";
 import { createAgentModel } from "./agent/model";
@@ -30,7 +36,17 @@ type EvidenceStepConfig = {
   system: string;
 };
 
-export class RegressionSurgeonAgent extends Think<PlatformEnvironment> {
+export type InvestigationAgentState =
+  | { status: "idle" }
+  | {
+      status: "investigating";
+      investigationId: string;
+      incident: IncidentReference;
+      startedAtMs: number;
+    };
+
+export class RegressionSurgeonAgent extends Think<PlatformEnvironment, InvestigationAgentState> {
+  override initialState: InvestigationAgentState = { status: "idle" };
   override maxSteps = 16;
   override workspaceBash = false;
 
@@ -39,13 +55,8 @@ export class RegressionSurgeonAgent extends Think<PlatformEnvironment> {
   }
 
   override getSystemPrompt(): string {
-    const measuredEvidence =
-      this.env.EVIDENCE_BASELINE_RELEASE_ID &&
-      this.env.EVIDENCE_DEGRADED_RELEASE_ID &&
-      this.env.EVIDENCE_DEGRADED_SINCE_MS &&
-      this.env.EVIDENCE_DEGRADED_UNTIL_MS
-        ? `The measured baseline release is ${this.env.EVIDENCE_BASELINE_RELEASE_ID} and the measured degraded release is ${this.env.EVIDENCE_DEGRADED_RELEASE_ID}. Compare them with windowMs 2592000000. Search degraded traces with sinceMs ${this.env.EVIDENCE_DEGRADED_SINCE_MS}, untilMs ${this.env.EVIDENCE_DEGRADED_UNTIL_MS}, releaseId ${this.env.EVIDENCE_DEGRADED_RELEASE_ID}, and limit 5. Use those exact values.`
-        : "Ask the user for the measured baseline and degraded release IDs before querying telemetry.";
+    const incident = configuredIncidentReference(this.env);
+    const measuredEvidence = `The configured incident is ${incident.incidentId}. Its measured baseline release is ${incident.baselineReleaseId} and its measured degraded release is ${incident.degradedReleaseId}. Compare them with windowMs 2592000000. Search degraded traces with sinceMs ${incident.traceWindow.sinceMs}, untilMs ${incident.traceWindow.untilMs}, releaseId ${incident.degradedReleaseId}, and limit 5. Use those exact values.`;
     return `You are Regression Surgeon, an evidence-first latency investigator.
 ${measuredEvidence}
 Use only the active bounded tools. First compare measured releases, then inspect slow traces
@@ -62,7 +73,8 @@ Only after that evidence is present may you propose one surgical source change t
 create_draft_pr. That action always requires explicit human approval. Never represent a preview as a
 GitHub write, and never claim a branch, commit, or draft PR exists unless the action result says so.
 
-Your final report must contain four explicit sections: Evidence (identifiers and measurements),
+Your final report must contain four explicit sections: Evidence (the incident ID, release and trace
+window identifiers, and measurements),
 Inference (reasoning derived from that evidence), Confidence (high, medium, or low with rationale),
 and Unknowns (remaining uncertainty). Clearly distinguish observed facts from inference. Never claim
 that a write occurred unless the action result proves it. Never claim a merge, deployment, or
@@ -78,6 +90,7 @@ rollback occurred.`;
         store,
         ...(this.env.GITHUB_TOKEN === undefined ? {} : { token: this.env.GITHUB_TOKEN }),
       }),
+      { incident: configuredIncidentReference(this.env) },
     );
   }
 
@@ -99,18 +112,46 @@ rollback occurred.`;
     });
   }
 
-  override beforeTurn(_context: TurnContext): TurnConfig {
+  startConfiguredInvestigation(): Extract<InvestigationAgentState, { status: "investigating" }> {
+    const state = {
+      status: "investigating" as const,
+      investigationId: crypto.randomUUID(),
+      incident: configuredIncidentReference(this.env),
+      startedAtMs: Date.now(),
+    };
+    this.setState(state);
+    return state;
+  }
+
+  private activeIncident(): IncidentReference {
+    if (this.state.status !== "investigating") {
+      throw new Error("An active incident-scoped investigation is required.");
+    }
+    const persisted = parseIncidentReference(this.state.incident);
+    const configured = configuredIncidentReference(this.env);
+    if (JSON.stringify(persisted) !== JSON.stringify(configured)) {
+      throw new Error("Persisted investigation incident does not match runtime configuration.");
+    }
+    return persisted;
+  }
+
+  override beforeTurn(context: TurnContext): TurnConfig {
+    const messages = Array.isArray(context.messages) ? context.messages : [];
+    if (!context.continuation && evidenceInvestigationRequested(messages)) {
+      this.startConfiguredInvestigation();
+    }
     return {
       activeTools: ["query_telemetry", "inspect_release", "read_repo_files", "create_draft_pr"],
     };
   }
 
   override beforeStep(context: PrepareStepContext): EvidenceStepConfig | undefined {
-    const evidenceSteps = [...evidenceStepsFromModelMessages(context.messages), ...context.steps];
+    const currentMessages = messagesForCurrentInvestigation(context.messages);
+    const evidenceSteps = [...evidenceStepsFromModelMessages(currentMessages), ...context.steps];
     const hasEvidence = evidenceSteps.some((step) => step.toolResults.length > 0);
     const requiredTool =
       nextRequiredEvidenceTool(evidenceSteps) ??
-      (!hasEvidence && evidenceInvestigationRequested(context.messages)
+      (!hasEvidence && evidenceInvestigationRequested(currentMessages)
         ? "query_telemetry"
         : undefined);
     if (requiredTool === undefined) return;
@@ -124,6 +165,7 @@ rollback occurred.`;
   async runLocalInvestigation() {
     await this.onStart();
     await this.clearMessages();
+    this.startConfiguredInvestigation();
     await this.runTurn({
       input:
         "Investigate the measured latency regression. Before the final report, compare releases, find slow traces, inspect one representative trace, inspect the degraded release, and read the relevant allowlisted source at that commit.",
@@ -138,12 +180,13 @@ rollback occurred.`;
       .filter((part) => part.type === "text")
       .map((part) => part.text)
       .join("\n");
-    return { toolTypes, report };
+    return { incident: this.activeIncident(), toolTypes, report };
   }
 
   async runLocalRemediationPreview() {
     await this.onStart();
     const messages = await this.getMessages();
+    const currentMessages = messagesForCurrentInvestigation(messages);
     const report = messages
       .filter((message) => message.role === "assistant")
       .flatMap((message) => message.parts)
@@ -151,14 +194,15 @@ rollback occurred.`;
       .map((part) => part.text)
       .join("\n");
     const traceId =
-      findRepresentativeTraceId(messages) ??
+      findRepresentativeTraceId(currentMessages) ??
       /Representative trace: ([A-Za-z0-9_-]+)/.exec(report)?.[1];
     if (traceId === undefined) throw new Error("Investigation trace evidence is unavailable.");
+    const incident = this.activeIncident();
     const action = this.createRemediationAction(false, "fake");
     return action.config.execute(
       {
         ...remediationFixture,
-        incident: { ...remediationFixture.incident, traceId },
+        incident: { ...remediationFixture.incident, ...incident, traceId },
       },
       {} as never,
     );

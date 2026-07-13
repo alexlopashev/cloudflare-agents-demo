@@ -20,6 +20,7 @@ const root = "/workspace/cloudflare-agents-demo";
 const databaseId = "11111111-2222-4333-8444-555555555555";
 const baselineVersionId = "aaaaaaaa-2222-4333-8444-555555555555";
 const degradedVersionId = "bbbbbbbb-2222-4333-8444-555555555555";
+const incidentId = `review-${degradedVersionId}`;
 
 function config(stage: DeploymentStage) {
   return buildPlatformDeploymentConfig({ databaseId, repositoryRoot: root, stage });
@@ -76,6 +77,7 @@ describe("Cloudflare deployment contract", () => {
   it("injects measured version IDs into the public investigator while writes stay off", () => {
     const deployed = config({
       kind: "investigator",
+      incidentId,
       gitSha: "c".repeat(40),
       baselineReleaseId: baselineVersionId,
       degradedReleaseId: degradedVersionId,
@@ -86,6 +88,7 @@ describe("Cloudflare deployment contract", () => {
     });
 
     expect(deployed.vars).toMatchObject({
+      EVIDENCE_INCIDENT_ID: incidentId,
       EVIDENCE_BASELINE_RELEASE_ID: baselineVersionId,
       EVIDENCE_DEGRADED_RELEASE_ID: degradedVersionId,
       EVIDENCE_DEGRADED_SINCE_MS: "1783840086000",
@@ -103,6 +106,7 @@ describe("Cloudflare deployment contract", () => {
   it("enables writes only for an explicit investigator deployment", () => {
     const deployed = config({
       kind: "investigator",
+      incidentId,
       gitSha: "c".repeat(40),
       baselineReleaseId: baselineVersionId,
       degradedReleaseId: degradedVersionId,
@@ -239,6 +243,7 @@ describe("Cloudflare deployment contract", () => {
     expect(() =>
       config({
         kind: "investigator",
+        incidentId,
         gitSha: "c".repeat(40),
         baselineReleaseId: "regression-concurrent",
         degradedReleaseId: "regression-sequential",

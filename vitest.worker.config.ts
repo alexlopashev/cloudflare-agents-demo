@@ -8,10 +8,11 @@ export default defineConfig({
       miniflare: {
         bindings: {
           DEPLOY_SMOKE_KEY: "",
-          EVIDENCE_BASELINE_RELEASE_ID: "",
-          EVIDENCE_DEGRADED_RELEASE_ID: "",
-          EVIDENCE_DEGRADED_SINCE_MS: "",
-          EVIDENCE_DEGRADED_UNTIL_MS: "",
+          EVIDENCE_INCIDENT_ID: "configured-latency-regression",
+          EVIDENCE_BASELINE_RELEASE_ID: "baseline-concurrent",
+          EVIDENCE_DEGRADED_RELEASE_ID: "regression-sequential",
+          EVIDENCE_DEGRADED_SINCE_MS: "1700086400000",
+          EVIDENCE_DEGRADED_UNTIL_MS: "1700086460000",
           GIT_SHA: "0000000000000000000000000000000000000000",
           GITHUB_OWNER: "alexlopashev",
           GITHUB_REPO: "cloudflare-agents-demo",

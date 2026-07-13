@@ -23,6 +23,7 @@ function createBindings() {
       timestamp: "2026-07-11T12:00:00.000Z",
     },
     DEPLOY_SMOKE_KEY: "",
+    EVIDENCE_INCIDENT_ID: "configured-latency-regression",
     EVIDENCE_BASELINE_RELEASE_ID: "baseline-version",
     EVIDENCE_DEGRADED_RELEASE_ID: "degraded-version",
     EVIDENCE_DEGRADED_SINCE_MS: "1000",
@@ -190,15 +191,68 @@ describe("platform routing", () => {
     );
 
     expect(await response.json()).toEqual({
-      evidence: {
+      incident: {
+        incidentId: "configured-latency-regression",
         baselineReleaseId: "baseline-version",
         degradedReleaseId: "degraded-version",
+        traceWindow: { sinceMs: 1000, untilMs: 2000 },
       },
       gitSha: "0123456789abcdef0123456789abcdef01234567",
       githubWriteEnabled: false,
       mode: "fake",
       versionId: "version-good",
     });
+  });
+
+  it("fails the runtime verification surface closed for an invalid incident", async () => {
+    const { bindings } = createBindings();
+    bindings.EVIDENCE_DEGRADED_RELEASE_ID = bindings.EVIDENCE_BASELINE_RELEASE_ID;
+
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/api/runtime"),
+      bindings,
+      async () => null,
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: { code: "invalid-incident-configuration" },
+    });
+  });
+
+  it("records current-release telemetry without changing the configured incident", async () => {
+    const { bindings, telemetryStoreFactory } = createBindings();
+    const before = await handlePlatformRequest(
+      new Request("https://example.test/api/runtime"),
+      bindings,
+      async () => null,
+    );
+    const generated = await handlePlatformRequest(
+      new Request("https://example.test/api/telemetry/ux", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          interactionId: "generated-interaction",
+          traceId: "generated-trace",
+          releaseId: "current-release",
+          metricName: "service_grid_ready_ms",
+          durationMs: 123,
+          outcome: "success",
+        }),
+      }),
+      bindings,
+      async () => null,
+      undefined,
+      telemetryStoreFactory,
+    );
+    const after = await handlePlatformRequest(
+      new Request("https://example.test/api/runtime"),
+      bindings,
+      async () => null,
+    );
+
+    expect(generated.status).toBe(204);
+    expect(await after.json()).toEqual(await before.json());
   });
 
   it("routes scenario controls through their local-only boundary", async () => {

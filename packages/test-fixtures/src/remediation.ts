@@ -18,8 +18,10 @@ for (let index = 0; index < serviceDefinitions.length; index += maximumConcurren
 
 export const remediationFixture = {
   incident: {
+    incidentId: "configured-latency-regression",
     baselineReleaseId: "baseline-concurrent",
     degradedReleaseId: "regression-sequential",
+    traceWindow: { sinceMs: 1_700_086_400_000, untilMs: 1_700_086_460_000 },
     traceId: "scenario-trace-34",
     regressionCommitSha: regressionSource.commitSha,
     sourcePullRequestNumber: regressionSource.pullRequestNumber,

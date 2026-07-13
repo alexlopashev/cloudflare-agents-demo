@@ -56,6 +56,8 @@ describe("DeployboardView", () => {
     expect(markup).toContain("Object storage");
     expect(markup.match(/Not checked/g)).toHaveLength(3);
     expect(markup).toContain("Generate metrics data");
+    expect(markup).toMatch(/optional telemetry ingestion/i);
+    expect(markup).toMatch(/does not select or modify the configured incident/i);
     expect(markup.match(/<option/g)).toHaveLength(3);
     expect(markup).toContain('<option value="5" selected="">5 samples</option>');
     expect(markup).toContain('<option value="10">10 samples</option>');

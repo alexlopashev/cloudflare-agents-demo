@@ -11,6 +11,39 @@ declare global {
 }
 
 describe("RegressionSurgeonAgent persistence", () => {
+  it("persists the configured incident while replacing per-investigation state", async () => {
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("incident-state-contract");
+    const states = await runInDurableObject<
+      RegressionSurgeonAgent,
+      { first: RegressionSurgeonAgent["state"]; second: RegressionSurgeonAgent["state"] }
+    >(stub, async (instance) => {
+      const first = instance.startConfiguredInvestigation();
+      const second = instance.startConfiguredInvestigation();
+      return { first, second };
+    });
+
+    expect(states.first).toMatchObject({
+      status: "investigating",
+      incident: {
+        incidentId: "configured-latency-regression",
+        baselineReleaseId: "baseline-concurrent",
+        degradedReleaseId: "regression-sequential",
+      },
+    });
+    if (states.first.status !== "investigating" || states.second.status !== "investigating") {
+      throw new Error("Expected incident-scoped investigation state.");
+    }
+    expect(states.second).toMatchObject({ incident: states.first.incident });
+    expect(states.second.investigationId).not.toBe(states.first.investigationId);
+
+    await evictDurableObject(stub);
+    const restored = await runInDurableObject<
+      RegressionSurgeonAgent,
+      RegressionSurgeonAgent["state"]
+    >(stub, async (instance) => instance.state);
+    expect(restored).toEqual(states.second);
+  });
+
   it("persists one copy of an idempotent message across Durable Object eviction", async () => {
     const id = env.REGRESSION_SURGEON_AGENT.idFromName("persistence-contract");
     const stub = env.REGRESSION_SURGEON_AGENT.get(id);
