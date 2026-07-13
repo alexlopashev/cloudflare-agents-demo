@@ -145,6 +145,40 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     expect(result.report).toMatch(/Evidence[\s\S]+Inference[\s\S]+Confidence[\s\S]+Unknowns/i);
   });
 
+  it("keeps deployment smoke remediation preview-only when production writes are enabled", async () => {
+    await seedRegressionEvidence();
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName(
+      "write-enabled-smoke-preview",
+    ) as unknown as {
+      runLocalInvestigation(): Promise<unknown>;
+      runLocalRemediationPreview(): Promise<unknown>;
+    };
+    await stub.runLocalInvestigation();
+
+    const result = await runInDurableObject<RegressionSurgeonAgent, unknown>(
+      stub as unknown as DurableObjectStub<RegressionSurgeonAgent>,
+      async (instance) => {
+        const instanceEnvironment = Reflect.get(instance, "env") as PlatformEnvironment;
+        const originalMode = instanceEnvironment.MODEL_MODE;
+        const originalToken = instanceEnvironment.GITHUB_TOKEN;
+        const originalWriteEnabled = instanceEnvironment.GITHUB_WRITE_ENABLED;
+        try {
+          instanceEnvironment.MODEL_MODE = "workers-ai";
+          instanceEnvironment.GITHUB_TOKEN = "scoped-token";
+          instanceEnvironment.GITHUB_WRITE_ENABLED = "true";
+          return await instance.runLocalRemediationPreview();
+        } finally {
+          instanceEnvironment.MODEL_MODE = originalMode;
+          if (originalToken === undefined) delete instanceEnvironment.GITHUB_TOKEN;
+          else instanceEnvironment.GITHUB_TOKEN = originalToken;
+          instanceEnvironment.GITHUB_WRITE_ENABLED = originalWriteEnabled;
+        }
+      },
+    );
+
+    expect(result).toMatchObject({ status: "preview", writesPerformed: false });
+  });
+
   it("runs and persists a real multi-step evidence investigation without duplicated effects", async () => {
     const store = createTelemetryStore(env.TELEMETRY_DB);
     const baselineSha = "cf25e5253b106b1e7514340abe94bd42fd748725";

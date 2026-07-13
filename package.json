@@ -32,6 +32,8 @@
     "deploy:refresh": "node scripts/deploy.ts refresh",
     "deploy:reset": "node scripts/deploy.ts reset",
     "deploy:smoke": "node scripts/deploy.ts smoke",
+    "deploy:writes:disable": "node scripts/deploy.ts disable-writes",
+    "deploy:writes:enable": "node scripts/deploy.ts enable-writes",
     "doctor": "node scripts/doctor.ts",
     "e2e": "node --test tests/foundation/*.test.mjs && pnpm db:migrate:local && node scripts/e2e.ts && node scripts/scenario.ts reseed && node scripts/agent-e2e.ts",
     "format": "biome format --write . && markdownlint-cli2 --fix '**/*.md' '#node_modules' '#.local'",

@@ -8,6 +8,7 @@ import {
 } from "../../workers/platform/src/remediation/service";
 
 const regressionSha = "d591869a8ef995f1835ef80152f4de085b10255b";
+const currentBaseSha = "a".repeat(40);
 const blobSha = "0cd08624a8881809bd6f0d55a4ec88b358daec64";
 const original = `const mode = "sequential";
 const result = await first();
@@ -105,9 +106,36 @@ describe("guarded remediation service", () => {
     expect(api.createDraftPullRequest).not.toHaveBeenCalled();
   });
 
+  it("builds on an advanced current base only when the evidenced source is unchanged", async () => {
+    const { api } = apiFixture();
+    vi.mocked(api.getBase).mockResolvedValue({ sha: currentBaseSha, treeSha: "5".repeat(40) });
+    vi.mocked(api.getFile).mockImplementation(async (ref: string) => ({
+      blobSha: ref.startsWith("regression-surgeon/") ? "2".repeat(40) : blobSha,
+      content: ref.startsWith("regression-surgeon/") ? replacement : original,
+    }));
+
+    await expect(service(api, true).execute(proposal())).resolves.toMatchObject({
+      status: "created",
+      draft: true,
+    });
+    expect(api.getFile).toHaveBeenCalledWith(regressionSha, proposal().path);
+    expect(api.getFile).toHaveBeenCalledWith(currentBaseSha, proposal().path);
+    expect(api.createTree).toHaveBeenCalledWith(
+      expect.objectContaining({ baseTreeSha: "5".repeat(40) }),
+    );
+    expect(api.createCommit).toHaveBeenCalledWith(
+      expect.objectContaining({ parentSha: currentBaseSha }),
+    );
+  });
+
   it("fails closed on stale evidence, disallowed paths, and every size budget before writes", async () => {
     const { api } = apiFixture();
     vi.mocked(api.getBase).mockResolvedValue({ sha: "9".repeat(40), treeSha: "1".repeat(40) });
+    vi.mocked(api.getFile).mockImplementation(async (ref: string) =>
+      ref === "9".repeat(40)
+        ? { blobSha: "8".repeat(40), content: `${original}\nconst changed = true;` }
+        : { blobSha, content: original },
+    );
     await expect(service(api, true).execute(proposal())).rejects.toMatchObject({
       code: "stale-base",
     });

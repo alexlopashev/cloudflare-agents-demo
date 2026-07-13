@@ -968,6 +968,38 @@ Acceptance criteria:
 - The top-right route pills are absent without changing either public route contract.
 - Full local gates, deployed smoke, responsive browser verification, and project-system alignment pass.
 
+### Phase 12 — Explicit guarded draft-PR write enablement
+
+Status: implemented locally in issue #30; review and merge remain, and issue #27 blocks the final
+real-model gate. The draft-PR action, approval UI, bounded GitHub adapter, and idempotent recovery were
+already implemented. The operator workflow keeps ordinary deployment write-disabled, accepts a
+fine-grained token only through pinned Wrangler's TTY secret prompt, and requires a separate explicit
+deployment command to enable writes.
+
+Enabling production writes must not make the keyed deployment smoke write-capable. Smoke continues
+to construct a preview-scoped remediation service, while a real browser turn can reach the
+write-scoped action only after Project Think requests and receives explicit approval. Disabling
+writes must be equally explicit and preserve the measured evidence pair.
+
+The regression commit remains the immutable incident anchor even after `main` advances. Before a
+live write, the service reads the allowlisted file at both the evidenced commit and current base. It
+may build the one-file commit on the current base tree only when both immutable blob and content are
+unchanged; otherwise it fails stale rather than overwriting newer source.
+
+Acceptance criteria:
+
+- Normal deploy and refresh tasks always set `GITHUB_WRITE_ENABLED=false`.
+- Token provisioning never reads `gh`, accepts a token argument, prints the token, or writes it to a
+  repository-local file.
+- Write enablement fails closed unless Cloudflare reports the exact `GITHUB_TOKEN` secret binding.
+- Enable and disable preserve measured evidence, record the expected posture, and verify runtime
+  attribution.
+- Keyed smoke remains a zero-write preview in both postures.
+- Advanced repository state is accepted only when the allowlisted evidenced blob is unchanged at the
+  current base.
+- Only a real approved browser action may create or reuse one bounded draft PR; no merge capability
+  exists.
+
 ## 17. Scope gates
 
 Implement in this order:

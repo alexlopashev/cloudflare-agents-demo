@@ -198,34 +198,51 @@ export function createRemediationService(options: RemediationServiceOptions) {
 
   const prepare = async (proposal: RemediationProposal) => {
     let rawBase: unknown;
-    let rawFile: unknown;
+    let rawEvidenceFile: unknown;
     try {
       rawBase = await options.api.getBase(baseBranch.data);
-      rawFile = await options.api.getFile(proposal.expectedBaseSha, proposal.path);
+      rawEvidenceFile = await options.api.getFile(proposal.expectedBaseSha, proposal.path);
     } catch (error) {
       if (error instanceof RemediationError) throw error;
       throw asUnavailable();
     }
     const base = parseExternal(baseResponse, rawBase, "Base branch");
-    if (base.sha !== proposal.expectedBaseSha) {
-      throw new RemediationError("stale-base", "The configured base branch has moved.");
-    }
-    const file = parseExternal(fileResponse, rawFile, "Base file");
-    if (file.blobSha !== proposal.expectedBlobSha) {
+    const evidenceFile = parseExternal(fileResponse, rawEvidenceFile, "Evidence file");
+    if (evidenceFile.blobSha !== proposal.expectedBlobSha) {
       throw new RemediationError("stale-blob", "The proposed source blob is stale.");
     }
-    if (file.content === proposal.replacementContent) {
+    let currentFile = evidenceFile;
+    if (base.sha !== proposal.expectedBaseSha) {
+      let rawCurrentFile: unknown;
+      try {
+        rawCurrentFile = await options.api.getFile(base.sha, proposal.path);
+      } catch (error) {
+        if (error instanceof RemediationError) throw error;
+        throw asUnavailable();
+      }
+      currentFile = parseExternal(fileResponse, rawCurrentFile, "Current base file");
+      if (
+        currentFile.blobSha !== evidenceFile.blobSha ||
+        currentFile.content !== evidenceFile.content
+      ) {
+        throw new RemediationError(
+          "stale-base",
+          "The allowlisted source changed after the evidenced regression commit.",
+        );
+      }
+    }
+    if (currentFile.content === proposal.replacementContent) {
       throw new RemediationError("invalid-input", "The proposal does not change the source file.");
     }
     if (
       new TextEncoder().encode(proposal.replacementContent).byteLength >
         options.limits.maxFileBytes ||
-      lineCount(file.content) > options.limits.maxLines ||
+      lineCount(currentFile.content) > options.limits.maxLines ||
       lineCount(proposal.replacementContent) > options.limits.maxLines
     ) {
       throw new RemediationError("limit-exceeded", "Remediation file size limit exceeded.");
     }
-    const changes = changedLines(file.content, proposal.replacementContent);
+    const changes = changedLines(currentFile.content, proposal.replacementContent);
     if (changes.additions + changes.deletions > options.limits.maxChangedLines) {
       throw new RemediationError("limit-exceeded", "Remediation changed-line limit exceeded.");
     }
@@ -304,7 +321,7 @@ export function createRemediationService(options: RemediationServiceOptions) {
         let rawChangedPaths: unknown;
         try {
           rawChangedPaths = await options.api.getChangedPaths(
-            proposal.expectedBaseSha,
+            prepared.base.sha,
             existingBranch.sha,
           );
         } catch {
@@ -377,7 +394,7 @@ export function createRemediationService(options: RemediationServiceOptions) {
           await options.api.createCommit({
             message: proposal.title,
             treeSha: tree.sha,
-            parentSha: proposal.expectedBaseSha,
+            parentSha: prepared.base.sha,
           }),
           "Created commit",
         );

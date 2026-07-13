@@ -68,17 +68,19 @@ rollback occurred.`;
   override getActions() {
     const writeEnabled =
       this.env.MODEL_MODE === "workers-ai" && this.env.GITHUB_WRITE_ENABLED === "true";
+    return { create_draft_pr: this.createRemediationAction(writeEnabled) };
+  }
+
+  createRemediationAction(writeEnabled: boolean, mode = this.env.MODEL_MODE) {
     const service = createAgentRemediationService({
-      mode: this.env.MODEL_MODE,
+      mode,
       repository: { owner: this.env.GITHUB_OWNER, repo: this.env.GITHUB_REPO },
       writeEnabled,
       ...(this.env.GITHUB_TOKEN === undefined ? {} : { token: this.env.GITHUB_TOKEN }),
     });
-    return {
-      create_draft_pr: createRemediationAction(service, {
-        idempotencyScope: writeEnabled ? "write" : "preview",
-      }),
-    };
+    return createRemediationAction(service, {
+      idempotencyScope: writeEnabled ? "write" : "preview",
+    });
   }
 
   override beforeTurn(_context: TurnContext): TurnConfig {
@@ -117,8 +119,7 @@ rollback occurred.`;
       findRepresentativeTraceId(messages) ??
       /Representative trace: ([A-Za-z0-9_-]+)/.exec(report)?.[1];
     if (traceId === undefined) throw new Error("Investigation trace evidence is unavailable.");
-    const action = this.getActions().create_draft_pr;
-    if (action === undefined) throw new Error("Remediation action is unavailable.");
+    const action = this.createRemediationAction(false, "fake");
     return action.config.execute(
       {
         ...remediationFixture,

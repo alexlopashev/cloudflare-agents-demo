@@ -80,9 +80,16 @@ Do not assert exact natural-language output from a live model. Assert structured
 - Writes are disabled by default.
 - Missing, empty, and whitespace-only GitHub credentials are treated as absent and cannot select a
   live adapter or satisfy the write gate.
+- Normal deploy and refresh tasks keep writes disabled. Only the explicit write-enable task may
+  change that posture, and only after the remote `GITHUB_TOKEN` secret is verified before and after
+  deployment.
+- GitHub token entry delegates directly to pinned Wrangler's TTY prompt. Tokens must never come from
+  `gh`, command arguments, environment files, repository state, or chat.
 - Explicit approval is required before every external write.
 - Only the configured repository and allowlisted source paths can change.
 - Base and blob SHAs prevent stale writes.
+- An advanced base is accepted only when the allowlisted source has the same immutable blob and
+  content as the evidenced regression commit; the new commit must parent the current base.
 - File-count, byte-count, and changed-line limits are enforced server-side.
 - Agent code, workflows, deployment configuration, and secrets are immutable.
 - Draft PR creation is idempotent per incident.
@@ -92,7 +99,9 @@ Do not assert exact natural-language output from a live model. Assert structured
 
 - `mise run deploy` must preserve distinct baseline, degraded, and investigator Worker version IDs.
 - Remote evidence must come from measured requests and retain immutable version-to-SHA attribution.
-- Public deployment keeps GitHub writes disabled and never copies a local `gh` credential implicitly.
+- Normal public deployment keeps GitHub writes disabled and never copies a local `gh` credential.
+- Explicit write enablement must preserve measured evidence, record the expected posture, and leave
+  keyed smoke preview-only with zero external writes.
 - Deployment smoke endpoints require an unguessable repository-local key and return 404 without it.
 - Reset operations may delete only the two measured release IDs recorded in validated deployment state.
 - A deployed gate is not complete until public routes, runtime metadata, Workers AI evidence tools,

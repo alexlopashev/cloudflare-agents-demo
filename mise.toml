@@ -83,6 +83,14 @@ run = "pnpm dev:live"
 description = "Authenticate Wrangler for remote Cloudflare operations"
 run = "wrangler login"
 
+[tasks."github:writes:secret"]
+description = "Enter the scoped GitHub token directly into Cloudflare's secret prompt"
+run = "wrangler secret put GITHUB_TOKEN --name regression-surgeon-platform"
+
+[tasks."github:writes:secret:delete"]
+description = "Delete the scoped GitHub token from the Cloudflare Worker"
+run = "wrangler secret delete GITHUB_TOKEN --name regression-surgeon-platform"
+
 [tasks.deploy]
 description = "Deploy measured evidence and the public Workers AI investigator"
 run = "pnpm run deploy"
@@ -94,6 +102,14 @@ run = "pnpm run deploy:smoke"
 [tasks."deploy:refresh"]
 description = "Redeploy only the public investigator while preserving measured evidence"
 run = "pnpm run deploy:refresh"
+
+[tasks."deploy:writes:enable"]
+description = "Explicitly deploy the public investigator with guarded draft-PR writes enabled"
+run = "pnpm run deploy:writes:enable"
+
+[tasks."deploy:writes:disable"]
+description = "Redeploy the public investigator with GitHub writes disabled"
+run = "pnpm run deploy:writes:disable"
 
 [tasks."deploy:reset"]
 description = "Remove only the measured baseline and regression evidence from remote D1"
