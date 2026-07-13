@@ -180,9 +180,9 @@ After every meaningful change, contributors must reassess and align the implemen
 
 ## Current status
 
-The v1.1 interactive-demo UX is merged in PR #26. The public Cloudflare deployment continues to
-serve the prior release until an explicit `mise run deploy:refresh` preserves the seeded evidence
-and publishes the merged investigator and Deployboard assets.
+The v1.1 interactive-demo UX from PR #26 is live on Cloudflare from main commit `41dee5d`. Deployboard
+now exposes bounded measured-traffic generation, and the mounted investigator uses the responsive
+support-style widget with safe Markdown reports.
 
 Phases 1 through 8 are implemented and verified locally and on Cloudflare. The real known-good release at `cf25e52`
 loads three service checks concurrently; the current scenario release intentionally serializes them
@@ -197,9 +197,10 @@ adapter restricts repository, path, SHA/blob freshness, request/response size, c
 state, and incident idempotency; deterministic branch names make partial writes recoverable.
 Native bootstrap now reaches the complete local E2E, and the optional Colima lane reproduces the same
 dev task through one isolated Linux service with ownership-safe recovery and teardown. The public
-deployment measured p75 latency of 245 ms for Cloudflare version `0c2432d5…` and 538 ms for version
-`01e7b428…`; the deployed Workers AI smoke traced that regression to commit `d591869…` and PR #19,
-read the pinned source, produced a structured report, and validated a no-write remediation preview.
+deployment measured p75 latency of 328 ms for Cloudflare version `3cdd02af…` and 493 ms for version
+`9f6f4949…`; investigator version `eac2cc77…` passed the deployed Workers AI smoke with five
+evidence-tool events, exact version-to-SHA attribution, a structured report, and a no-write
+remediation preview.
 The v1 clean-room bootstrap, local E2E, production build, four-platform CI, and public reviewer smoke
 are recorded in [the release-readiness evidence](RELEASE_READINESS.md). Known limitations and deferred
 work are explicit there. The milestone and native blocked-by issue graph remain the executable

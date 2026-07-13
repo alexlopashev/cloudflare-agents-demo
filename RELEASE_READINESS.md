@@ -1,6 +1,7 @@
-# v1 Release Readiness
+# v1 and v1.1 Release Readiness
 
-Verified on 2026-07-12 from a clean macOS ARM64 worktree at merged commit `e470dd4`.
+The v1 clean-room release was verified on 2026-07-12 from a macOS ARM64 worktree at merged commit
+`e470dd4`. The v1.1 public interface was deployed later that day from main commit `41dee5d`.
 
 ## Clean-room evidence
 
@@ -21,11 +22,14 @@ required GitHub Actions lanes. PR #23 passed macOS ARM64/x64 and Linux ARM64/x64
 
 - Public app: <https://regression-surgeon-platform.alexlopashev.workers.dev/app>
 - Investigator: <https://regression-surgeon-platform.alexlopashev.workers.dev/investigator>
-- Baseline Worker version: `0c2432d5-d661-4f1b-aa42-4c8907580774`, measured p75 245 ms.
-- Degraded Worker version: `01e7b428-ac68-4875-b178-b1fcf7874a7c`, measured p75 538 ms.
+- Baseline Worker version: `3cdd02af-a0e5-4258-b795-ab277021300b`, measured p75 328 ms.
+- Degraded Worker version: `9f6f4949-63fb-4d4b-8c97-e0e134deb8b9`, measured p75 493 ms.
+- Investigator Worker version: `eac2cc77-e50c-4c8e-b39d-52a439304b13`, attributed to `41dee5d`.
 - The deployed smoke verifies the exact runtime metadata, both public routes, real Workers AI turn,
   telemetry comparison, representative trace, commit `d591869…`, PR #19, pinned source, validated
   remediation preview, and `GITHUB_WRITE_ENABLED=false`.
+- Browser verification at 1280 px confirmed the bounded metric generator and badged floating
+  launcher. At 390×844, the investigator filled the viewport and its send button measured 350×44.
 
 Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its ignored
 `.local/deploy/state.json` contains the exact remote version IDs and an owner-only smoke credential.
@@ -48,7 +52,8 @@ Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its 
 
 ## Alignment evidence
 
-- `README.md`, `IMPLEMENTATION_PLAN.md`, `AGENTS.md`, and this release record describe the same v1.
+- `README.md`, `IMPLEMENTATION_PLAN.md`, `AGENTS.md`, and this release record describe the same v1
+  and focused v1.1 delivery.
 - The GitHub wiki mirrors product, architecture, operations, decisions, development, and roadmap.
-- Issues #2–#11 are closed; #12 is blocked by #11 and blocks the v1 tracking issue #1.
+- The v1 and v1.1 milestones are closed. Issue #25 has no native dependency relations.
 - The repository-local alignment skill validates successfully.

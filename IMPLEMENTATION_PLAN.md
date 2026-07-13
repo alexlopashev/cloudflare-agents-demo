@@ -909,6 +909,11 @@ waits for each UX telemetry write to be acknowledged, exposes progress, and stop
 first failed sample. Refresh and generation share one in-flight guard, while the latest successful
 sample keeps its interaction, trace, and release evidence visible.
 
+The v1.1 interface is deployed publicly from main commit `41dee5d`. Its measured Cloudflare evidence
+pair recorded p75 latency of 328 ms for baseline version `3cdd02af…` and 493 ms for degraded version
+`9f6f4949…`. Investigator version `eac2cc77…` passed the keyed five-tool Workers AI smoke with exact
+runtime attribution, a structured report, a validated remediation preview, and GitHub writes off.
+
 The investigator is mounted alongside Deployboard as a bottom-corner support widget. A floating
 launcher carries numeric attention and availability badges; its accessible dialog can collapse and
 reopen without unmounting the Project Think session. `/investigator` deep-links to the same product
