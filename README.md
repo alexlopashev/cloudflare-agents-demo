@@ -156,6 +156,9 @@ new one-file commit on current `main`; otherwise it fails stale. Run
 `mise run deploy:writes:disable` immediately after the demonstration; ordinary `deploy` and
 `deploy:refresh` also return to the default-off posture.
 After disabling writes, run `mise run github:writes:secret:delete` to revoke the Worker credential.
+The keyed smoke may retry the endpoint's pre-execution 404 briefly while a newly rotated smoke key
+propagates across Cloudflare. It returns every other status immediately, so a Workers AI turn or
+other endpoint work is never duplicated.
 
 ### Optional Colima parity
 
@@ -216,9 +219,11 @@ failure: the model finalized after release inspection without calling `read_repo
 refinement now explicitly requires all five evidence operations before the final report; deployed
 smoke passed. The first real browser turn then exposed a Workers-specific fetch receiver error before
 GitHub returned a response. Receiver-sensitive regressions now cover both GitHub adapters, and the
-captured platform fetcher is invoked as a plain function; deployed browser re-verification remains.
-The failed turn created no GitHub state and the public runtime was restored to write-disabled version
-`8b49567d…` with the measured evidence IDs preserved.
+captured platform fetcher is invoked as a plain function. The next write-enable smoke reached the
+exact Worker version but received the endpoint's unauthenticated 404 while its rotated key was still
+propagating, so fail-closed rollback restored write-disabled version `1ffbd553…` before any model
+turn or GitHub write. Bounded retries now cover only that pre-execution 404; deployed browser
+re-verification remains.
 
 PRs #31 and #32 implement the explicit draft-PR write workflow and fail-closed rollback for issue #30,
 which is natively blocked by issue #27 for its real Workers AI approval run. A scoped token is

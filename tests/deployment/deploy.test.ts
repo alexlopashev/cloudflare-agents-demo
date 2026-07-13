@@ -6,9 +6,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildPlatformDeploymentConfig,
   buildEvidenceResetSql,
+  deploymentSmokeRetryPolicy,
   parseD1DatabaseId,
   parseDeploymentResult,
   parseGitHubWriteSecretInventory,
+  requestDeploymentSmokeWithRetry,
   runtimeAttributionRetryPolicy,
   runWithFailClosedRollback,
   type DeploymentStage,
@@ -164,6 +166,41 @@ describe("Cloudflare deployment contract", () => {
       name: "AggregateError",
       errors: [enableFailure, rollbackFailure],
     });
+  });
+
+  it("retries only pre-execution 404s while a rotated smoke key propagates", async () => {
+    const responses = [new Response(null, { status: 404 }), new Response(null, { status: 404 })];
+    responses.push(new Response("ok", { status: 200 }));
+    const request = vi.fn(async () => responses.shift() ?? new Response(null, { status: 500 }));
+    const wait = vi.fn(async () => undefined);
+
+    const response = await requestDeploymentSmokeWithRetry(request, wait);
+
+    expect(response.status).toBe(200);
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(wait).toHaveBeenCalledTimes(2);
+  });
+
+  it("never retries a smoke response that may follow endpoint execution", async () => {
+    const request = vi.fn(async () => new Response(null, { status: 500 }));
+    const wait = vi.fn(async () => undefined);
+
+    const response = await requestDeploymentSmokeWithRetry(request, wait);
+
+    expect(response.status).toBe(500);
+    expect(request).toHaveBeenCalledOnce();
+    expect(wait).not.toHaveBeenCalled();
+  });
+
+  it("bounds repeated propagation-only smoke responses", async () => {
+    const request = vi.fn(async () => new Response(null, { status: 404 }));
+    const wait = vi.fn(async () => undefined);
+
+    const response = await requestDeploymentSmokeWithRetry(request, wait);
+
+    expect(response.status).toBe(404);
+    expect(request).toHaveBeenCalledTimes(deploymentSmokeRetryPolicy.maxAttempts);
+    expect(wait).toHaveBeenCalledTimes(deploymentSmokeRetryPolicy.maxAttempts - 1);
   });
 
   it("parses existing/created D1 resources and Wrangler deployment evidence", () => {

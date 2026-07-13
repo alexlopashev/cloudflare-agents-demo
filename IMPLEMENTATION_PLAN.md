@@ -1003,6 +1003,9 @@ Acceptance criteria:
   the write-disabled posture; a rollback failure preserves both errors.
 - Runtime attribution allows at least 60 seconds of bounded edge propagation before declaring a
   write-disabled rollback unverifiable.
+- Keyed smoke retries only the pre-execution 404 that can occur while the rotated smoke secret
+  propagates; any response that may follow endpoint execution is returned immediately and never
+  duplicated.
 - Keyed smoke remains a zero-write preview in both postures.
 - Advanced repository state is accepted only when the allowlisted evidenced blob is unchanged at the
   current base.

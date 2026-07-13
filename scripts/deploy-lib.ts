@@ -8,6 +8,25 @@ export const runtimeAttributionRetryPolicy = Object.freeze({
   delayMs: 750,
 });
 
+export const deploymentSmokeRetryPolicy = Object.freeze({
+  maxAttempts: 16,
+  delayMs: 750,
+});
+
+export async function requestDeploymentSmokeWithRetry(
+  request: () => Promise<Response>,
+  wait: () => Promise<void>,
+): Promise<Response> {
+  for (let attempt = 0; attempt < deploymentSmokeRetryPolicy.maxAttempts; attempt += 1) {
+    const response = await request();
+    if (response.status !== 404 || attempt === deploymentSmokeRetryPolicy.maxAttempts - 1) {
+      return response;
+    }
+    await wait();
+  }
+  throw new Error("Deployment smoke retry policy did not produce a response.");
+}
+
 export type DeploymentStage =
   | { kind: "baseline"; gitSha: string }
   | { kind: "regression"; gitSha: string }
