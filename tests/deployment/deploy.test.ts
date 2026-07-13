@@ -9,6 +9,7 @@ import {
   parseD1DatabaseId,
   parseDeploymentResult,
   parseGitHubWriteSecretInventory,
+  runtimeAttributionRetryPolicy,
   runWithFailClosedRollback,
   type DeploymentStage,
 } from "../../scripts/deploy-lib.ts";
@@ -45,6 +46,11 @@ describe("Cloudflare deployment contract", () => {
     expect(
       deployScript.match(/if \(githubWriteEnabled\) assertGitHubWriteSecret\(\);/g),
     ).toHaveLength(2);
+    expect(deployScript).toContain("runtimeAttributionRetryPolicy.maxAttempts");
+    expect(deployScript).toContain("runtimeAttributionRetryPolicy.delayMs");
+    expect(
+      runtimeAttributionRetryPolicy.maxAttempts * runtimeAttributionRetryPolicy.delayMs,
+    ).toBeGreaterThanOrEqual(60_000);
   });
 
   it("builds measured baseline and regression stages against the real D1 database", () => {

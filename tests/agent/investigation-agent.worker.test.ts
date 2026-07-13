@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PlatformEnvironment, RegressionSurgeonAgent } from "../../workers/platform/src/index";
 import { createTelemetryStore } from "../../workers/platform/src/telemetry/store";
@@ -123,9 +123,38 @@ describe("RegressionSurgeonAgent investigation policy", () => {
       workspaceBash: false,
     });
     expect(policy.prompt).toMatch(/do not repeat a successful tool operation/i);
+    expect(policy.prompt).toMatch(
+      /before[^.]+final[^.]+must[^.]+compare releases[^.]+find slow\s+traces[^.]+inspect one representative trace[^.]+inspect the degraded release[^.]+read the relevant\s+allowlisted source/is,
+    );
     expect(policy.prompt).not.toMatch(
       /Never claim\s+that a write, deployment, rollback, or pull-request creation occurred\./,
     );
+  });
+
+  it("makes every evidence operation explicit in the programmatic investigation request", async () => {
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName(
+      "programmatic-investigation-contract",
+    ) as unknown as DurableObjectStub<RegressionSurgeonAgent>;
+
+    const input = await runInDurableObject<RegressionSurgeonAgent, string | undefined>(
+      stub,
+      async (instance) => {
+        const runTurn = vi.spyOn(instance, "runTurn").mockResolvedValue(undefined as never);
+        await instance.runLocalInvestigation();
+        const capturedInput = runTurn.mock.calls[0]?.[0].input;
+        if (typeof capturedInput !== "string") {
+          throw new Error("Programmatic investigation input was not a string.");
+        }
+        return capturedInput;
+      },
+    );
+
+    expect(input).toMatch(/compare releases/i);
+    expect(input).toMatch(/find slow traces/i);
+    expect(input).toMatch(/inspect one representative trace/i);
+    expect(input).toMatch(/inspect the degraded release/i);
+    expect(input).toMatch(/read the relevant allowlisted source/i);
+    expect(input).toMatch(/before (?:the )?final report/i);
   });
 
   it("exposes the deterministic investigation through its local RPC boundary", async () => {

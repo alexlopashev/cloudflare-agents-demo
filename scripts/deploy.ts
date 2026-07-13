@@ -11,6 +11,7 @@ import {
   parseD1DatabaseId,
   parseDeploymentResult,
   parseGitHubWriteSecretInventory,
+  runtimeAttributionRetryPolicy,
   runWithFailClosedRollback,
 } from "./deploy-lib.ts";
 
@@ -148,11 +149,13 @@ async function assertRuntimeAttribution(state: z.infer<typeof stateSchema>) {
       degradedReleaseId: z.literal(state.degradedReleaseId),
     }),
   });
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  for (let attempt = 0; attempt < runtimeAttributionRetryPolicy.maxAttempts; attempt += 1) {
     const response = await requestWithRetry(`${state.publicUrl}/api/runtime`);
     const parsed = runtimeSchema.safeParse(await response.json());
     if (parsed.success) return parsed.data;
-    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 750));
+    await new Promise<void>((resolveDelay) =>
+      setTimeout(resolveDelay, runtimeAttributionRetryPolicy.delayMs),
+    );
   }
   throw new Error("The exact deployed runtime did not reach the edge.");
 }
