@@ -91,6 +91,8 @@ export function createDeterministicModel(): LanguageModel {
   };
   const next = (prompt: unknown) => {
     const serializedPrompt = JSON.stringify(prompt);
+    const receiptId =
+      /active evidence receipt is ([A-Za-z0-9_-]+)/i.exec(serializedPrompt)?.[1] ?? "unknown";
     const remediationRequested = serializedPrompt
       .toLowerCase()
       .includes("prepare the guarded remediation preview");
@@ -146,6 +148,8 @@ approved action to reconcile or create the draft pull request without creating a
         ...remediationFixture,
         incident: { ...remediationFixture.incident, traceId: reportTrace },
         expectedBlobSha: findProperty(prompt, "blobSha") ?? remediationFixture.expectedBlobSha,
+        proposalFingerprint:
+          findProperty(prompt, "proposalFingerprint") ?? "proposal-v1-0000000000000000",
       };
       step += 1;
       return { type: "tool" as const, toolName: "create_draft_pr" as const, input: proposal };
@@ -154,18 +158,16 @@ approved action to reconcile or create the draft pull request without creating a
     const traceId = findProperty(prompt, "traceId") ?? "regression-trace-unknown";
     const sequence = [
       {
-        toolName: "query_telemetry",
+        toolName: "compare_releases",
         input: {
-          operation: "compare-releases",
           baselineReleaseId: "baseline-concurrent",
           candidateReleaseId: "regression-sequential",
           windowMs: 60_000,
         },
       },
       {
-        toolName: "query_telemetry",
+        toolName: "find_slow_traces",
         input: {
-          operation: "find-slow-traces",
           releaseId: "regression-sequential",
           sinceMs: 1_700_086_400_000,
           untilMs: 1_700_086_460_000,
@@ -173,8 +175,8 @@ approved action to reconcile or create the draft pull request without creating a
         },
       },
       {
-        toolName: "query_telemetry",
-        input: { operation: "inspect-trace", traceId },
+        toolName: "inspect_trace",
+        input: { traceId },
       },
       {
         toolName: "inspect_release",
@@ -196,6 +198,7 @@ approved action to reconcile or create the draft pull request without creating a
         type: "text" as const,
         text: `## Evidence
 - Incident: ${remediationFixture.incident.incidentId}.
+- Evidence receipt: ${receiptId}.
 One or more evidence tools returned a bounded unavailable error. The required trace, release,
 commit, pull-request, and source chain is incomplete.
 
@@ -221,6 +224,7 @@ evidence operation before remediation. No write or deployment has been performed
       type: "text" as const,
       text: `## Evidence
 - Incident: ${remediationFixture.incident.incidentId}; trace window ${remediationFixture.incident.traceWindow.sinceMs}–${remediationFixture.incident.traceWindow.untilMs} ms.
+- Evidence receipt: ${receiptId}.
 - Release comparison: baseline-concurrent p75 ${baselineP75} ms; regression-sequential p75 ${candidateP75} ms.
 - Representative trace: ${traceId}; its critical path is approximately ${criticalPathMs} ms with sequential service spans.
 - Immutable source: commit ${regressionSource.commitSha}; PR #${regressionSource.pullRequestNumber}.
@@ -259,9 +263,8 @@ has been performed.`,
       const response = runaway
         ? {
             type: "tool" as const,
-            toolName: "query_telemetry" as const,
+            toolName: "compare_releases" as const,
             input: {
-              operation: "compare-releases" as const,
               baselineReleaseId: "baseline-concurrent",
               candidateReleaseId: "regression-sequential",
               windowMs: 60_000,

@@ -267,7 +267,13 @@ async function smoke(state: z.infer<typeof stateSchema>) {
       report: z.string().min(1),
     })
     .parse(returnedInvestigation);
-  for (const tool of ["query_telemetry", "inspect_release", "read_repo_files"]) {
+  for (const tool of [
+    "compare_releases",
+    "find_slow_traces",
+    "inspect_trace",
+    "inspect_release",
+    "read_repo_files",
+  ]) {
     if (!agentResult.toolTypes.some((type) => type.includes(tool))) {
       throw new Error(`Public agent did not execute ${tool}.`);
     }

@@ -122,18 +122,26 @@ function changedLines(before: string, after: string) {
   return { additions: right.length - common, deletions: left.length - common };
 }
 
-async function fingerprint(proposal: RemediationProposal): Promise<string> {
-  const identity = JSON.stringify({
+async function shortFingerprint(identity: unknown): Promise<string> {
+  const bytes = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify(identity)),
+  );
+  return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16);
+}
+
+export async function remediationProposalFingerprint(
+  proposal: RemediationProposal,
+): Promise<string> {
+  return shortFingerprint({
     incident: proposal.incident,
     expectedBaseSha: proposal.expectedBaseSha,
     expectedBlobSha: proposal.expectedBlobSha,
     path: proposal.path,
     replacementContent: proposal.replacementContent,
   });
-  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(identity));
-  return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0"))
-    .join("")
-    .slice(0, 16);
 }
 
 function pullRequestBody(proposal: RemediationProposal, changes: ReturnType<typeof changedLines>) {
@@ -264,7 +272,10 @@ export function createRemediationService(options: RemediationServiceOptions) {
           "The remediation base does not match the evidenced regression commit.",
         );
       }
-      const incidentFingerprint = await fingerprint(proposal);
+      const incidentFingerprint = await shortFingerprint({
+        repository: repositoryName,
+        incidentId: proposal.incident.incidentId,
+      });
       const branch = `regression-surgeon/${incidentFingerprint}`;
 
       if (options.writeEnabled) {

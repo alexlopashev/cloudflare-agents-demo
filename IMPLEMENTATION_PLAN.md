@@ -509,9 +509,8 @@ Native Workers observability is enabled in parallel, but D1 remains the agent's 
 
 ## 13. Project Think agent
 
-The current implementation uses three bounded tools for five evidence operations. The v1.2 target
-replaces inferred completion from undifferentiated tool history with one typed, incident-scoped
-evidence receipt and five single-purpose tools.
+The implementation uses one typed, incident-scoped evidence receipt and five single-purpose tools.
+It does not infer completion from prose or undifferentiated history.
 
 Configure:
 
@@ -523,7 +522,7 @@ Configure:
 - Persistent conversation state
 - Explicit confidence and unknowns in final reports
 
-v1.2 target tools:
+Evidence tools:
 
 ### `compare_releases`
 
@@ -817,15 +816,15 @@ Acceptance criteria:
 
 ### Phase 5 — Read-only agent
 
-Status: historically delivered in issues #7 and #8, with evidence-provenance hardening planned in
-issues #38 and #39. The bounded connector resolves release evidence to immutable commits and
-associated PR metadata. Project Think currently exposes `query_telemetry`, `inspect_release`, and
-`read_repo_files`, enforces 16 tool steps and deterministic result truncation, and produces a report
-that separates evidence, inference, confidence, and unknowns. The credential-free E2E runs five
-evidence operations over measured local D1 evidence. Today, phase completion is reconstructed from
-broad tool history; v1.2 replaces that policy with the typed receipt described in section 13.
+Status: historically delivered in issues #7 and #8, with incident identity and evidence provenance
+hardened in issues #38 and #39. The bounded connector resolves release evidence to immutable commits
+and associated PR metadata. Project Think exposes five single-purpose evidence tools, enforces 16
+tool steps and deterministic result truncation, and persists one validated incident-scoped receipt.
+Only the expected tool's sufficient, cross-referenced output completes each phase. The final report
+cites that receipt and separates evidence, inference, confidence, and unknowns.
 
-- Add `query_telemetry`, `inspect_release`, and `read_repo_files`.
+- Add `compare_releases`, `find_slow_traces`, `inspect_trace`, `inspect_release`, and
+  `read_repo_files`.
 - Configure prompt, step limits, and tool-event UI.
 - Add deterministic fake-model E2E.
 
@@ -837,7 +836,7 @@ Acceptance criteria:
 
 ### Phase 6 — Draft PR
 
-Status: historically delivered in issue #9, with receipt binding planned in issue #39.
+Status: historically delivered in issue #9, with receipt binding implemented in issue #39.
 `create_draft_pr` is a native Project Think action with explicit high-risk approval, a narrow
 permission, and preview/write-scoped incident idempotency. The
 server-side service validates configured repository and path, matching regression/base SHA, current
@@ -847,9 +846,9 @@ The live GitHub REST adapter requires a token and remains write-disabled until t
 set. Existing PRs are reused, and uncertain branch or PR responses return deterministic recoverable
 state without creating another branch. Recovery accepts only a branch exactly one commit ahead of
 the evidenced base with exactly the approved file changed. No merge endpoint or tool exists. The
-existing validator trusts proposal-supplied evidence identifiers more than the investigation state;
-v1.2 makes eligibility and approval depend mechanically on the same completed incident receipt and
-prepared fingerprint.
+action is unavailable until the same incident's receipt is complete. The receipt then prepares and
+persists the exact one-file replacement and stable fingerprint; authorization rejects a changed
+fingerprint or proposal, while repository branch identity remains stable per incident.
 
 - Add guarded PR proposal creation.
 - Add Project Think approval interaction.
@@ -1047,8 +1046,8 @@ Work packages:
 - Incident identity is explicit and validated across runtime metadata, persisted investigation
   state, bounded evidence tools, structured reports, remediation preparation, fixtures, and deploy
   state; metric generation is labeled and enforced as ingestion-only (#38).
-- Replace inferred tool-history completion with one typed evidence receipt and mechanically gate
-  remediation on it (#39).
+- Inferred tool-history completion is replaced by one persisted typed evidence receipt; remediation
+  is gated on its exact prepared fingerprint and incident-stable branch identity (#39).
 - Reject conflicting telemetry retries and cross-release attribution atomically (#40).
 - Implement truthful, parent-aware trace-path semantics (#41).
 - Make targeted tests, watch mode, aggregate checks, reconnection, and remote smoke prove the same

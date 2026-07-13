@@ -8,7 +8,7 @@ const messages = [
     id: "assistant-1",
     parts: [
       {
-        type: "tool-query_telemetry",
+        type: "tool-compare_releases",
         state: "output-available",
         toolCallId: "call-1",
         output: { status: "ready" },
@@ -39,15 +39,15 @@ describe("investigator tool timeline", () => {
     expect(buildToolTimeline(messages)).toEqual([
       {
         id: "assistant-1-call-1",
-        label: "Query telemetry",
+        label: "Compare releases",
         state: "completed",
         summary: "Evidence received",
       },
       {
         id: "assistant-1-call-2",
         label: "Inspect release",
-        state: "completed",
-        summary: "Evidence received (truncated to context limit)",
+        state: "failed",
+        summary: "Evidence incomplete (bounded result)",
       },
       {
         id: "assistant-1-call-3",
@@ -69,10 +69,10 @@ describe("investigator tool timeline", () => {
     const markup = renderToStaticMarkup(<ToolTimeline entries={buildToolTimeline(messages)} />);
 
     expect(markup).toContain('aria-label="Investigation tool timeline"');
-    expect(markup).toContain("Query telemetry");
+    expect(markup).toContain("Compare releases");
     expect(markup).toContain("Inspect release");
     expect(markup).toContain("Read repository files");
     expect(markup).toContain("Create draft PR");
-    expect(markup.indexOf("Query telemetry")).toBeLessThan(markup.indexOf("Inspect release"));
+    expect(markup.indexOf("Compare releases")).toBeLessThan(markup.indexOf("Inspect release"));
   });
 });

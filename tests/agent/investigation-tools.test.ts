@@ -26,26 +26,30 @@ function services() {
 }
 
 describe("investigation tools", () => {
-  it("exposes only the three evidence capabilities and delegates fixed telemetry operations", async () => {
+  it("exposes only five single-purpose evidence capabilities", async () => {
     const evidence = services();
     const tools = createInvestigationTools(evidence);
 
-    expect(Object.keys(tools)).toEqual(["query_telemetry", "inspect_release", "read_repo_files"]);
+    expect(Object.keys(tools)).toEqual([
+      "compare_releases",
+      "find_slow_traces",
+      "inspect_trace",
+      "inspect_release",
+      "read_repo_files",
+    ]);
     await expect(
-      execute(tools.query_telemetry, {
-        operation: "compare-releases",
+      execute(tools.compare_releases, {
         baselineReleaseId: "baseline-concurrent",
         candidateReleaseId: "regression-sequential",
         windowMs: 60_000,
       }),
     ).resolves.toMatchObject({ kind: "comparison" });
-    await execute(tools.query_telemetry, {
-      operation: "find-slow-traces",
+    await execute(tools.find_slow_traces, {
       sinceMs: 1,
       untilMs: 2,
       limit: 10,
     });
-    await execute(tools.query_telemetry, { operation: "inspect-trace", traceId: "trace-1" });
+    await execute(tools.inspect_trace, { traceId: "trace-1" });
 
     expect(evidence.telemetry.compareReleases).toHaveBeenCalledOnce();
     expect(evidence.telemetry.findSlowTraces).toHaveBeenCalledOnce();
@@ -57,11 +61,15 @@ describe("investigation tools", () => {
     const tools = createInvestigationTools(evidence);
 
     await expect(
-      execute(tools.query_telemetry, { operation: "sql", sql: "SELECT * FROM releases" }),
+      execute(tools.compare_releases, {
+        baselineReleaseId: "baseline-concurrent",
+        candidateReleaseId: "regression-sequential",
+        windowMs: 60_000,
+        sql: "SELECT * FROM releases",
+      }),
     ).rejects.toThrow();
     await expect(
-      execute(tools.query_telemetry, {
-        operation: "find-slow-traces",
+      execute(tools.find_slow_traces, {
         sinceMs: 0,
         untilMs: 1,
         limit: 101,
@@ -82,8 +90,7 @@ describe("investigation tools", () => {
     });
 
     await expect(
-      execute(tools.query_telemetry, {
-        operation: "compare-releases",
+      execute(tools.compare_releases, {
         baselineReleaseId: "generated-current-release",
         candidateReleaseId: "regression-sequential",
         windowMs: 60_000,
@@ -94,8 +101,7 @@ describe("investigation tools", () => {
       message: "Evidence request does not match the configured incident.",
     });
     await expect(
-      execute(tools.query_telemetry, {
-        operation: "find-slow-traces",
+      execute(tools.find_slow_traces, {
         releaseId: "regression-sequential",
         sinceMs: 1_001,
         untilMs: 2_000,

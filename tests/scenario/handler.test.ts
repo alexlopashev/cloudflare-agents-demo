@@ -35,7 +35,7 @@ function options() {
   }));
   const investigate = vi.fn(async () => ({
     report: "## Evidence\nComplete",
-    toolTypes: ["tool-query_telemetry", "tool-inspect_release", "tool-read_repo_files"],
+    toolTypes: ["tool-compare_releases", "tool-inspect_release", "tool-read_repo_files"],
   }));
   const previewRemediation = vi.fn(async () => ({
     status: "preview",
@@ -147,7 +147,7 @@ describe("local scenario control", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       report: "## Evidence\nComplete",
-      toolTypes: ["tool-query_telemetry", "tool-inspect_release", "tool-read_repo_files"],
+      toolTypes: ["tool-compare_releases", "tool-inspect_release", "tool-read_repo_files"],
     });
     expect(fixture.investigate).toHaveBeenCalledOnce();
   });

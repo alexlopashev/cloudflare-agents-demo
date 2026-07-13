@@ -3,6 +3,8 @@ export type ApprovalRequest = {
   toolCallId: string;
   title: string;
   path: string;
+  proposalFingerprint: string;
+  replacementContent: string;
   traceId: string;
 };
 
@@ -44,17 +46,29 @@ export function buildApprovalRequests(messages: readonly ApprovalMessage[]): App
       const toolCallId = stringProperty(part, "toolCallId");
       const title = stringProperty(input, "title");
       const path = stringProperty(input, "path");
+      const proposalFingerprint = stringProperty(input, "proposalFingerprint");
+      const replacementContent = stringProperty(input, "replacementContent");
       const traceId = stringProperty(incident, "traceId");
       if (
         approvalId === undefined ||
         toolCallId === undefined ||
         title === undefined ||
         path === undefined ||
+        proposalFingerprint === undefined ||
+        replacementContent === undefined ||
         traceId === undefined
       ) {
         continue;
       }
-      requests.push({ approvalId, toolCallId, title, path, traceId });
+      requests.push({
+        approvalId,
+        toolCallId,
+        title,
+        path,
+        proposalFingerprint,
+        replacementContent,
+        traceId,
+      });
     }
   }
   return requests;
@@ -83,7 +97,15 @@ export function ApprovalPanel({
               <dt>Only file</dt>
               <dd>{request.path}</dd>
             </div>
+            <div>
+              <dt>Proposal fingerprint</dt>
+              <dd>{request.proposalFingerprint}</dd>
+            </div>
           </dl>
+          <p>Exact proposed replacement</p>
+          <pre>
+            <code>{request.replacementContent}</code>
+          </pre>
           <p>
             Approval permits one guarded draft-PR action. It does not permit merge, deploy, or
             rollback.

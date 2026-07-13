@@ -221,6 +221,13 @@ with the investigation, scopes evidence requests and remediation preparation, an
 verification. Starting again creates fresh investigation state, while optional current-release
 metric ingestion cannot replace the configured incident.
 
+Five single-purpose tools advance one persisted receipt in order: release comparison, slow-trace
+selection, trace inspection, immutable release inspection, and allowlisted source reading. Prose,
+truncated or malformed output, cross-release identifiers, and out-of-order results cannot complete a
+phase. The final report cites the receipt. Only a complete receipt can persist the exact one-file
+replacement and proposal fingerprint; approval shows that replacement and rejects a changed payload,
+while preview and write retries keep one branch identity per incident.
+
 The active [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
 hardens that slice rather than expanding it. Work now makes evidence incident-scoped, binds
 remediation mechanically to the same receipt, repairs telemetry semantics, strengthens smoke and

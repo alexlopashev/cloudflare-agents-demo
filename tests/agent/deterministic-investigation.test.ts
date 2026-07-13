@@ -9,17 +9,25 @@ describe("deterministic investigation model", () => {
   it("performs the complete evidence sequence before producing a structured report", async () => {
     const calls: string[] = [];
     const tools = {
-      query_telemetry: tool({
-        inputSchema: z.object({ operation: z.string() }).passthrough(),
-        execute: async (input) => {
-          calls.push(`query_telemetry:${input.operation}`);
-          if (input.operation === "find-slow-traces") {
-            return [{ traceId: "regression-trace-7", releaseId: "regression-sequential" }];
-          }
-          if (input.operation === "inspect-trace") {
-            return { trace: { traceId: "regression-trace-7" }, criticalPath: { durationMs: 443 } };
-          }
+      compare_releases: tool({
+        inputSchema: z.object({}).passthrough(),
+        execute: async () => {
+          calls.push("compare_releases");
           return { status: "ready", baseline: { p75Ms: 111 }, candidate: { p75Ms: 443 } };
+        },
+      }),
+      find_slow_traces: tool({
+        inputSchema: z.object({}).passthrough(),
+        execute: async () => {
+          calls.push("find_slow_traces");
+          return [{ traceId: "regression-trace-7", releaseId: "regression-sequential" }];
+        },
+      }),
+      inspect_trace: tool({
+        inputSchema: z.object({}).passthrough(),
+        execute: async () => {
+          calls.push("inspect_trace");
+          return { trace: { traceId: "regression-trace-7" }, criticalPath: { durationMs: 443 } };
         },
       }),
       inspect_release: tool({
@@ -50,9 +58,9 @@ describe("deterministic investigation model", () => {
     const text = await result.text;
 
     expect(calls).toEqual([
-      "query_telemetry:compare-releases",
-      "query_telemetry:find-slow-traces",
-      "query_telemetry:inspect-trace",
+      "compare_releases",
+      "find_slow_traces",
+      "inspect_trace",
       "inspect_release",
       "read_repo_files",
     ]);
@@ -70,7 +78,15 @@ describe("deterministic investigation model", () => {
       message: "Evidence source is unavailable." as const,
     };
     const tools = {
-      query_telemetry: tool({
+      compare_releases: tool({
+        inputSchema: z.object({}).passthrough(),
+        execute: async () => error,
+      }),
+      find_slow_traces: tool({
+        inputSchema: z.object({}).passthrough(),
+        execute: async () => error,
+      }),
+      inspect_trace: tool({
         inputSchema: z.object({}).passthrough(),
         execute: async () => error,
       }),

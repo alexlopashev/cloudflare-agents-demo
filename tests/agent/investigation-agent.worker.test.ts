@@ -114,12 +114,24 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     });
 
     expect(policy).toEqual({
-      actionApproval: true,
-      actions: ["create_draft_pr"],
-      activeTools: ["query_telemetry", "inspect_release", "read_repo_files", "create_draft_pr"],
+      actionApproval: undefined,
+      actions: [],
+      activeTools: [
+        "compare_releases",
+        "find_slow_traces",
+        "inspect_trace",
+        "inspect_release",
+        "read_repo_files",
+      ],
       maxSteps: 16,
       prompt: expect.stringMatching(/evidence[\s\S]+inference[\s\S]+confidence[\s\S]+unknowns/i),
-      tools: ["query_telemetry", "inspect_release", "read_repo_files"],
+      tools: [
+        "compare_releases",
+        "find_slow_traces",
+        "inspect_trace",
+        "inspect_release",
+        "read_repo_files",
+      ],
       workspaceBash: false,
     });
     expect(policy.prompt).toMatch(/do not repeat a successful tool operation/i);
@@ -162,8 +174,9 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     const policy = await runInDurableObject<
       RegressionSurgeonAgent,
       Awaited<ReturnType<RegressionSurgeonAgent["beforeStep"]>>
-    >(stub, async (instance) =>
-      instance.beforeStep({
+    >(stub, async (instance) => {
+      instance.startConfiguredInvestigation();
+      return instance.beforeStep({
         messages: [],
         stepNumber: 4,
         steps: [
@@ -171,9 +184,19 @@ describe("RegressionSurgeonAgent investigation policy", () => {
             toolResults: [
               {
                 toolCallId: "compare-call",
-                toolName: "query_telemetry",
-                input: { operation: "compare-releases" },
-                output: { baseline: { p75Ms: 130 }, candidate: { p75Ms: 380 } },
+                toolName: "compare_releases",
+                input: {
+                  baselineReleaseId: "baseline-concurrent",
+                  candidateReleaseId: "regression-sequential",
+                  windowMs: 60_000,
+                },
+                output: {
+                  status: "ready",
+                  windowMs: 60_000,
+                  baseline: { count: 20, p50Ms: 130, p75Ms: 130, p95Ms: 130, errorRate: 0 },
+                  candidate: { count: 20, p50Ms: 380, p75Ms: 380, p95Ms: 380, errorRate: 0 },
+                  delta: { p75Ms: 250 },
+                },
               },
             ],
           },
@@ -181,9 +204,23 @@ describe("RegressionSurgeonAgent investigation policy", () => {
             toolResults: [
               {
                 toolCallId: "slow-call",
-                toolName: "query_telemetry",
-                input: { operation: "find-slow-traces" },
-                output: { traces: [{ traceId: "trace-36" }] },
+                toolName: "find_slow_traces",
+                input: {
+                  releaseId: "regression-sequential",
+                  sinceMs: 1_700_086_400_000,
+                  untilMs: 1_700_086_460_000,
+                  limit: 5,
+                },
+                output: [
+                  {
+                    traceId: "trace-36",
+                    interactionId: "interaction-36",
+                    releaseId: "regression-sequential",
+                    startedAtMs: 1_700_086_436_000,
+                    durationMs: 380,
+                    outcome: "success",
+                  },
+                ],
               },
             ],
           },
@@ -191,9 +228,20 @@ describe("RegressionSurgeonAgent investigation policy", () => {
             toolResults: [
               {
                 toolCallId: "trace-call",
-                toolName: "query_telemetry",
-                input: { operation: "inspect-trace", traceId: "trace-36" },
-                output: { traceId: "trace-36" },
+                toolName: "inspect_trace",
+                input: { traceId: "trace-36" },
+                output: {
+                  trace: {
+                    traceId: "trace-36",
+                    interactionId: "interaction-36",
+                    releaseId: "regression-sequential",
+                    startedAtMs: 1_700_086_436_000,
+                    durationMs: 380,
+                    outcome: "success",
+                  },
+                  criticalPath: { durationMs: 380, spanIds: ["request"] },
+                  tree: [{ span: { spanId: "request" } }],
+                },
               },
             ],
           },
@@ -204,15 +252,22 @@ describe("RegressionSurgeonAgent investigation policy", () => {
                 toolName: "inspect_release",
                 input: { versionId: "regression-sequential" },
                 output: {
-                  commitSha: "d591869a8ef995f1835ef80152f4de085b10255b",
-                  changedFiles: ["workers/health-service/src/handler.ts"],
+                  release: {
+                    versionId: "regression-sequential",
+                    commitSha: "d591869a8ef995f1835ef80152f4de085b10255b",
+                  },
+                  commit: {
+                    sha: "d591869a8ef995f1835ef80152f4de085b10255b",
+                    changes: [{ path: "workers/platform/src/api/health.ts" }],
+                  },
+                  pullRequest: { status: "found", number: 19 },
                 },
               },
             ],
           },
         ],
-      } as never),
-    );
+      } as never);
+    });
 
     expect(policy).toMatchObject({
       activeTools: ["read_repo_files"],
@@ -249,26 +304,44 @@ describe("RegressionSurgeonAgent investigation policy", () => {
 
     expect(policies.chat).toBeUndefined();
     expect(policies.investigation).toMatchObject({
-      activeTools: ["query_telemetry"],
-      toolChoice: { type: "tool", toolName: "query_telemetry" },
+      activeTools: ["compare_releases"],
+      toolChoice: { type: "tool", toolName: "compare_releases" },
     });
   });
 
   it("exposes the deterministic investigation through its local RPC boundary", async () => {
+    await seedRegressionEvidence();
     const stub = env.REGRESSION_SURGEON_AGENT.getByName("local-rpc-boundary") as unknown as {
-      runLocalInvestigation(): Promise<{ report: string; toolTypes: string[] }>;
+      runLocalInvestigation(): Promise<{
+        preparedRemediation: {
+          diff: { path: string; replacementContent: string };
+          fingerprint: string;
+        };
+        report: string;
+        receipt: { investigationId: string; phases: { status: string }[] };
+        toolTypes: string[];
+      }>;
     };
 
     const result = await stub.runLocalInvestigation();
 
     expect(result.toolTypes).toEqual([
-      "tool-query_telemetry",
-      "tool-query_telemetry",
-      "tool-query_telemetry",
+      "tool-compare_releases",
+      "tool-find_slow_traces",
+      "tool-inspect_trace",
       "tool-inspect_release",
       "tool-read_repo_files",
     ]);
+    expect(result.receipt.phases.every((phase) => phase.status === "complete")).toBe(true);
+    expect(result.preparedRemediation).toMatchObject({
+      diff: {
+        path: "workers/platform/src/api/health.ts",
+        replacementContent: expect.stringMatching(/maximumConcurrentChecks = 2/),
+      },
+      fingerprint: expect.stringMatching(/^proposal-v1-[0-9a-f]{16}$/),
+    });
     expect(result.report).toMatch(/Evidence[\s\S]+Inference[\s\S]+Confidence[\s\S]+Unknowns/i);
+    expect(result.report).toContain(result.receipt.investigationId);
   });
 
   it("keeps deployment smoke remediation preview-only when production writes are enabled", async () => {
@@ -394,9 +467,9 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     });
 
     expect(beforeEviction.toolTypes).toEqual([
-      "tool-query_telemetry",
-      "tool-query_telemetry",
-      "tool-query_telemetry",
+      "tool-compare_releases",
+      "tool-find_slow_traces",
+      "tool-inspect_trace",
       "tool-inspect_release",
       "tool-read_repo_files",
     ]);
@@ -432,7 +505,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     );
 
     expect(toolTypes).toHaveLength(16);
-    expect(new Set(toolTypes)).toEqual(new Set(["tool-query_telemetry"]));
+    expect(new Set(toolTypes)).toEqual(new Set(["tool-compare_releases"]));
   });
 
   it("parks the guarded remediation action until explicit human approval", async () => {
@@ -444,6 +517,8 @@ describe("RegressionSurgeonAgent investigation policy", () => {
       RegressionSurgeonAgent,
       {
         approvalId: string | undefined;
+        proposalFingerprint: string | undefined;
+        replacementContent: string | undefined;
         output: unknown;
         state: string | undefined;
       }
@@ -458,6 +533,8 @@ describe("RegressionSurgeonAgent investigation policy", () => {
       if (part === undefined || !("state" in part)) {
         return {
           approvalId: undefined,
+          proposalFingerprint: undefined,
+          replacementContent: undefined,
           output: undefined,
           state: undefined,
         };
@@ -468,6 +545,14 @@ describe("RegressionSurgeonAgent investigation policy", () => {
           approval !== undefined && typeof approval === "object" && approval !== null
             ? Reflect.get(approval, "id")
             : undefined,
+        proposalFingerprint:
+          "input" in part && typeof part.input === "object" && part.input !== null
+            ? Reflect.get(part.input, "proposalFingerprint")
+            : undefined,
+        replacementContent:
+          "input" in part && typeof part.input === "object" && part.input !== null
+            ? Reflect.get(part.input, "replacementContent")
+            : undefined,
         output: "output" in part ? part.output : undefined,
         state: typeof part.state === "string" ? part.state : undefined,
       };
@@ -475,8 +560,47 @@ describe("RegressionSurgeonAgent investigation policy", () => {
 
     expect(pending).toEqual({
       approvalId: expect.any(String),
+      proposalFingerprint: expect.stringMatching(/^proposal-v1-[0-9a-f]{16}$/),
+      replacementContent: expect.stringMatching(/maximumConcurrentChecks = 2/),
       output: undefined,
       state: "approval-requested",
     });
+  });
+
+  it("rejects a changed proposal after the receipt fingerprint is prepared", async () => {
+    await seedRegressionEvidence();
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("fingerprint-authorization");
+    await (
+      stub as unknown as { runLocalInvestigation(): Promise<unknown> }
+    ).runLocalInvestigation();
+
+    const errorMessage = await runInDurableObject<RegressionSurgeonAgent, string | undefined>(
+      stub,
+      async (instance) => {
+        if (
+          instance.state.status !== "investigating" ||
+          instance.state.preparedRemediation === undefined
+        ) {
+          throw new Error("Expected a receipt-prepared remediation.");
+        }
+        const action = instance.getActions().create_draft_pr;
+        if (action === undefined) throw new Error("Expected the receipt-gated action.");
+        try {
+          await action.config.execute(
+            {
+              ...instance.state.preparedRemediation.proposal,
+              proposalFingerprint: instance.state.preparedRemediation.fingerprint,
+              replacementContent: "a different model-supplied proposal",
+            },
+            {} as never,
+          );
+          return;
+        } catch (error) {
+          return error instanceof Error ? error.message : "unknown error";
+        }
+      },
+    );
+
+    expect(errorMessage).toMatch(/fingerprint is not authorized/i);
   });
 });

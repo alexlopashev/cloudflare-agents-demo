@@ -8,7 +8,9 @@ export type ToolTimelineEntry = {
 type TimelineMessage = { id: string; parts: readonly unknown[] };
 
 const labels: Record<string, string> = {
-  query_telemetry: "Query telemetry",
+  compare_releases: "Compare releases",
+  find_slow_traces: "Find slow traces",
+  inspect_trace: "Inspect trace",
   inspect_release: "Inspect release",
   read_repo_files: "Read repository files",
   create_draft_pr: "Create draft PR",
@@ -34,18 +36,19 @@ export function buildToolTimeline(messages: readonly TimelineMessage[]): ToolTim
         output !== null && typeof output === "object"
           ? stringProperty(output, "status")
           : undefined;
-      const failed = state === "output-error" || outputStatus === "error";
+      const insufficient = outputStatus === "truncated" || outputStatus === "insufficient-data";
+      const failed = state === "output-error" || outputStatus === "error" || insufficient;
       const completed = state === "output-available" && !failed;
       entries.push({
         id: `${message.id}-${stringProperty(part, "toolCallId") ?? index}`,
         label: labels[toolName] ?? toolName,
         state: failed ? "failed" : completed ? "completed" : "running",
-        summary: failed
-          ? "Evidence lookup failed"
-          : state === "approval-requested"
-            ? "Awaiting human approval"
-            : outputStatus === "truncated"
-              ? "Evidence received (truncated to context limit)"
+        summary: insufficient
+          ? "Evidence incomplete (bounded result)"
+          : failed
+            ? "Evidence lookup failed"
+            : state === "approval-requested"
+              ? "Awaiting human approval"
               : completed
                 ? "Evidence received"
                 : "Gathering evidence",
