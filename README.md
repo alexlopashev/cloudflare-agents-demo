@@ -222,8 +222,12 @@ GitHub returned a response. Receiver-sensitive regressions now cover both GitHub
 captured platform fetcher is invoked as a plain function. The next write-enable smoke reached the
 exact Worker version but received the endpoint's unauthenticated 404 while its rotated key was still
 propagating, so fail-closed rollback restored write-disabled version `1ffbd553…` before any model
-turn or GitHub write. Bounded retries now cover only that pre-execution 404; deployed browser
-re-verification remains.
+turn or GitHub write. Bounded retries now cover only that pre-execution 404. The following live smoke
+reached Project Think but again finalized before reading source, proving prompt guidance alone was
+insufficient. The agent now forces each next missing evidence capability after an investigation
+begins, reconstructs the phase from persisted tool history, and permits only one bounded retry per
+failed operation. Deployed browser re-verification remains; the latest rollback left writes disabled
+as version `7a7a2135…` and created no GitHub state.
 
 PRs #31 and #32 implement the explicit draft-PR write workflow and fail-closed rollback for issue #30,
 which is natively blocked by issue #27 for its real Workers AI approval run. A scoped token is

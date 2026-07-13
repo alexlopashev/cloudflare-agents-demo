@@ -157,6 +157,103 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     expect(input).toMatch(/before (?:the )?final report/i);
   });
 
+  it("forces the next missing evidence capability before Project Think can finalize", async () => {
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("evidence-step-policy");
+    const policy = await runInDurableObject<
+      RegressionSurgeonAgent,
+      Awaited<ReturnType<RegressionSurgeonAgent["beforeStep"]>>
+    >(stub, async (instance) =>
+      instance.beforeStep({
+        messages: [],
+        stepNumber: 4,
+        steps: [
+          {
+            toolResults: [
+              {
+                toolCallId: "compare-call",
+                toolName: "query_telemetry",
+                input: { operation: "compare-releases" },
+                output: { baseline: { p75Ms: 130 }, candidate: { p75Ms: 380 } },
+              },
+            ],
+          },
+          {
+            toolResults: [
+              {
+                toolCallId: "slow-call",
+                toolName: "query_telemetry",
+                input: { operation: "find-slow-traces" },
+                output: { traces: [{ traceId: "trace-36" }] },
+              },
+            ],
+          },
+          {
+            toolResults: [
+              {
+                toolCallId: "trace-call",
+                toolName: "query_telemetry",
+                input: { operation: "inspect-trace", traceId: "trace-36" },
+                output: { traceId: "trace-36" },
+              },
+            ],
+          },
+          {
+            toolResults: [
+              {
+                toolCallId: "release-call",
+                toolName: "inspect_release",
+                input: { versionId: "regression-sequential" },
+                output: {
+                  commitSha: "d591869a8ef995f1835ef80152f4de085b10255b",
+                  changedFiles: ["workers/health-service/src/handler.ts"],
+                },
+              },
+            ],
+          },
+        ],
+      } as never),
+    );
+
+    expect(policy).toMatchObject({
+      activeTools: ["read_repo_files"],
+      toolChoice: { type: "tool", toolName: "read_repo_files" },
+    });
+    expect(policy?.system).toMatch(/complete the missing evidence operation/i);
+  });
+
+  it("starts the evidence chain for an investigation request but not ordinary chat", async () => {
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("evidence-step-intent");
+    const policies = await runInDurableObject<
+      RegressionSurgeonAgent,
+      {
+        chat: Awaited<ReturnType<RegressionSurgeonAgent["beforeStep"]>>;
+        investigation: Awaited<ReturnType<RegressionSurgeonAgent["beforeStep"]>>;
+      }
+    >(stub, async (instance) => ({
+      chat: await instance.beforeStep({
+        messages: [{ role: "user", content: [{ type: "text", text: "Thanks" }] }],
+        stepNumber: 0,
+        steps: [],
+      } as never),
+      investigation: await instance.beforeStep({
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Investigate the latency regression" }],
+          },
+        ],
+        stepNumber: 0,
+        steps: [],
+      } as never),
+    }));
+
+    expect(policies.chat).toBeUndefined();
+    expect(policies.investigation).toMatchObject({
+      activeTools: ["query_telemetry"],
+      toolChoice: { type: "tool", toolName: "query_telemetry" },
+    });
+  });
+
   it("exposes the deterministic investigation through its local RPC boundary", async () => {
     const stub = env.REGRESSION_SURGEON_AGENT.getByName("local-rpc-boundary") as unknown as {
       runLocalInvestigation(): Promise<{ report: string; toolTypes: string[] }>;

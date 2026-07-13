@@ -945,7 +945,11 @@ on 2026-07-13, but two consecutive public smokes finalized before `read_repo_fil
 refinement now makes all five evidence operations explicit in both the system policy and the
 programmatic deployment request. The next real browser turn exposed a Workers receiver error before
 the GitHub request received a response; both bounded GitHub adapters now invoke their captured
-platform fetcher as a plain function, with deployed re-verification remaining. The public browser transport now passes absent and empty GitHub
+platform fetcher as a plain function. A later live smoke proved that prompt guidance alone still
+allowed a premature final response, so the Project Think step hook now forces the next missing
+evidence capability after an investigation begins, restores phase from persisted tool history,
+deduplicates the current step, and stops forcing after the second bounded failure. Deployed
+re-verification remains. The public browser transport now passes absent and empty GitHub
 credentials to the existing no-token path when writes are disabled, while the fail-closed write gate
 requires a non-empty scoped token. A persisted session that recorded the earlier failed stream can
 accept an explicit retry without enabling overlapping submitted or streaming turns.
@@ -969,6 +973,9 @@ Acceptance criteria:
   search, representative-trace inspection, degraded-release inspection, and allowlisted source
   reading before a final report.
 - Both live GitHub adapters invoke the Workers fetch function without changing its receiver.
+- The Project Think step policy forces the ordered evidence capabilities, restores persisted phase,
+  does not double-count a tool call, and permits a low-confidence final report after two bounded
+  failures rather than looping.
 - A real public browser message completes that evidence-tool chain and produces an assistant response.
 - The top-right route pills are absent without changing either public route contract.
 - Full local gates, deployed smoke, responsive browser verification, and project-system alignment pass.
