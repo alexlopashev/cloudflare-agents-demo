@@ -1,9 +1,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { InvestigatorWidgetChrome } from "../../apps/web/src/investigator/InvestigatorWidget";
+import {
+  canSubmitInvestigatorRequest,
+  InvestigatorWidgetChrome,
+} from "../../apps/web/src/investigator/InvestigatorWidget";
 
 describe("investigator support widget", () => {
+  it("allows an explicit retry after failure without overlapping an active turn", () => {
+    expect(canSubmitInvestigatorRequest("ready")).toBe(true);
+    expect(canSubmitInvestigatorRequest("error")).toBe(true);
+    expect(canSubmitInvestigatorRequest("submitted")).toBe(false);
+    expect(canSubmitInvestigatorRequest("streaming")).toBe(false);
+  });
+
   it("collapses to an accessible floating launcher with attention and availability badges", () => {
     const markup = renderToStaticMarkup(
       <InvestigatorWidgetChrome isOpen={false} onToggle={vi.fn()} status="ready" unreadCount={1}>
