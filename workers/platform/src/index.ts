@@ -1,14 +1,18 @@
+import type { PrepareStepContext, TurnConfig, TurnContext } from "@cloudflare/think";
 import { Think } from "@cloudflare/think";
-import type { TurnConfig, TurnContext } from "@cloudflare/think";
-import type { LanguageModel, ToolSet } from "ai";
 import { routeAgentRequest } from "agents";
-
-import { createAgentModel } from "./agent/model";
-import { createAgentEvidenceServices } from "./agent/evidence-services";
+import type { LanguageModel, ToolSet } from "ai";
+import { remediationFixture } from "../../../packages/test-fixtures/src/remediation";
 import { findRepresentativeTraceId } from "./agent/evidence-identifiers";
+import { createAgentEvidenceServices } from "./agent/evidence-services";
+import {
+  evidenceInvestigationRequested,
+  evidenceStepsFromModelMessages,
+  nextRequiredEvidenceTool,
+} from "./agent/evidence-step-policy";
+import { createAgentModel } from "./agent/model";
 import { createRemediationAction } from "./agent/remediation-action";
 import { createAgentRemediationService } from "./agent/remediation-services";
-import { remediationFixture } from "../../../packages/test-fixtures/src/remediation";
 import { createInvestigationTools } from "./agent/tools";
 import { handlePlatformRequest, type PlatformBindings } from "./routing";
 import { createTelemetryStore } from "./telemetry/store";
@@ -16,6 +20,15 @@ import { createTelemetryStore } from "./telemetry/store";
 export interface PlatformEnvironment extends PlatformBindings {
   REGRESSION_SURGEON_AGENT: DurableObjectNamespace<RegressionSurgeonAgent>;
 }
+
+type EvidenceStepConfig = {
+  activeTools: ("query_telemetry" | "inspect_release" | "read_repo_files")[];
+  toolChoice: {
+    type: "tool";
+    toolName: "query_telemetry" | "inspect_release" | "read_repo_files";
+  };
+  system: string;
+};
 
 export class RegressionSurgeonAgent extends Think<PlatformEnvironment> {
   override maxSteps = 16;
@@ -89,6 +102,22 @@ rollback occurred.`;
   override beforeTurn(_context: TurnContext): TurnConfig {
     return {
       activeTools: ["query_telemetry", "inspect_release", "read_repo_files", "create_draft_pr"],
+    };
+  }
+
+  override beforeStep(context: PrepareStepContext): EvidenceStepConfig | undefined {
+    const evidenceSteps = [...evidenceStepsFromModelMessages(context.messages), ...context.steps];
+    const hasEvidence = evidenceSteps.some((step) => step.toolResults.length > 0);
+    const requiredTool =
+      nextRequiredEvidenceTool(evidenceSteps) ??
+      (!hasEvidence && evidenceInvestigationRequested(context.messages)
+        ? "query_telemetry"
+        : undefined);
+    if (requiredTool === undefined) return;
+    return {
+      activeTools: [requiredTool],
+      toolChoice: { type: "tool", toolName: requiredTool },
+      system: `${this.getSystemPrompt()}\n\nComplete the missing evidence operation through ${requiredTool} now. Do not produce final text in this step.`,
     };
   }
 
