@@ -1,6 +1,16 @@
 import { useAgentChat } from "@cloudflare/ai-chat/react";
-import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { useAgent } from "agents/react";
+import type { InvestigationAgentState } from "../../../../workers/platform/src";
 
 import { ApprovalPanel, buildApprovalRequests } from "./ApprovalPanel";
 import { messageText } from "./messages";
@@ -14,6 +24,9 @@ type InvestigatorWidgetChromeProps = {
   unreadCount: number;
   status: string;
   onToggle: () => void;
+  closeButtonRef?: Ref<HTMLButtonElement>;
+  dialogRef?: Ref<HTMLElement>;
+  launcherRef?: Ref<HTMLButtonElement>;
   children: ReactNode;
 };
 
@@ -32,6 +45,9 @@ export function InvestigatorWidgetChrome({
   unreadCount,
   status,
   onToggle,
+  closeButtonRef,
+  dialogRef,
+  launcherRef,
   children,
 }: InvestigatorWidgetChromeProps) {
   const boundedUnreadCount = Math.max(0, Math.floor(unreadCount));
@@ -45,6 +61,7 @@ export function InvestigatorWidgetChrome({
         hidden={!isOpen}
         id="investigator-dialog"
         role="dialog"
+        ref={dialogRef}
       >
         <header className="support-dialog-header">
           <div>
@@ -55,7 +72,12 @@ export function InvestigatorWidgetChrome({
               {widgetStatus(status)}
             </p>
           </div>
-          <button aria-label="Collapse investigator" onClick={onToggle} type="button">
+          <button
+            aria-label="Collapse investigator"
+            onClick={onToggle}
+            ref={closeButtonRef}
+            type="button"
+          >
             <span aria-hidden="true">−</span>
           </button>
         </header>
@@ -67,6 +89,7 @@ export function InvestigatorWidgetChrome({
         aria-label={isOpen ? "Collapse regression investigator" : "Open regression investigator"}
         className="support-launcher"
         onClick={onToggle}
+        ref={launcherRef}
         type="button"
       >
         <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -88,15 +111,42 @@ export function InvestigatorWidgetChrome({
   );
 }
 
+export const configuredInvestigationPrompt = "Investigate the seeded latency regression.";
+
+export function InvestigationStarter({
+  disabled,
+  onInvestigate,
+}: {
+  disabled: boolean;
+  onInvestigate(): void;
+}) {
+  return (
+    <div className="empty-state">
+      <strong>Start with the configured incident</strong>
+      <p>Collect the five required evidence phases without selecting a different incident.</p>
+      <button disabled={disabled} onClick={onInvestigate} type="button">
+        Investigate the seeded latency regression
+      </button>
+    </div>
+  );
+}
+
 export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }) {
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [input, setInput] = useState("");
-  const [unreadCount, setUnreadCount] = useState(initiallyOpen ? 0 : 1);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [session] = useState(() => resolveInvestigatorSession(window.localStorage));
-  const agent = useAgent({ agent: "RegressionSurgeonAgent", name: session });
+  const agent = useAgent<InvestigationAgentState>({
+    agent: "RegressionSurgeonAgent",
+    name: session,
+  });
   const { addToolApprovalResponse, messages, sendMessage, status } = useAgentChat({ agent });
-  const toolTimeline = buildToolTimeline(messages);
-  const approvals = buildApprovalRequests(messages);
+  const toolTimeline =
+    agent.state?.status === "investigating" ? buildToolTimeline(agent.state.receipt) : [];
+  const approvals = buildApprovalRequests(
+    messages,
+    agent.state?.status === "investigating" ? agent.state.preparedRemediation : undefined,
+  );
   const visibleMessages = messages
     .map((message) => ({ message, text: messageText(message.parts) }))
     .filter(({ text }) => text.length > 0);
@@ -104,6 +154,10 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
     ({ message }) => message.role === "assistant",
   ).length;
   const previousAssistantMessageCount = useRef(assistantMessageCount);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const launcherRef = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
 
   useEffect(() => {
     const added = Math.max(0, assistantMessageCount - previousAssistantMessageCount.current);
@@ -111,6 +165,23 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
     if (isOpen) setUnreadCount(0);
     else if (added > 0) setUnreadCount((count) => count + added);
   }, [assistantMessageCount, isOpen]);
+
+  useEffect(() => {
+    if (isOpen && !wasOpen.current) closeButtonRef.current?.focus();
+    if (!isOpen && wasOpen.current) launcherRef.current?.focus();
+    wasOpen.current = isOpen;
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setIsOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen]);
 
   function toggle() {
     setIsOpen((open) => {
@@ -128,10 +199,21 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
     setInput("");
   }
 
+  function startConfiguredInvestigation() {
+    if (!canSubmitInvestigatorRequest(status)) return;
+    sendMessage({
+      role: "user",
+      parts: [{ type: "text", text: configuredInvestigationPrompt }],
+    });
+  }
+
   return (
     <InvestigatorWidgetChrome
       isOpen={isOpen}
       onToggle={toggle}
+      closeButtonRef={closeButtonRef}
+      dialogRef={dialogRef}
+      launcherRef={launcherRef}
       status={status}
       unreadCount={unreadCount}
     >
@@ -143,10 +225,10 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
         />
         <div className="messages" aria-live="polite">
           {visibleMessages.length === 0 ? (
-            <div className="empty-state">
-              <strong>How can I help?</strong>
-              <p>Ask me to investigate the measured dashboard latency regression.</p>
-            </div>
+            <InvestigationStarter
+              disabled={!canSubmitInvestigatorRequest(status)}
+              onInvestigate={startConfiguredInvestigation}
+            />
           ) : (
             visibleMessages.map(({ message, text }) => (
               <article className={`message ${message.role}`} key={message.id}>

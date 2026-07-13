@@ -28,7 +28,11 @@ import { createAgentModel } from "./agent/model";
 import { createRemediationAction } from "./agent/remediation-action";
 import { createAgentRemediationService } from "./agent/remediation-services";
 import { createInvestigationTools } from "./agent/tools";
-import { remediationProposalFingerprint, type RemediationProposal } from "./remediation/service";
+import {
+  remediationChangeCounts,
+  remediationProposalFingerprint,
+  type RemediationProposal,
+} from "./remediation/service";
 import { handlePlatformRequest, type PlatformBindings } from "./routing";
 import { createTelemetryStore } from "./telemetry/store";
 
@@ -45,10 +49,14 @@ type EvidenceStepConfig = {
   system: string;
 };
 
-type PreparedRemediation = {
+export type PreparedRemediation = {
   fingerprint: string;
+  writeEnabled: boolean;
   proposal: RemediationProposal;
   diff: {
+    additions: number;
+    currentContent: string;
+    deletions: number;
     path: string;
     expectedBlobSha: string;
     replacementContent: string;
@@ -163,7 +171,8 @@ rollback occurred.${prepared}`;
       evidence.commitSha === undefined ||
       evidence.pullRequest?.status !== "found" ||
       evidence.sourcePath === undefined ||
-      evidence.blobSha === undefined
+      evidence.blobSha === undefined ||
+      evidence.sourceContent === undefined
     ) {
       return;
     }
@@ -179,10 +188,16 @@ rollback occurred.${prepared}`;
       expectedBlobSha: evidence.blobSha,
       path: evidence.sourcePath,
     };
+    const changes = remediationChangeCounts(evidence.sourceContent, proposal.replacementContent);
     return {
       fingerprint: `proposal-v1-${await remediationProposalFingerprint(proposal)}`,
+      writeEnabled:
+        this.env.MODEL_MODE === "workers-ai" && this.env.GITHUB_WRITE_ENABLED === "true",
       proposal,
       diff: {
+        additions: changes.additions,
+        currentContent: evidence.sourceContent,
+        deletions: changes.deletions,
         path: proposal.path,
         expectedBlobSha: proposal.expectedBlobSha,
         replacementContent: proposal.replacementContent,

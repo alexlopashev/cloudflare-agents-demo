@@ -314,8 +314,15 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     const stub = env.REGRESSION_SURGEON_AGENT.getByName("local-rpc-boundary") as unknown as {
       runLocalInvestigation(): Promise<{
         preparedRemediation: {
-          diff: { path: string; replacementContent: string };
+          diff: {
+            additions: number;
+            currentContent: string;
+            deletions: number;
+            path: string;
+            replacementContent: string;
+          };
           fingerprint: string;
+          writeEnabled: boolean;
         };
         report: string;
         receipt: { investigationId: string; phases: { status: string }[] };
@@ -335,10 +342,14 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     expect(result.receipt.phases.every((phase) => phase.status === "complete")).toBe(true);
     expect(result.preparedRemediation).toMatchObject({
       diff: {
+        additions: expect.any(Number),
+        currentContent: expect.stringMatching(/loadingMode === "sequential"/),
+        deletions: expect.any(Number),
         path: "workers/platform/src/api/health.ts",
         replacementContent: expect.stringMatching(/maximumConcurrentChecks = 2/),
       },
       fingerprint: expect.stringMatching(/^proposal-v1-[0-9a-f]{16}$/),
+      writeEnabled: false,
     });
     expect(result.report).toMatch(/Evidence[\s\S]+Inference[\s\S]+Confidence[\s\S]+Unknowns/i);
     expect(result.report).toContain(result.receipt.investigationId);

@@ -458,9 +458,11 @@ h1 {
   text-align: right;
 }
 .approval-panel {
+  max-height: 60%;
   padding: 22px 28px;
   border-bottom: 1px solid #17232918;
   background: #fff8e8;
+  overflow: auto;
 }
 .approval-panel article {
   padding: 18px;
@@ -471,6 +473,13 @@ h1 {
 .approval-panel h2 {
   margin: 0 0 12px;
   font-size: 1.1rem;
+}
+.approval-panel h3 {
+  margin: 18px 0 8px;
+  font-size: 1rem;
+}
+.write-posture {
+  font-weight: 800;
 }
 .approval-panel dl div {
   display: grid;
@@ -507,6 +516,9 @@ h1 {
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.4rem;
   font-weight: 500;
+}
+.empty-state button {
+  margin-top: 12px;
 }
 .empty-state p {
   margin: 8px 0 0;

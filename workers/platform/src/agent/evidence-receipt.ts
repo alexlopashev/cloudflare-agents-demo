@@ -50,6 +50,7 @@ export type EvidenceReceipt = {
       | { status: "unknown"; reason: "not-found" | "ambiguous" };
     sourcePath?: string;
     blobSha?: string;
+    sourceContent?: string;
   };
 };
 
@@ -363,7 +364,7 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
   return {
     status: "complete",
     reason: "validated",
-    evidence: { sourcePath: file.path, blobSha: file.blobSha },
+    evidence: { sourcePath: file.path, blobSha: file.blobSha, sourceContent: file.content },
   };
 }
 

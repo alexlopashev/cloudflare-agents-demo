@@ -5,7 +5,15 @@ export type ToolTimelineEntry = {
   summary: string;
 };
 
-type TimelineMessage = { id: string; parts: readonly unknown[] };
+type ReceiptPhase = {
+  toolName: string;
+  status: "pending" | "complete" | "insufficient" | "error";
+};
+
+type TimelineReceipt = {
+  investigationId: string;
+  phases: readonly ReceiptPhase[];
+};
 
 const labels: Record<string, string> = {
   compare_releases: "Compare releases",
@@ -13,49 +21,26 @@ const labels: Record<string, string> = {
   inspect_trace: "Inspect trace",
   inspect_release: "Inspect release",
   read_repo_files: "Read repository files",
-  create_draft_pr: "Create draft PR",
 };
 
-function stringProperty(value: object, property: string): string | undefined {
-  const candidate = Reflect.get(value, property);
-  return typeof candidate === "string" ? candidate : undefined;
-}
-
-export function buildToolTimeline(messages: readonly TimelineMessage[]): ToolTimelineEntry[] {
-  const entries: ToolTimelineEntry[] = [];
-  for (const message of messages) {
-    for (const [index, part] of message.parts.entries()) {
-      if (part === null || typeof part !== "object") continue;
-      const type = stringProperty(part, "type");
-      if (type === undefined || !type.startsWith("tool-")) continue;
-      const toolName = type.slice("tool-".length);
-      if (!(toolName in labels)) continue;
-      const state = stringProperty(part, "state");
-      const output = Reflect.get(part, "output");
-      const outputStatus =
-        output !== null && typeof output === "object"
-          ? stringProperty(output, "status")
-          : undefined;
-      const insufficient = outputStatus === "truncated" || outputStatus === "insufficient-data";
-      const failed = state === "output-error" || outputStatus === "error" || insufficient;
-      const completed = state === "output-available" && !failed;
-      entries.push({
-        id: `${message.id}-${stringProperty(part, "toolCallId") ?? index}`,
-        label: labels[toolName] ?? toolName,
-        state: failed ? "failed" : completed ? "completed" : "running",
-        summary: insufficient
+export function buildToolTimeline(receipt: TimelineReceipt): ToolTimelineEntry[] {
+  const activeIndex = receipt.phases.findIndex((phase) => phase.status !== "complete");
+  return receipt.phases.map((phase, index) => ({
+    id: `${receipt.investigationId}-${phase.toolName}`,
+    label: labels[phase.toolName] ?? phase.toolName,
+    state:
+      phase.status === "complete" ? "completed" : phase.status === "pending" ? "running" : "failed",
+    summary:
+      phase.status === "complete"
+        ? "Evidence received"
+        : phase.status === "insufficient"
           ? "Evidence incomplete (bounded result)"
-          : failed
+          : phase.status === "error"
             ? "Evidence lookup failed"
-            : state === "approval-requested"
-              ? "Awaiting human approval"
-              : completed
-                ? "Evidence received"
-                : "Gathering evidence",
-      });
-    }
-  }
-  return entries;
+            : index === activeIndex
+              ? "Gathering evidence"
+              : "Waiting for prior evidence",
+  }));
 }
 
 export function ToolTimeline({ entries }: { entries: readonly ToolTimelineEntry[] }) {

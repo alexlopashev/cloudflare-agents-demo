@@ -104,7 +104,7 @@ function lineCount(value: string): number {
   return value.length === 0 ? 0 : value.split("\n").length;
 }
 
-function changedLines(before: string, after: string) {
+export function remediationChangeCounts(before: string, after: string) {
   const left = before.split("\n");
   const right = after.split("\n");
   let previous = new Uint16Array(right.length + 1);
@@ -144,7 +144,10 @@ export async function remediationProposalFingerprint(
   });
 }
 
-function pullRequestBody(proposal: RemediationProposal, changes: ReturnType<typeof changedLines>) {
+function pullRequestBody(
+  proposal: RemediationProposal,
+  changes: ReturnType<typeof remediationChangeCounts>,
+) {
   return `## Evidence
 
 - Baseline release: ${proposal.incident.baselineReleaseId}
@@ -249,7 +252,7 @@ export function createRemediationService(options: RemediationServiceOptions) {
     ) {
       throw new RemediationError("limit-exceeded", "Remediation file size limit exceeded.");
     }
-    const changes = changedLines(currentFile.content, proposal.replacementContent);
+    const changes = remediationChangeCounts(currentFile.content, proposal.replacementContent);
     if (changes.additions + changes.deletions > options.limits.maxChangedLines) {
       throw new RemediationError("limit-exceeded", "Remediation changed-line limit exceeded.");
     }

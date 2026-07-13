@@ -3,76 +3,60 @@ import { describe, expect, it } from "vitest";
 
 import { buildToolTimeline, ToolTimeline } from "../../apps/web/src/investigator/ToolTimeline";
 
-const messages = [
-  {
-    id: "assistant-1",
-    parts: [
-      {
-        type: "tool-compare_releases",
-        state: "output-available",
-        toolCallId: "call-1",
-        output: { status: "ready" },
-      },
-      {
-        type: "tool-inspect_release",
-        state: "output-available",
-        toolCallId: "call-2",
-        output: { status: "truncated" },
-      },
-      {
-        type: "tool-read_repo_files",
-        state: "output-error",
-        toolCallId: "call-3",
-        errorText: "private detail",
-      },
-      {
-        type: "tool-create_draft_pr",
-        state: "approval-requested",
-        toolCallId: "call-4",
-      },
-    ],
-  },
-];
+const receipt = {
+  investigationId: "investigation-1",
+  phases: [
+    { toolName: "compare_releases", status: "complete", attempts: [] },
+    { toolName: "find_slow_traces", status: "insufficient", attempts: [] },
+    { toolName: "inspect_trace", status: "pending", attempts: [] },
+    { toolName: "inspect_release", status: "pending", attempts: [] },
+    { toolName: "read_repo_files", status: "pending", attempts: [] },
+  ],
+} as const;
 
 describe("investigator tool timeline", () => {
-  it("projects ordered, bounded tool status without leaking raw errors", () => {
-    expect(buildToolTimeline(messages)).toEqual([
+  it("projects all five ordered phases from the shared receipt", () => {
+    expect(buildToolTimeline(receipt)).toEqual([
       {
-        id: "assistant-1-call-1",
+        id: "investigation-1-compare_releases",
         label: "Compare releases",
         state: "completed",
         summary: "Evidence received",
       },
       {
-        id: "assistant-1-call-2",
-        label: "Inspect release",
+        id: "investigation-1-find_slow_traces",
+        label: "Find slow traces",
         state: "failed",
         summary: "Evidence incomplete (bounded result)",
       },
       {
-        id: "assistant-1-call-3",
-        label: "Read repository files",
-        state: "failed",
-        summary: "Evidence lookup failed",
+        id: "investigation-1-inspect_trace",
+        label: "Inspect trace",
+        state: "running",
+        summary: "Waiting for prior evidence",
       },
       {
-        id: "assistant-1-call-4",
-        label: "Create draft PR",
+        id: "investigation-1-inspect_release",
+        label: "Inspect release",
         state: "running",
-        summary: "Awaiting human approval",
+        summary: "Waiting for prior evidence",
+      },
+      {
+        id: "investigation-1-read_repo_files",
+        label: "Read repository files",
+        state: "running",
+        summary: "Waiting for prior evidence",
       },
     ]);
-    expect(JSON.stringify(buildToolTimeline(messages))).not.toContain("private");
   });
 
   it("renders an accessible ordered timeline", () => {
-    const markup = renderToStaticMarkup(<ToolTimeline entries={buildToolTimeline(messages)} />);
+    const markup = renderToStaticMarkup(<ToolTimeline entries={buildToolTimeline(receipt)} />);
 
     expect(markup).toContain('aria-label="Investigation tool timeline"');
     expect(markup).toContain("Compare releases");
     expect(markup).toContain("Inspect release");
     expect(markup).toContain("Read repository files");
-    expect(markup).toContain("Create draft PR");
     expect(markup.indexOf("Compare releases")).toBeLessThan(markup.indexOf("Inspect release"));
   });
 });
