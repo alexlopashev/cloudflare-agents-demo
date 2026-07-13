@@ -938,6 +938,28 @@ Acceptance criteria:
 - Focused UI tests, the complete local E2E, aggregate quality gates, container contract, and build
   pass.
 
+### Phase 11 — Live investigator recovery and header simplification
+
+Status: implemented locally in issue #27; review, merge, and public refresh remain. The public browser
+transport reconnects and restores the committed user message, but the resumed stream currently fails
+while constructing the remediation action because the Worker presents an absent GitHub credential as
+an empty string. Empty and whitespace-only credentials now select the existing no-token path when
+writes are disabled, while the fail-closed write gate requires a non-empty scoped token.
+
+The investigator is already mounted as a support widget on both product routes, so the separate
+Deployboard and Investigator route pills in the header are redundant. Remove those pills while
+retaining the Regression Surgeon brand link and the `/app` collapsed and `/investigator` expanded
+direct-link contracts.
+
+Acceptance criteria:
+
+- Empty and whitespace-only GitHub tokens select the deterministic no-write preview only when writes
+  are disabled.
+- Write-enabled mode rejects missing, empty, and whitespace-only tokens.
+- A real public browser message completes the evidence-tool chain and produces an assistant response.
+- The top-right route pills are absent without changing either public route contract.
+- Full local gates, deployed smoke, responsive browser verification, and project-system alignment pass.
+
 ## 17. Scope gates
 
 Implement in this order:

@@ -2,39 +2,23 @@ import { Deployboard } from "./deployboard/Deployboard";
 import { resolveExperience } from "./experience";
 import { InvestigatorWidget } from "./investigator/InvestigatorWidget";
 
+export function SiteHeader() {
+  return (
+    <header className="site-header">
+      <a className="brand" href="/app">
+        Regression Surgeon
+      </a>
+    </header>
+  );
+}
+
 export function App() {
   const experience = resolveExperience(window.location.pathname);
   document.title = `${experience.title} · Regression Surgeon`;
 
   return (
     <div className="site-shell">
-      <header className="site-header">
-        <a className="brand" href="/app">
-          Regression Surgeon
-        </a>
-        <nav aria-label="Product experiences">
-          <a
-            aria-current={
-              experience.kind === "product" && !experience.investigatorInitiallyOpen
-                ? "page"
-                : undefined
-            }
-            href="/app"
-          >
-            Deployboard
-          </a>
-          <a
-            aria-current={
-              experience.kind === "product" && experience.investigatorInitiallyOpen
-                ? "page"
-                : undefined
-            }
-            href="/investigator"
-          >
-            Investigator
-          </a>
-        </nav>
-      </header>
+      <SiteHeader />
       {experience.kind === "product" && (
         <>
           <Deployboard />

@@ -23,19 +23,32 @@ describe("agent remediation services", () => {
 
   it("allows credential-free Workers AI previews but requires a token before enabling writes", async () => {
     const repository = { owner: "alexlopashev", repo: "cloudflare-agents-demo" };
+    const fetcher = vi.fn(async () => new Response("network must not be used"));
 
-    const preview = createAgentRemediationService({
-      mode: "workers-ai",
-      repository,
-      writeEnabled: false,
-    });
-    await expect(preview.execute(remediationFixture)).resolves.toMatchObject({
-      status: "preview",
-      writesPerformed: false,
-    });
-    expect(() =>
-      createAgentRemediationService({ mode: "workers-ai", repository, writeEnabled: true }),
-    ).toThrow(/token/i);
+    for (const token of [undefined, "", "   "]) {
+      const preview = createAgentRemediationService({
+        mode: "workers-ai",
+        repository,
+        writeEnabled: false,
+        fetcher,
+        ...(token === undefined ? {} : { token }),
+      });
+      await expect(preview.execute(remediationFixture)).resolves.toMatchObject({
+        status: "preview",
+        writesPerformed: false,
+      });
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+    for (const token of [undefined, "", "   "]) {
+      expect(() =>
+        createAgentRemediationService({
+          mode: "workers-ai",
+          repository,
+          writeEnabled: true,
+          ...(token === undefined ? {} : { token }),
+        }),
+      ).toThrow(/non-empty scoped token/i);
+    }
     expect(() =>
       createAgentRemediationService({ mode: "unsupported", repository, writeEnabled: false }),
     ).toThrow("Unsupported remediation mode");
