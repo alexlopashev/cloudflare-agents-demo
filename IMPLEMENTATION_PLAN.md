@@ -970,11 +970,11 @@ Acceptance criteria:
 
 ### Phase 12 — Explicit guarded draft-PR write enablement
 
-Status: implemented locally in issue #30; review and merge remain, and issue #27 blocks the final
-real-model gate. The draft-PR action, approval UI, bounded GitHub adapter, and idempotent recovery were
-already implemented. The operator workflow keeps ordinary deployment write-disabled, accepts a
-fine-grained token only through pinned Wrangler's TTY secret prompt, and requires a separate explicit
-deployment command to enable writes.
+Status: implementation and fail-closed review refinements merged in PRs #31 and #32; issue #27 blocks
+the final real-model gate. The draft-PR action, approval UI, bounded GitHub adapter, and idempotent
+recovery were already implemented. The operator workflow keeps ordinary deployment write-disabled,
+accepts a fine-grained token only through pinned Wrangler's TTY secret prompt, and requires a separate
+explicit deployment command to enable writes.
 
 Enabling production writes must not make the keyed deployment smoke write-capable. Smoke continues
 to construct a preview-scoped remediation service, while a real browser turn can reach the
