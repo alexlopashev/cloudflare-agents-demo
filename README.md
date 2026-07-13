@@ -184,11 +184,17 @@ The v1.1 interactive-demo UX from PR #26 is live on Cloudflare from main commit 
 now exposes bounded measured-traffic generation, and the mounted investigator uses the responsive
 support-style widget with safe Markdown reports.
 
-Issue #27 fixes a live browser-turn failure caused by Cloudflare presenting the absent optional
-GitHub credential as an empty string. Empty credentials now stay on the deterministic no-write
-preview path, while write-enabled mode still requires a non-empty scoped token. The redundant
-Deployboard and Investigator header pills are removed; `/app` and `/investigator` retain their
-collapsed and expanded direct-link behavior. Public deployment of this follow-up remains pending.
+Issue #27 is deployed through PRs #28 and #29 at main commit `008969a`. Empty GitHub credentials stay
+on the deterministic no-write preview path, while write-enabled mode still requires a non-empty
+scoped token. A failed persisted turn can now accept an explicit retry without permitting overlap,
+and the redundant Deployboard and Investigator header pills are removed. `/app` and `/investigator`
+retain their collapsed and expanded direct-link behavior.
+
+The latest runtime and UI are live at investigator version `e69e1a38…`, but the final live-agent gate
+is temporarily blocked: Cloudflare Workers AI returns error 4006 because the account has exhausted
+its daily free allocation of 10,000 neurons. The keyed smoke and a new browser response cannot pass
+until that allocation resets or the Workers account is upgraded; local deterministic gates remain
+green and public GitHub writes remain disabled.
 
 Phases 1 through 8 are implemented and verified locally and on Cloudflare. The real known-good release at `cf25e52`
 loads three service checks concurrently; the current scenario release intentionally serializes them

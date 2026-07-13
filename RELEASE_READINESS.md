@@ -31,6 +31,14 @@ required GitHub Actions lanes. PR #23 passed macOS ARM64/x64 and Linux ARM64/x64
 - Browser verification at 1280 px confirmed the bounded metric generator and badged floating
   launcher. At 390×844, the investigator filled the viewport and its send button measured 350×44.
 
+The issue #27 follow-up is deployed from main commit `008969a` as investigator version
+`e69e1a38-5abd-4cda-94ba-96ef981a5656`. Browser verification confirms that the redundant header
+pills are absent and the persisted failed session preserves its message while enabling an explicit
+retry. This version is not yet a passing deployed gate: Workers AI returns error 4006 because the
+account exhausted its daily free allocation of 10,000 neurons, so the keyed smoke cannot produce the
+trace evidence required for remediation preview. Issue #27 and milestone 2 remain open until a real
+browser turn and keyed smoke pass after allocation recovery.
+
 Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its ignored
 `.local/deploy/state.json` contains the exact remote version IDs and an owner-only smoke credential.
 
@@ -55,5 +63,6 @@ Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its 
 - `README.md`, `IMPLEMENTATION_PLAN.md`, `AGENTS.md`, and this release record describe the same v1
   and focused v1.1 delivery.
 - The GitHub wiki mirrors product, architecture, operations, decisions, development, and roadmap.
-- The v1 and v1.1 milestones are closed. Issue #25 has no native dependency relations.
+- The v1 milestone is closed. The v1.1 milestone is open for issue #27, which has no native
+  dependency relations and is blocked only by the external Workers AI allocation reset or upgrade.
 - The repository-local alignment skill validates successfully.

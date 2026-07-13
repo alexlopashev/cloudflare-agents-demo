@@ -940,12 +940,17 @@ Acceptance criteria:
 
 ### Phase 11 — Live investigator recovery and header simplification
 
-Status: active in issue #27. PR #28 merged and deployed the credential normalization and header
-simplification. The public browser transport now passes absent and empty GitHub credentials to the
-existing no-token path when writes are disabled, while the fail-closed write gate requires a
-non-empty scoped token. A persisted session that recorded the earlier failed stream still needs an
-explicit retry path: error state must permit a new request without enabling overlapping submitted or
-streaming turns.
+Status: implemented, merged in PRs #28 and #29, and deployed at main commit `008969a`; issue #27 stays
+open on the final live-model gate. The public browser transport now passes absent and empty GitHub
+credentials to the existing no-token path when writes are disabled, while the fail-closed write gate
+requires a non-empty scoped token. A persisted session that recorded the earlier failed stream can
+accept an explicit retry without enabling overlapping submitted or streaming turns.
+
+The deployed browser verifies the preserved failed message, enabled retry, removed header pills, and
+unchanged write-disabled posture. The keyed Workers AI smoke cannot currently finish because the
+account exhausted its daily free allocation of 10,000 neurons; Cloudflare returns error 4006 before
+the model can produce trace evidence. Retry the deployed gate after the allocation resets or the
+account is upgraded, then close issue #27 and milestone 2 only if the real browser turn also passes.
 
 The investigator is already mounted as a support widget on both product routes, so the separate
 Deployboard and Investigator route pills in the header are redundant. Remove those pills while
