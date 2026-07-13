@@ -177,7 +177,8 @@ export function createInvestigationTools(
       },
     }),
     inspect_trace: tool({
-      description: "Inspect one selected trace and its bounded critical path.",
+      description:
+        "Inspect one selected trace and its bounded parent-aware critical path with explicit parentage diagnostics.",
       inputSchema: inspectTraceSchema,
       execute: async (rawInput) => {
         const input = inspectTraceSchema.parse(rawInput);

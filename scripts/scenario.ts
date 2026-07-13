@@ -11,7 +11,11 @@ const reseedResultSchema = z.object({
   }),
   scenario: z.object({ sampleCount: z.number() }),
   slowTrace: z.object({
-    criticalPath: z.object({ durationMs: z.number() }),
+    criticalPath: z.object({
+      diagnostics: z.array(z.unknown()),
+      spanIds: z.array(z.string()).min(1),
+      wallTimeMs: z.number(),
+    }),
     releaseId: z.string(),
     traceId: z.string(),
   }),
@@ -55,7 +59,7 @@ try {
       result.data.scenario.sampleCount !== 20 ||
       result.data.slowTrace.releaseId !== "regression-sequential" ||
       result.data.comparison.candidate.p75Ms < result.data.comparison.baseline.p75Ms * 2 ||
-      result.data.slowTrace.criticalPath.durationMs < 300
+      result.data.slowTrace.criticalPath.wallTimeMs < 300
     ) {
       throw new Error(
         `Scenario evidence did not prove the controlled regression: ${JSON.stringify(result)}`,

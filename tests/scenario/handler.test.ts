@@ -31,7 +31,11 @@ function options() {
     { traceId: "slow-trace", releaseId: "regression-sequential", durationMs: 360 },
   ]);
   const getTraceDetail = vi.fn(async () => ({
-    criticalPath: { durationMs: 360, spanIds: ["service-api", "service-jobs", "service-storage"] },
+    criticalPath: {
+      diagnostics: [],
+      spanIds: ["request", "service-api", "service-jobs", "service-storage"],
+      wallTimeMs: 360,
+    },
   }));
   const investigate = vi.fn(async () => ({
     report: "## Evidence\nComplete",
@@ -80,8 +84,9 @@ describe("local scenario control", () => {
       comparison: { status: "ready" },
       slowTrace: {
         criticalPath: {
-          durationMs: 360,
-          spanIds: ["service-api", "service-jobs", "service-storage"],
+          diagnostics: [],
+          spanIds: ["request", "service-api", "service-jobs", "service-storage"],
+          wallTimeMs: 360,
         },
         durationMs: 360,
         releaseId: "regression-sequential",

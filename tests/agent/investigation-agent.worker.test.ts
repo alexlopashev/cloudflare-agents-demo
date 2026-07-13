@@ -239,7 +239,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
                     durationMs: 380,
                     outcome: "success",
                   },
-                  criticalPath: { durationMs: 380, spanIds: ["request"] },
+                  criticalPath: { diagnostics: [], spanIds: ["request"], wallTimeMs: 380 },
                   tree: [{ span: { spanId: "request" } }],
                 },
               },

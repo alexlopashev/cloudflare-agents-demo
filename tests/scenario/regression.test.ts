@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { calculateCriticalPath } from "../../packages/telemetry/src/traces";
 import { generateRegressionScenario } from "../../workers/platform/src/scenario/generator";
 import type { SpanRecord, TraceRecord } from "../../workers/platform/src/telemetry/store";
 
@@ -53,6 +54,26 @@ describe("controlled regression scenario", () => {
     expect(new Set(baselineServiceStarts).size).toBe(1);
     expect(degradedServiceStarts).toEqual([
       1_700_086_401_000, 1_700_086_401_120, 1_700_086_401_240,
+    ]);
+    const paths = traces.map(({ spans }) =>
+      calculateCriticalPath(
+        spans.map((span) => ({
+          ...span,
+          status: span.status === "success" ? ("ok" as const) : ("error" as const),
+        })),
+      ),
+    );
+    expect(paths).toEqual([
+      {
+        diagnostics: [],
+        spanIds: ["request", "service-api"],
+        wallTimeMs: 120,
+      },
+      {
+        diagnostics: [],
+        spanIds: ["request", "service-api", "service-jobs", "service-storage"],
+        wallTimeMs: 360,
+      },
     ]);
     expect(store.recordUxEvent).toHaveBeenCalledTimes(2);
   });

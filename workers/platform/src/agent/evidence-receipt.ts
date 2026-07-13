@@ -89,13 +89,24 @@ const traceRecord = z
   })
   .passthrough();
 const slowTraceOutput = z.array(traceRecord).min(1).max(100);
+const traceParentageDiagnostic = z.discriminatedUnion("code", [
+  z.object({ code: z.literal("cycle"), spanIds: z.array(evidenceId).min(1).max(500) }).strict(),
+  z
+    .object({
+      code: z.literal("missing-parent"),
+      spanId: evidenceId,
+      parentSpanId: evidenceId,
+    })
+    .strict(),
+]);
 const traceOutput = z
   .object({
     trace: traceRecord,
     criticalPath: z
       .object({
-        durationMs: z.number().nonnegative(),
+        wallTimeMs: z.number().nonnegative(),
         spanIds: z.array(evidenceId).min(1),
+        diagnostics: z.array(traceParentageDiagnostic).max(500),
       })
       .passthrough(),
     tree: z.array(z.unknown()).min(1),

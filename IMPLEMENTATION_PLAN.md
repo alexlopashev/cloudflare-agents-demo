@@ -471,9 +471,9 @@ The regression exists as a real commit associated with a real PR in repository h
 
 `mise run scenario:reseed` removes only the two controlled releases, sends 20 concurrent and 20
 sequential interactions through the real local service binding, stores their measured D1 evidence,
-then verifies a ready comparison and sequential slow-trace interval coverage. `mise run scenario:reset`
-performs the scoped deletion independently. Neither operation writes an agent conclusion or modifies
-unrelated telemetry.
+then verifies a ready comparison and parent-aware slow-trace critical-path wall time.
+`mise run scenario:reset` performs the scoped deletion independently. Neither operation writes an
+agent conclusion or modifies unrelated telemetry.
 
 ## 12. Telemetry model
 
@@ -618,8 +618,13 @@ Coverage percentage is not the target. The target is complete protection of mean
 - Release comparisons use equivalent windows and require a minimum sample count.
 - Percentiles, error rates, and deltas are correct at empty, singleton, and boundary-sized datasets.
 - Clock ordering and duration units are consistent.
-- Trace trees preserve parent-child relationships and tolerate missing or late spans.
-- Critical-path calculation does not double-count overlapping spans.
+- Trace trees preserve parent-child relationships and expose bounded missing-parent and cycle
+  diagnostics.
+- Critical-path calculation selects deterministic causal contributors: parallel siblings compete,
+  sequential siblings can both contribute, nested ancestry remains visible, and fork/join ties are
+  stable.
+- Critical-path span IDs and `wallTimeMs` describe the same selected path; merged interval coverage
+  is not mislabeled as a path.
 - Queries enforce time-window, row-count, and result-size limits.
 - No tool accepts arbitrary SQL.
 
@@ -796,15 +801,15 @@ Acceptance criteria:
 
 ### Phase 4 — Telemetry
 
-Status: historically delivered in issues #5 and #6, with retry and attribution integrity hardened in
-issue #40 and parent-aware trace semantics planned in issue #41. D1 stores immutable releases, UX
-events, traces, and spans from real application requests. Exact retries are idempotent, while reused
-trace, span, or interaction identifiers with different immutable data abort the complete write.
-Every UX event must match the release and interaction of its referenced trace. Fixed query methods
-enforce time, row, and serialized-result bounds; comparisons use equivalent release-relative windows
-and minimum samples; trace detail handles missing parents and overlapping spans. The current timing
-field measures merged interval coverage, not a parent-aware path; issue #41 gives that output a
-truthful parent-aware contract.
+Status: historically delivered in issues #5 and #6, with retry/attribution integrity hardened in
+issue #40 and parent-aware trace semantics implemented in issue #41. D1 stores immutable releases,
+UX events, traces, and spans from real application requests. Exact retries are idempotent, while
+reused trace, span, or interaction identifiers with different immutable data abort the complete
+write. Every UX event must match the release and interaction of its referenced trace. Fixed query
+methods enforce time, row, and serialized-result bounds; comparisons use equivalent release-relative
+windows and minimum samples. Trace detail reports a deterministic parent-aware path and its wall
+time, excludes malformed components with explicit diagnostics, and never labels merged interval
+coverage as a path.
 
 - Add D1 migrations.
 - Record UX events, traces, spans, and releases.
@@ -1051,7 +1056,7 @@ Work packages:
 - Inferred tool-history completion is replaced by one persisted typed evidence receipt; remediation
   is gated on its exact prepared fingerprint and incident-stable branch identity (#39).
 - Reject conflicting telemetry retries and cross-release attribution atomically (#40, implemented).
-- Implement truthful, parent-aware trace-path semantics (#41).
+- Implement truthful, parent-aware trace-path semantics (#41, implemented).
 - Make targeted tests, watch mode, aggregate checks, reconnection, and remote smoke prove the same
   structured contract (#42).
 - Make the first-run UX direct, honest, accessible, and explicit about preview versus live writes

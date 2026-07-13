@@ -330,8 +330,11 @@ describe("D1 telemetry store", () => {
     expect(slow[0]?.traceId).toBe(input.trace.traceId);
 
     const detail = await store.getTraceDetail(input.trace.traceId);
-    expect(detail?.criticalPath.durationMs).toBe(150);
-    expect(detail?.criticalPath.spanIds).toEqual(["catalog", "root", "orphan"]);
+    expect(detail?.criticalPath).toEqual({
+      diagnostics: [{ code: "missing-parent", parentSpanId: "late-parent", spanId: "orphan" }],
+      spanIds: ["root", "catalog"],
+      wallTimeMs: 120,
+    });
     expect(detail?.tree.map((node) => node.span.spanId)).toEqual(["root", "orphan"]);
     expect(detail?.tree[1]?.missingParentSpanId).toBe("late-parent");
   });

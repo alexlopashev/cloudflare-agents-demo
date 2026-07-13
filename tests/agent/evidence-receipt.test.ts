@@ -75,7 +75,11 @@ const completeResults = [
         durationMs: 381,
         outcome: "success",
       },
-      criticalPath: { durationMs: 381, spanIds: ["request", "service-api"] },
+      criticalPath: {
+        diagnostics: [],
+        spanIds: ["request", "service-api"],
+        wallTimeMs: 381,
+      },
       tree: [{ span: { spanId: "request" }, children: [] }],
     },
   ),
@@ -180,6 +184,29 @@ describe("incident-scoped evidence receipt", () => {
 
     expect(receipt.phases[0]?.status).toBe(status);
     expect(evidenceReceiptComplete(receipt)).toBe(false);
+  });
+
+  it("rejects the former interval-duration field as trace-path evidence", () => {
+    const readyForTrace = completeResults
+      .slice(0, 2)
+      .reduce(
+        (receipt, evidence) => recordEvidenceResult(receipt, evidence),
+        createEvidenceReceipt("investigation-1", incident),
+      );
+    const legacyTrace = recordEvidenceResult(readyForTrace, {
+      ...completeResults[2],
+      toolCallId: "legacy-trace-contract",
+      output: {
+        ...completeResults[2].output,
+        criticalPath: {
+          durationMs: 381,
+          spanIds: ["request", "service-api"],
+        },
+      },
+    });
+
+    expect(legacyTrace.phases[2]?.status).toBe("insufficient");
+    expect(nextEvidenceTool(legacyTrace)).toBe("inspect_trace");
   });
 
   it("recovers only matching persisted tool results and starts another investigation empty", () => {
