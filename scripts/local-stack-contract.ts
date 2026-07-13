@@ -21,6 +21,7 @@ async function requireJson(response: Response, label: string): Promise<Record<st
 export async function verifyLocalStack(
   baseUrl: string,
   fetcher: Fetcher = fetch,
+  createInteractionId: () => string = () => crypto.randomUUID(),
 ): Promise<StackVerification> {
   const routes = ["/app", "/investigator"] as const;
   for (const route of routes) {
@@ -40,7 +41,7 @@ export async function verifyLocalStack(
       new Request(new URL("/api/health", baseUrl), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ interactionId: "e2e-interaction" }),
+        body: JSON.stringify({ interactionId: createInteractionId() }),
       }),
     ),
     "health report",

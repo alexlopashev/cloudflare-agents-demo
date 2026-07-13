@@ -796,13 +796,15 @@ Acceptance criteria:
 
 ### Phase 4 — Telemetry
 
-Status: historically delivered in issues #5 and #6, with integrity hardening planned in issues #40
-and #41. D1 stores immutable releases, UX events, traces, and spans from real application requests.
-Fixed query methods enforce time, row, and serialized-result bounds; comparisons use equivalent
-release-relative windows and minimum samples; trace detail handles missing parents and overlapping
-spans. The current timing field measures merged interval coverage, not a parent-aware path. v1.2
-rejects conflicting identifier reuse and cross-release attribution atomically and gives trace-path
-output a truthful parent-aware contract.
+Status: historically delivered in issues #5 and #6, with retry and attribution integrity hardened in
+issue #40 and parent-aware trace semantics planned in issue #41. D1 stores immutable releases, UX
+events, traces, and spans from real application requests. Exact retries are idempotent, while reused
+trace, span, or interaction identifiers with different immutable data abort the complete write.
+Every UX event must match the release and interaction of its referenced trace. Fixed query methods
+enforce time, row, and serialized-result bounds; comparisons use equivalent release-relative windows
+and minimum samples; trace detail handles missing parents and overlapping spans. The current timing
+field measures merged interval coverage, not a parent-aware path; issue #41 gives that output a
+truthful parent-aware contract.
 
 - Add D1 migrations.
 - Record UX events, traces, spans, and releases.
@@ -1048,7 +1050,7 @@ Work packages:
   state; metric generation is labeled and enforced as ingestion-only (#38).
 - Inferred tool-history completion is replaced by one persisted typed evidence receipt; remediation
   is gated on its exact prepared fingerprint and incident-stable branch identity (#39).
-- Reject conflicting telemetry retries and cross-release attribution atomically (#40).
+- Reject conflicting telemetry retries and cross-release attribution atomically (#40, implemented).
 - Implement truthful, parent-aware trace-path semantics (#41).
 - Make targeted tests, watch mode, aggregate checks, reconnection, and remote smoke prove the same
   structured contract (#42).

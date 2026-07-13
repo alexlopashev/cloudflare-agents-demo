@@ -3,6 +3,10 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 const migrationPath = new URL("../../migrations/telemetry/0002_telemetry.sql", import.meta.url);
+const integrityMigrationPath = new URL(
+  "../../migrations/telemetry/0003_telemetry_integrity.sql",
+  import.meta.url,
+);
 
 describe("telemetry migration", () => {
   it("defines normalized release, interaction, trace, and span evidence", async () => {
@@ -25,5 +29,15 @@ describe("telemetry migration", () => {
     expect(sql).toContain("idx_traces_release_started");
     expect(sql).toContain("idx_traces_duration");
     expect(sql).toContain("idx_spans_trace_started");
+  });
+
+  it("rejects conflicting identifier reuse and cross-trace UX attribution in D1", async () => {
+    const sql = await readFile(integrityMigrationPath, "utf8");
+
+    expect(sql).toContain("reject_conflicting_trace");
+    expect(sql).toContain("reject_conflicting_span");
+    expect(sql).toContain("reject_conflicting_ux_event");
+    expect(sql).toContain("validate_ux_event_trace_insert");
+    expect(sql).toContain("RAISE(ABORT");
   });
 });

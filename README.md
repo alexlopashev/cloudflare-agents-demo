@@ -228,6 +228,11 @@ phase. The final report cites the receipt. Only a complete receipt can persist t
 replacement and proposal fingerprint; approval shows that replacement and rejects a changed payload,
 while preview and write retries keep one branch identity per incident.
 
+Telemetry ingestion is retry-safe at its D1 boundary. Exact release, trace, span, and UX-event
+replays remain idempotent; conflicting identifier reuse aborts the whole write before related rows
+can be appended. A UX event is accepted only when its release and interaction match the referenced
+trace, so optional ingestion cannot cross-attribute evidence between releases.
+
 The active [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
 hardens that slice rather than expanding it. Work now makes evidence incident-scoped, binds
 remediation mechanically to the same receipt, repairs telemetry semantics, strengthens smoke and
