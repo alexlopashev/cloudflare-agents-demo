@@ -903,8 +903,8 @@ Acceptance criteria:
 
 ### Phase 10 — Interactive demo UX
 
-Status: active in issue #25. Deployboard now offers fixed batches of 5, 10, or 20 measured
-interactions. The client rejects other counts before I/O, runs one health interaction at a time,
+Status: complete in issue #25 and PR #26. Deployboard now offers fixed batches of 5, 10, or 20
+measured interactions. The client rejects other counts before I/O, runs one health interaction at a time,
 waits for each UX telemetry write to be acknowledged, exposes progress, and stops visibly on the
 first failed sample. Refresh and generation share one in-flight guard, while the latest successful
 sample keeps its interaction, trace, and release evidence visible.

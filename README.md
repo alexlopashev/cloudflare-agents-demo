@@ -180,6 +180,10 @@ After every meaningful change, contributors must reassess and align the implemen
 
 ## Current status
 
+The v1.1 interactive-demo UX is merged in PR #26. The public Cloudflare deployment continues to
+serve the prior release until an explicit `mise run deploy:refresh` preserves the seeded evidence
+and publishes the merged investigator and Deployboard assets.
+
 Phases 1 through 8 are implemented and verified locally and on Cloudflare. The real known-good release at `cf25e52`
 loads three service checks concurrently; the current scenario release intentionally serializes them
 to reduce simultaneous downstream pressure. A deterministic reseed measured local p75 latency near
