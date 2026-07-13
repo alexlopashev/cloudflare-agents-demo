@@ -56,17 +56,32 @@ test("foundation exposes the committed developer entrypoints", () => {
     "pnpm-workspace.yaml",
     "package.json",
     "scripts/bootstrap",
-    "scripts/bootstrap.fish",
-    "scripts/bootstrap.nu",
     "scripts/bootstrap-core.sh",
     "scripts/activate",
-    "scripts/activate.fish",
-    "scripts/activate.nu",
     "scripts/teardown",
     "scripts/doctor.ts",
     ".github/workflows/ci.yml",
   ]) {
     assert.doesNotThrow(() => readRepo(path), `missing ${path}`);
+  }
+
+  for (const path of [
+    "scripts/bootstrap.fish",
+    "scripts/bootstrap.nu",
+    "scripts/activate.fish",
+    "scripts/activate.nu",
+    "scripts/teardown.fish",
+    "scripts/teardown.nu",
+  ]) {
+    assert.equal(
+      existsSync(join(repoRoot, path)),
+      false,
+      `unexpected shell-specific entrypoint ${path}`,
+    );
+  }
+
+  for (const path of ["scripts/bootstrap", "scripts/activate", "scripts/teardown"]) {
+    assert.match(readRepo(path), /^#!\/bin\/sh\n/);
   }
 });
 
@@ -113,14 +128,21 @@ test("mise pins the agreed runtime and external tools", () => {
   assert.match(bootstrap, /corepack prepare pnpm@10\.34\.5 --activate/);
 });
 
-test("shell syntax validation cannot invoke the real bootstrap", () => {
+test("shell syntax validation covers only the shared POSIX lifecycle scripts", () => {
   const syntaxGate = readRepo("scripts/lint-shells.ts");
 
-  assert.match(syntaxGate, /REGRESSION_SURGEON_BOOTSTRAP_TEST/);
+  for (const path of ["scripts/bootstrap", "scripts/activate", "scripts/teardown"]) {
+    assert.match(syntaxGate, new RegExp(`"${path}"`));
+  }
+  assert.doesNotMatch(syntaxGate, /\.fish|\.nu|run\("fish"|run\("nu"/);
 });
 
 test("mise doctor task invokes the repository doctor script", () => {
   assert.match(readRepo("mise.toml"), /\[tasks\.doctor\][\s\S]*run = "pnpm run doctor"/);
+});
+
+test("mise teardown task invokes the shared shell-neutral entrypoint", () => {
+  assert.match(readRepo("mise.toml"), /\[tasks\.teardown\][\s\S]*run = "\.\/scripts\/teardown"/);
 });
 
 test("CI covers every supported operating-system and architecture pair", () => {
@@ -135,7 +157,7 @@ test("CI covers every supported operating-system and architecture pair", () => {
 });
 
 for (const shell of ["sh", "bash", "zsh"]) {
-  test(`${shell} bootstrap activates only the current shell and preserves profiles`, () => {
+  test(`${shell} can run the shell-neutral bootstrap without changing profiles`, () => {
     const home = mkdtempSync(join(tmpdir(), `regression-surgeon-${shell}-`));
     const sentinel = `unchanged-${shell}\n`;
 
@@ -147,18 +169,19 @@ for (const shell of ["sh", "bash", "zsh"]) {
       shell,
       [
         "-c",
-        [
-          `cd ${JSON.stringify(repoRoot)}`,
-          `export HOME=${JSON.stringify(home)}`,
-          "export REGRESSION_SURGEON_BOOTSTRAP_TEST=1",
-          ". ./scripts/bootstrap",
-          'printf "%s|%s" "$REGRESSION_SURGEON_MISE_ACTIVE" "$MISE_IGNORED_CONFIG_PATHS"',
-        ].join("; "),
+        './scripts/bootstrap sh -c \'printf "%s|%s" "$REGRESSION_SURGEON_MISE_ACTIVE" "$MISE_IGNORED_CONFIG_PATHS"\'',
       ],
-      { encoding: "utf8", env: cleanEnvironment() },
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+        env: cleanEnvironment({
+          HOME: home,
+          REGRESSION_SURGEON_BOOTSTRAP_TEST: "1",
+        }),
+      },
     );
 
-    assert.equal(output, `${shell}|${join(home, ".config/mise/config.toml")}`);
+    assert.equal(output, `project|${join(home, ".config/mise/config.toml")}`);
 
     for (const profile of [".profile", ".bashrc", ".zshrc"]) {
       assert.equal(readFileSync(join(home, profile), "utf8"), sentinel);
@@ -166,21 +189,28 @@ for (const shell of ["sh", "bash", "zsh"]) {
   });
 }
 
-test("bootstrap is idempotent in one active shell", () => {
+test("shell-neutral bootstrap is idempotent", () => {
   const home = mkdtempSync(join(tmpdir(), "regression-surgeon-idempotent-"));
   const command = [
-    `cd ${JSON.stringify(repoRoot)}`,
-    `export HOME=${JSON.stringify(home)}`,
-    "export REGRESSION_SURGEON_BOOTSTRAP_TEST=1",
-    ". ./scripts/bootstrap",
-    ". ./scripts/bootstrap",
+    "sh",
+    "-c",
     'printf "%s|%s" "$REGRESSION_SURGEON_MISE_ACTIVE" "$MISE_IGNORED_CONFIG_PATHS"',
-  ].join("; ");
+  ];
+  const environment = cleanEnvironment({
+    HOME: home,
+    REGRESSION_SURGEON_BOOTSTRAP_TEST: "1",
+  });
 
-  assert.equal(
-    execFileSync("bash", ["-c", command], { encoding: "utf8", env: cleanEnvironment() }),
-    `bash|${join(home, ".config/mise/config.toml")}`,
-  );
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    assert.equal(
+      execFileSync(join(repoRoot, "scripts/bootstrap"), command, {
+        cwd: repoRoot,
+        encoding: "utf8",
+        env: environment,
+      }),
+      `project|${join(home, ".config/mise/config.toml")}`,
+    );
+  }
 });
 
 test("plain sh activation uses repository shims without an unsupported mise hook", () => {
@@ -206,13 +236,26 @@ test("plain sh activation uses repository shims without an unsupported mise hook
     "sh",
     [
       "-c",
-      `. ./scripts/activate; printf '%s|%s' "$REGRESSION_SURGEON_MISE_ACTIVE" "$(command -v node)"`,
+      `./scripts/activate sh -c 'printf "%s|%s" "$REGRESSION_SURGEON_MISE_ACTIVE" "$(command -v node)"'`,
     ],
     { cwd: root, encoding: "utf8", env: cleanEnvironment() },
   );
 
-  assert.equal(output, `sh|${realpathSync(nodeShim)}`);
+  assert.equal(output, `project|${realpathSync(nodeShim)}`);
   assert.equal(existsSync(log), false);
+
+  const nestedPath = execFileSync(
+    join(scripts, "activate"),
+    [join(scripts, "activate"), "sh", "-c", 'printf "%s" "$PATH"'],
+    { cwd: root, encoding: "utf8", env: cleanEnvironment() },
+  );
+  /** @param {string} expected */
+  const countResolvedPath = (expected) =>
+    nestedPath
+      .split(":")
+      .filter((path) => existsSync(path) && realpathSync(path) === realpathSync(expected)).length;
+  assert.equal(countResolvedPath(dirname(miseBin)), 1);
+  assert.equal(countResolvedPath(dirname(nodeShim)), 1);
 });
 
 test("declining mise installation wins over approval and leaves no repository-local state", () => {
@@ -330,7 +373,7 @@ test("teardown removes only project-owned runtime paths", () => {
   assert.equal(readFileSync(join(external, "sentinel"), "utf8"), "preserve\n");
 });
 
-test("Nu bootstrap activates only the current shell and preserves config", (context) => {
+test("Nu can run the shell-neutral bootstrap without changing config", (context) => {
   try {
     execFileSync("nu", ["--version"], { stdio: "ignore" });
   } catch (error) {
@@ -349,32 +392,31 @@ test("Nu bootstrap activates only the current shell and preserves config", (cont
 
   const command = [
     `cd ${JSON.stringify(repoRoot)}`,
-    `$env.HOME = ${JSON.stringify(home)}`,
-    '$env.REGRESSION_SURGEON_BOOTSTRAP_TEST = "1"',
-    "source scripts/bootstrap.nu",
-    'print -n $"($env.REGRESSION_SURGEON_MISE_ACTIVE)|($env.MISE_IGNORED_CONFIG_PATHS)"',
+    '^./scripts/bootstrap sh -c \'printf "%s|%s" "$REGRESSION_SURGEON_MISE_ACTIVE" "$MISE_IGNORED_CONFIG_PATHS"\'',
   ].join("; ");
   const output = execFileSync("nu", ["--no-config-file", "--commands", command], {
     encoding: "utf8",
-    env: cleanEnvironment(),
+    env: cleanEnvironment({
+      HOME: home,
+      REGRESSION_SURGEON_BOOTSTRAP_TEST: "1",
+    }),
   });
 
-  assert.equal(output, `nu|${join(home, ".config/mise/config.toml")}`);
+  assert.equal(output, `project|${join(home, ".config/mise/config.toml")}`);
   assert.equal(readFileSync(config, "utf8"), "# unchanged\n");
 });
 
-test("Nu teardown is idempotent and forwards an empty argument list", () => {
+test("Nu can run the shell-neutral teardown idempotently", () => {
   const root = mkdtempSync(join(tmpdir(), "regression-surgeon-nu-teardown-"));
   const scripts = join(root, "scripts");
   mkdirSync(join(root, ".local/run"), { recursive: true });
   mkdirSync(scripts);
   writeFileSync(join(root, "mise.toml"), 'min_version = "2026.6.14"\n');
   copyFileSync(join(repoRoot, "scripts/teardown"), join(scripts, "teardown"));
-  copyFileSync(join(repoRoot, "scripts/teardown.nu"), join(scripts, "teardown.nu"));
   chmodSync(join(scripts, "teardown"), 0o755);
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    execFileSync("nu", ["--no-config-file", join(scripts, "teardown.nu")], {
+    execFileSync("nu", ["--no-config-file", "--commands", "^./scripts/teardown"], {
       cwd: root,
       encoding: "utf8",
     });
@@ -383,7 +425,7 @@ test("Nu teardown is idempotent and forwards an empty argument list", () => {
   assert.equal(existsSync(join(root, ".local/run")), false);
 });
 
-test("Fish bootstrap activates only the current shell and preserves config", (context) => {
+test("Fish can run the shell-neutral bootstrap without changing config", (context) => {
   try {
     execFileSync("fish", ["--version"], { stdio: "ignore" });
   } catch (error) {
@@ -402,16 +444,16 @@ test("Fish bootstrap activates only the current shell and preserves config", (co
 
   const command = [
     `cd ${JSON.stringify(repoRoot)}`,
-    `set -gx HOME ${JSON.stringify(home)}`,
-    "set -gx REGRESSION_SURGEON_BOOTSTRAP_TEST 1",
-    "source scripts/bootstrap.fish",
-    'printf "%s|%s" "$REGRESSION_SURGEON_MISE_ACTIVE" "$MISE_IGNORED_CONFIG_PATHS"',
+    './scripts/bootstrap sh -c \'printf "%s|%s" "$REGRESSION_SURGEON_MISE_ACTIVE" "$MISE_IGNORED_CONFIG_PATHS"\'',
   ].join("; ");
   const output = execFileSync("fish", ["--no-config", "--command", command], {
     encoding: "utf8",
-    env: cleanEnvironment(),
+    env: cleanEnvironment({
+      HOME: home,
+      REGRESSION_SURGEON_BOOTSTRAP_TEST: "1",
+    }),
   });
 
-  assert.equal(output, `fish|${join(home, ".config/mise/config.toml")}`);
+  assert.equal(output, `project|${join(home, ".config/mise/config.toml")}`);
   assert.equal(readFileSync(config, "utf8"), "# unchanged\n");
 });

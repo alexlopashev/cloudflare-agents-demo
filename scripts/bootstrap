@@ -1,11 +1,10 @@
 #!/bin/sh
 
-# This file supports both execution and sourcing; ShellCheck cannot infer the latter return path.
-# shellcheck disable=SC2317
+set -eu
 
 if [ ! -f "mise.toml" ]; then
   printf '%s\n' "Run bootstrap from the repository root." >&2
-  return 1 2>/dev/null || exit 1
+  exit 1
 fi
 
 REGRESSION_SURGEON_ROOT=$PWD
@@ -31,30 +30,24 @@ case ":${MISE_IGNORED_CONFIG_PATHS:-}:" in
   *) export MISE_IGNORED_CONFIG_PATHS="$REGRESSION_SURGEON_USER_MISE_CONFIG${MISE_IGNORED_CONFIG_PATHS:+:$MISE_IGNORED_CONFIG_PATHS}" ;;
 esac
 
-if [ -n "${ZSH_VERSION:-}" ]; then
-  REGRESSION_SURGEON_SHELL=zsh
-else
-  case "${0##*/}" in
-    *bash) REGRESSION_SURGEON_SHELL=bash ;;
-    *) REGRESSION_SURGEON_SHELL="sh" ;;
-  esac
+case ":$PATH:" in
+  *":$(dirname "$MISE_INSTALL_PATH"):"*) ;;
+  *) PATH="$(dirname "$MISE_INSTALL_PATH"):$PATH" ;;
+esac
+case ":$PATH:" in
+  *":$MISE_DATA_DIR/shims:"*) ;;
+  *) PATH="$MISE_DATA_DIR/shims:$PATH" ;;
+esac
+export PATH
+REGRESSION_SURGEON_MISE_ACTIVE=project
+export REGRESSION_SURGEON_MISE_ACTIVE
+
+if [ "${REGRESSION_SURGEON_BOOTSTRAP_TEST:-0}" != "1" ]; then
+  sh "$REGRESSION_SURGEON_ROOT/scripts/bootstrap-core.sh"
 fi
 
-if [ "${REGRESSION_SURGEON_BOOTSTRAP_TEST:-0}" = "1" ]; then
-  REGRESSION_SURGEON_MISE_ACTIVE=$REGRESSION_SURGEON_SHELL
-  export REGRESSION_SURGEON_MISE_ACTIVE
-else
-  sh "$REGRESSION_SURGEON_ROOT/scripts/bootstrap-core.sh" || {
-    return 1 2>/dev/null || exit 1
-  }
-  if [ "$REGRESSION_SURGEON_SHELL" = "sh" ]; then
-    PATH="$MISE_DATA_DIR/shims:$(dirname "$MISE_INSTALL_PATH"):$PATH"
-    export PATH
-  else
-    eval "$("$MISE_INSTALL_PATH" activate "$REGRESSION_SURGEON_SHELL")"
-  fi
-  REGRESSION_SURGEON_MISE_ACTIVE=$REGRESSION_SURGEON_SHELL
-  export REGRESSION_SURGEON_MISE_ACTIVE
+if [ "$#" -gt 0 ]; then
+  exec "$@"
 fi
 
-unset REGRESSION_SURGEON_SHELL
+printf '%s\n' "Bootstrap complete. Run ./scripts/activate to open a project shell."
