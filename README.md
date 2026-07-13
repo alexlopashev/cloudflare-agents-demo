@@ -217,9 +217,9 @@ the account has exhausted its daily free allocation of 10,000 neurons. The keyed
 browser response cannot pass until that allocation resets or the Workers account is upgraded; local
 deterministic gates remain green and public GitHub writes remain disabled.
 
-Issue #30 implements the explicit draft-PR write workflow locally and is natively blocked by issue #27
-for its real Workers AI approval run. Token provisioning and production enablement have not been
-performed; the current public runtime remains write-disabled.
+PRs #31 and #32 implement the explicit draft-PR write workflow and fail-closed rollback for issue #30,
+which is natively blocked by issue #27 for its real Workers AI approval run. Token provisioning and
+production enablement have not been performed; the current public runtime remains write-disabled.
 
 Phases 1 through 8 are implemented and verified locally and on Cloudflare. The real known-good release at `cf25e52`
 loads three service checks concurrently; the current scenario release intentionally serializes them
