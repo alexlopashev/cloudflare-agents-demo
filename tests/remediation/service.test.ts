@@ -19,8 +19,10 @@ const [result, next] = await Promise.all([first(), second()]);`;
 function proposal(overrides: Partial<RemediationProposal> = {}): RemediationProposal {
   return {
     incident: {
+      incidentId: "configured-latency-regression",
       baselineReleaseId: "baseline-concurrent",
       degradedReleaseId: "regression-sequential",
+      traceWindow: { sinceMs: 1_700_086_400_000, untilMs: 1_700_086_460_000 },
       traceId: "scenario-trace-34",
       regressionCommitSha: regressionSha,
       sourcePullRequestNumber: 19,
@@ -98,6 +100,7 @@ describe("guarded remediation service", () => {
     });
     if (result.status !== "preview") throw new Error("Expected preview result");
     expect(result.body).toContain("scenario-trace-34");
+    expect(result.body).toContain("configured-latency-regression");
     expect(result.body).toContain(regressionSha);
     expect(result.body).toContain("PR #19");
     expect(result.body).toContain("Risk");

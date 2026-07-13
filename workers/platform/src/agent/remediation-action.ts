@@ -20,7 +20,7 @@ export function createRemediationAction(
     approvalRisk: "high",
     permissions: ["github:draft-pr"],
     idempotencyKey: ({ input }) =>
-      `${options.idempotencyScope}:${input.incident.traceId}:${input.expectedBaseSha}:${input.path}`,
+      `${options.idempotencyScope}:${input.incident.incidentId}:${input.incident.traceId}:${input.expectedBaseSha}:${input.path}`,
     execute: async (proposal) => service.execute(proposal),
   });
 }

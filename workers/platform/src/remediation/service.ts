@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { incidentReferenceSchema } from "../../../../packages/contracts/src/incident";
 import { isSafeRepositoryPath } from "../github/path-policy";
 
 const sha = z.string().regex(/^[0-9a-f]{40}$/);
@@ -12,15 +13,11 @@ const repositorySchema = z
   .strict();
 export const remediationProposalSchema = z
   .object({
-    incident: z
-      .object({
-        baselineReleaseId: evidenceId,
-        degradedReleaseId: evidenceId,
-        traceId: evidenceId,
-        regressionCommitSha: sha,
-        sourcePullRequestNumber: z.number().int().positive(),
-      })
-      .strict(),
+    incident: incidentReferenceSchema.safeExtend({
+      traceId: evidenceId,
+      regressionCommitSha: sha,
+      sourcePullRequestNumber: z.number().int().positive(),
+    }),
     expectedBaseSha: sha,
     expectedBlobSha: sha,
     path: z.string().min(1).max(512),
@@ -144,6 +141,8 @@ function pullRequestBody(proposal: RemediationProposal, changes: ReturnType<type
 
 - Baseline release: ${proposal.incident.baselineReleaseId}
 - Degraded release: ${proposal.incident.degradedReleaseId}
+- Incident: ${proposal.incident.incidentId}
+- Trace window: ${proposal.incident.traceWindow.sinceMs}–${proposal.incident.traceWindow.untilMs} ms
 - Representative trace: ${proposal.incident.traceId}
 - Regression commit: ${proposal.incident.regressionCommitSha}
 - Source PR: PR #${proposal.incident.sourcePullRequestNumber}

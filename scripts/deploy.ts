@@ -27,6 +27,7 @@ const regressionGitSha = "d591869a8ef995f1835ef80152f4de085b10255b";
 const stateSchema = z.object({
   databaseId: z.string().uuid(),
   publicUrl: z.string().url(),
+  incidentId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/),
   baselineReleaseId: z.string().uuid(),
   degradedReleaseId: z.string().uuid(),
   degradedSinceMs: z.number().int().nonnegative(),
@@ -146,9 +147,14 @@ async function assertRuntimeAttribution(state: z.infer<typeof stateSchema>) {
     versionId: z.literal(state.investigatorReleaseId),
     gitSha: z.literal(state.deployedGitSha),
     githubWriteEnabled: z.literal(state.githubWriteEnabled),
-    evidence: z.object({
+    incident: z.object({
+      incidentId: z.literal(state.incidentId),
       baselineReleaseId: z.literal(state.baselineReleaseId),
       degradedReleaseId: z.literal(state.degradedReleaseId),
+      traceWindow: z.object({
+        sinceMs: z.literal(state.degradedSinceMs),
+        untilMs: z.literal(state.degradedUntilMs),
+      }),
     }),
   });
   for (let attempt = 0; attempt < runtimeAttributionRetryPolicy.maxAttempts; attempt += 1) {
@@ -234,8 +240,24 @@ async function smoke(state: z.infer<typeof stateSchema>) {
   const smokeResult = await smokeResponse.json();
   const returned = z
     .object({
-      investigation: z.object({ toolTypes: z.array(z.string()), report: z.string() }),
-      remediation: z.object({ status: z.literal("preview"), writesPerformed: z.literal(false) }),
+      investigation: z.object({
+        incident: z.object({
+          incidentId: z.literal(state.incidentId),
+          baselineReleaseId: z.literal(state.baselineReleaseId),
+          degradedReleaseId: z.literal(state.degradedReleaseId),
+          traceWindow: z.object({
+            sinceMs: z.literal(state.degradedSinceMs),
+            untilMs: z.literal(state.degradedUntilMs),
+          }),
+        }),
+        toolTypes: z.array(z.string()),
+        report: z.string(),
+      }),
+      remediation: z.object({
+        body: z.string(),
+        status: z.literal("preview"),
+        writesPerformed: z.literal(false),
+      }),
     })
     .parse(smokeResult);
   const returnedInvestigation = returned.investigation;
@@ -249,6 +271,12 @@ async function smoke(state: z.infer<typeof stateSchema>) {
     if (!agentResult.toolTypes.some((type) => type.includes(tool))) {
       throw new Error(`Public agent did not execute ${tool}.`);
     }
+  }
+  if (
+    !agentResult.report.includes(state.incidentId) ||
+    !returned.remediation.body.includes(state.incidentId)
+  ) {
+    throw new Error("Public smoke did not preserve the configured incident identity.");
   }
   console.log(
     `Public smoke passed at ${state.publicUrl}: routes, Workers AI mode, version ${runtime.versionId}, measured evidence IDs, ${agentResult.toolTypes.length} evidence tool events, preview performed zero writes, production GitHub writes ${runtime.githubWriteEnabled ? "enabled" : "disabled"}.`,
@@ -308,6 +336,7 @@ async function deploy() {
     repositoryRoot,
     stage: {
       kind: "investigator",
+      incidentId: `review-${degraded.versionId}`,
       gitSha: deployedGitSha,
       baselineReleaseId: baseline.versionId,
       degradedReleaseId: degraded.versionId,
@@ -321,6 +350,7 @@ async function deploy() {
   const state = stateSchema.parse({
     databaseId,
     publicUrl: investigator.url,
+    incidentId: `review-${degraded.versionId}`,
     baselineReleaseId: baseline.versionId,
     degradedReleaseId: degraded.versionId,
     degradedSinceMs: degradedWindow.sinceMs,
@@ -345,6 +375,7 @@ function deployRefreshedInvestigator(
     repositoryRoot,
     stage: {
       kind: "investigator",
+      incidentId: previous.incidentId,
       gitSha: deployedGitSha,
       baselineReleaseId: previous.baselineReleaseId,
       degradedReleaseId: previous.degradedReleaseId,
@@ -399,6 +430,7 @@ function resetRemoteEvidence() {
       repositoryRoot,
       stage: {
         kind: "investigator",
+        incidentId: state.incidentId,
         gitSha: state.deployedGitSha,
         baselineReleaseId: state.baselineReleaseId,
         degradedReleaseId: state.degradedReleaseId,

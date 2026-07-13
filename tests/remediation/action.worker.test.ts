@@ -5,8 +5,10 @@ import type { RemediationProposal } from "../../workers/platform/src/remediation
 
 const proposal: RemediationProposal = {
   incident: {
+    incidentId: "configured-latency-regression",
     baselineReleaseId: "baseline-concurrent",
     degradedReleaseId: "regression-sequential",
+    traceWindow: { sinceMs: 1_700_086_400_000, untilMs: 1_700_086_460_000 },
     traceId: "scenario-trace-34",
     regressionCommitSha: "d591869a8ef995f1835ef80152f4de085b10255b",
     sourcePullRequestNumber: 19,
@@ -36,10 +38,10 @@ describe("create_draft_pr Project Think action", () => {
     if (typeof idempotency !== "function") throw new Error("Expected idempotency function");
     const context = {} as never;
     expect(await idempotency({ input: proposal, ctx: context })).toBe(
-      "preview:scenario-trace-34:d591869a8ef995f1835ef80152f4de085b10255b:workers/platform/src/api/health.ts",
+      "preview:configured-latency-regression:scenario-trace-34:d591869a8ef995f1835ef80152f4de085b10255b:workers/platform/src/api/health.ts",
     );
     expect(await idempotency({ input: proposal, ctx: context })).toBe(
-      "preview:scenario-trace-34:d591869a8ef995f1835ef80152f4de085b10255b:workers/platform/src/api/health.ts",
+      "preview:configured-latency-regression:scenario-trace-34:d591869a8ef995f1835ef80152f4de085b10255b:workers/platform/src/api/health.ts",
     );
 
     await expect(remediation.config.execute(proposal, context)).resolves.toEqual({

@@ -119,11 +119,12 @@ export function DeployboardView({
 
       <section className="metrics-generator panel" aria-labelledby="metrics-generator-title">
         <div>
-          <p className="eyebrow">Measured traffic</p>
+          <p className="eyebrow">Optional telemetry ingestion</p>
           <h2 id="metrics-generator-title">Generate metrics data</h2>
           <p>
             Run a bounded sequence of real service-grid interactions. Samples execute one at a time
-            and count only after telemetry is stored.
+            and count only after telemetry is stored. This does not select or modify the configured
+            incident.
           </p>
         </div>
         <div className="metric-generator-actions">

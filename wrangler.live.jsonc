@@ -42,6 +42,7 @@
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "vars": {
     "DEPLOY_SMOKE_KEY": "",
+    "EVIDENCE_INCIDENT_ID": "",
     "EVIDENCE_BASELINE_RELEASE_ID": "",
     "EVIDENCE_DEGRADED_RELEASE_ID": "",
     "EVIDENCE_DEGRADED_SINCE_MS": "",

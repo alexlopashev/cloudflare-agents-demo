@@ -215,6 +215,12 @@ The existing vertical slice works locally and on Cloudflare: measured baseline/d
 bounded repository inspection, a multi-step Project Think investigation, durable conversation state,
 and a guarded zero-write remediation preview. GitHub writes remain disabled by default.
 
+Each investigation now starts from one validated incident reference containing its incident ID,
+immutable baseline/degraded release pair, and bounded degraded trace window. That reference persists
+with the investigation, scopes evidence requests and remediation preparation, and appears in runtime
+verification. Starting again creates fresh investigation state, while optional current-release
+metric ingestion cannot replace the configured incident.
+
 The active [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
 hardens that slice rather than expanding it. Work now makes evidence incident-scoped, binds
 remediation mechanically to the same receipt, repairs telemetry semantics, strengthens smoke and
