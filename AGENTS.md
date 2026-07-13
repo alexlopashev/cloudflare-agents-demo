@@ -83,6 +83,9 @@ Do not assert exact natural-language output from a live model. Assert structured
 - Normal deploy and refresh tasks keep writes disabled. Only the explicit write-enable task may
   change that posture, and only after the remote `GITHUB_TOKEN` secret is verified before and after
   deployment.
+- Any write-enable deployment or smoke failure after mutation begins must automatically redeploy the
+  preserved evidence configuration with writes disabled and verify that public runtime posture
+  without depending on Workers AI. An unverifiable rollback must expose both failures.
 - GitHub token entry delegates directly to pinned Wrangler's TTY prompt. Tokens must never come from
   `gh`, command arguments, environment files, repository state, or chat.
 - Explicit approval is required before every external write.

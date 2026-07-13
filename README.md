@@ -146,7 +146,10 @@ Administration, Secrets, and every other write permission disabled. Run
 `mise run github:writes:secret` and enter the token only at Wrangler's terminal prompt. Then run
 `mise run deploy:writes:enable`. The task fails closed unless Cloudflare reports the exact secret,
 preserves the measured evidence pair, deploys the explicit write posture, and runs a preview-only
-smoke that cannot create a PR. A real PR can be created only when the browser agent requests the
+smoke that cannot create a PR. If deployment or smoke fails after mutation begins, the task
+automatically redeploys the preserved evidence with writes disabled and verifies that posture
+without calling Workers AI; if rollback cannot be verified, both errors are reported. A real PR can
+be created only when the browser agent requests the
 high-risk action and a human clicks Approve. If `main` has advanced, the write service proceeds only
 when the allowlisted source blob is unchanged from the evidenced regression commit, then parents the
 new one-file commit on current `main`; otherwise it fails stale. Run

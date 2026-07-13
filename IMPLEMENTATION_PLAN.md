@@ -994,6 +994,8 @@ Acceptance criteria:
 - Write enablement fails closed unless Cloudflare reports the exact `GITHUB_TOKEN` secret binding.
 - Enable and disable preserve measured evidence, record the expected posture, and verify runtime
   attribution.
+- Any enable-path failure after deployment begins automatically redeploys and independently verifies
+  the write-disabled posture; a rollback failure preserves both errors.
 - Keyed smoke remains a zero-write preview in both postures.
 - Advanced repository state is accepted only when the allowlisted evidenced blob is unchanged at the
   current base.
