@@ -30,7 +30,7 @@ export type ScenarioControlOptions = {
     }[]
   >;
   getTraceDetail(traceId: string): Promise<{
-    criticalPath: { durationMs: number; spanIds: string[] };
+    criticalPath: { diagnostics: unknown[]; spanIds: string[]; wallTimeMs: number };
   } | null>;
   investigate(): Promise<unknown>;
   previewRemediation(): Promise<unknown>;

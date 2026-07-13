@@ -209,13 +209,13 @@ No causal conclusion or fix proposal is justified from the available evidence.
 Low. A required evidence source failed during this turn.
 
 ## Unknowns
-The degraded critical path and immutable source change remain unknown. Retry the failed bounded
+The degraded critical-path wall time and immutable source change remain unknown. Retry the failed bounded
 evidence operation before remediation. No write or deployment has been performed.`,
       };
     }
     const baselineP75 = findNestedNumber(prompt, "baseline", "p75Ms") ?? "unknown";
     const candidateP75 = findNestedNumber(prompt, "candidate", "p75Ms") ?? "unknown";
-    const criticalPathMs = findNestedNumber(prompt, "criticalPath", "durationMs") ?? "unknown";
+    const criticalPathMs = findNestedNumber(prompt, "criticalPath", "wallTimeMs") ?? "unknown";
     const latencyRatio =
       typeof baselineP75 === "number" && typeof candidateP75 === "number" && baselineP75 > 0
         ? (candidateP75 / baselineP75).toFixed(1)
@@ -226,7 +226,7 @@ evidence operation before remediation. No write or deployment has been performed
 - Incident: ${remediationFixture.incident.incidentId}; trace window ${remediationFixture.incident.traceWindow.sinceMs}–${remediationFixture.incident.traceWindow.untilMs} ms.
 - Evidence receipt: ${receiptId}.
 - Release comparison: baseline-concurrent p75 ${baselineP75} ms; regression-sequential p75 ${candidateP75} ms.
-- Representative trace: ${traceId}; its critical path is approximately ${criticalPathMs} ms with sequential service spans.
+- Representative trace: ${traceId}; its critical-path wall time is approximately ${criticalPathMs} ms with sequential service spans.
 - Immutable source: commit ${regressionSource.commitSha}; PR #${regressionSource.pullRequestNumber}.
 - Source at that commit awaits each service check when loadingMode is sequential.
 

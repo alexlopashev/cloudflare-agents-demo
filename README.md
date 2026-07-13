@@ -233,6 +233,11 @@ replays remain idempotent; conflicting identifier reuse aborts the whole write b
 can be appended. A UX event is accepted only when its release and interaction match the referenced
 trace, so optional ingestion cannot cross-attribute evidence between releases.
 
+Trace inspection reports one parent-aware critical path with `wallTimeMs`. Parallel siblings are not
+flattened into one path; sequential spans, nesting, gaps, and fork/join ties follow a deterministic
+contract. Missing or cyclic parentage is excluded from the selected path and returned as bounded
+diagnostics instead of silently fabricating causality.
+
 The active [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
 hardens that slice rather than expanding it. Work now makes evidence incident-scoped, binds
 remediation mechanically to the same receipt, repairs telemetry semantics, strengthens smoke and

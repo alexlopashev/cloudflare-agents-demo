@@ -27,7 +27,10 @@ describe("deterministic investigation model", () => {
         inputSchema: z.object({}).passthrough(),
         execute: async () => {
           calls.push("inspect_trace");
-          return { trace: { traceId: "regression-trace-7" }, criticalPath: { durationMs: 443 } };
+          return {
+            trace: { traceId: "regression-trace-7" },
+            criticalPath: { diagnostics: [], spanIds: ["request"], wallTimeMs: 443 },
+          };
         },
       }),
       inspect_release: tool({
@@ -66,7 +69,7 @@ describe("deterministic investigation model", () => {
     ]);
     expect(text).toMatch(/Evidence[\s\S]+regression-trace-7[\s\S]+d591869[\s\S]+PR #19/);
     expect(text).toMatch(/baseline-concurrent p75 111 ms; regression-sequential p75 443 ms/);
-    expect(text).toMatch(/critical path is approximately 443 ms/);
+    expect(text).toMatch(/critical-path wall time is approximately 443 ms/);
     expect(text).toMatch(/Inference[\s\S]+Confidence[\s\S]+Unknowns/);
     expect(calls.indexOf("read_repo_files")).toBeLessThan(text.length);
   });
