@@ -940,11 +940,12 @@ Acceptance criteria:
 
 ### Phase 11 — Live investigator recovery and header simplification
 
-Status: implemented locally in issue #27; review, merge, and public refresh remain. The public browser
-transport reconnects and restores the committed user message, but the resumed stream currently fails
-while constructing the remediation action because the Worker presents an absent GitHub credential as
-an empty string. Empty and whitespace-only credentials now select the existing no-token path when
-writes are disabled, while the fail-closed write gate requires a non-empty scoped token.
+Status: active in issue #27. PR #28 merged and deployed the credential normalization and header
+simplification. The public browser transport now passes absent and empty GitHub credentials to the
+existing no-token path when writes are disabled, while the fail-closed write gate requires a
+non-empty scoped token. A persisted session that recorded the earlier failed stream still needs an
+explicit retry path: error state must permit a new request without enabling overlapping submitted or
+streaming turns.
 
 The investigator is already mounted as a support widget on both product routes, so the separate
 Deployboard and Investigator route pills in the header are redundant. Remove those pills while
@@ -956,6 +957,7 @@ Acceptance criteria:
 - Empty and whitespace-only GitHub tokens select the deterministic no-write preview only when writes
   are disabled.
 - Write-enabled mode rejects missing, empty, and whitespace-only tokens.
+- A failed turn permits a new explicit submission while submitted and streaming turns remain locked.
 - A real public browser message completes the evidence-tool chain and produces an assistant response.
 - The top-right route pills are absent without changing either public route contract.
 - Full local gates, deployed smoke, responsive browser verification, and project-system alignment pass.

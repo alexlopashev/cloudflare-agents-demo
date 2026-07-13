@@ -23,6 +23,10 @@ function widgetStatus(status: string): string {
   return "Investigating";
 }
 
+export function canSubmitInvestigatorRequest(status: string): boolean {
+  return status === "ready" || status === "error";
+}
+
 export function InvestigatorWidgetChrome({
   isOpen,
   unreadCount,
@@ -119,7 +123,7 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = input.trim();
-    if (!text || status !== "ready") return;
+    if (!text || !canSubmitInvestigatorRequest(status)) return;
     sendMessage({ role: "user", parts: [{ type: "text", text }] });
     setInput("");
   }
@@ -163,7 +167,10 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
               placeholder="Why did interaction latency regress?"
               value={input}
             />
-            <button disabled={status !== "ready" || input.trim().length === 0} type="submit">
+            <button
+              disabled={!canSubmitInvestigatorRequest(status) || input.trim().length === 0}
+              type="submit"
+            >
               Send
             </button>
           </div>
