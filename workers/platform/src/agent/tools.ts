@@ -34,30 +34,26 @@ export type InvestigationEvidenceServices = {
 };
 
 const evidenceId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/);
-const queryTelemetrySchema = z.discriminatedUnion("operation", [
-  z
-    .object({
-      operation: z.literal("compare-releases"),
-      baselineReleaseId: evidenceId,
-      candidateReleaseId: evidenceId,
-      windowMs: z
-        .number()
-        .int()
-        .positive()
-        .max(30 * 24 * 60 * 60 * 1_000),
-    })
-    .strict(),
-  z
-    .object({
-      operation: z.literal("find-slow-traces"),
-      releaseId: evidenceId.optional(),
-      sinceMs: z.number().int().nonnegative(),
-      untilMs: z.number().int().positive(),
-      limit: z.number().int().min(1).max(100),
-    })
-    .strict(),
-  z.object({ operation: z.literal("inspect-trace"), traceId: evidenceId }).strict(),
-]);
+const compareReleasesSchema = z
+  .object({
+    baselineReleaseId: evidenceId,
+    candidateReleaseId: evidenceId,
+    windowMs: z
+      .number()
+      .int()
+      .positive()
+      .max(30 * 24 * 60 * 60 * 1_000),
+  })
+  .strict();
+const findSlowTracesSchema = z
+  .object({
+    releaseId: evidenceId.optional(),
+    sinceMs: z.number().int().nonnegative(),
+    untilMs: z.number().int().positive(),
+    limit: z.number().int().min(1).max(100),
+  })
+  .strict();
+const inspectTraceSchema = z.object({ traceId: evidenceId }).strict();
 const inspectReleaseSchema = z.object({ versionId: evidenceId }).strict();
 const readFilesSchema = z
   .object({
@@ -142,40 +138,49 @@ export function createInvestigationTools(
     );
 
   return {
-    query_telemetry: tool({
-      description:
-        "Compare measured releases, find slow traces, or inspect one trace through fixed bounded operations. Never accepts SQL.",
-      inputSchema: queryTelemetrySchema,
+    compare_releases: tool({
+      description: "Compare only the configured measured release pair in one bounded window.",
+      inputSchema: compareReleasesSchema,
       execute: async (rawInput) => {
-        const input = queryTelemetrySchema.parse(rawInput);
-        if (input.operation === "compare-releases") {
-          if (
-            incident !== undefined &&
-            (input.baselineReleaseId !== incident.baselineReleaseId ||
-              input.candidateReleaseId !== incident.degradedReleaseId)
-          ) {
-            return incidentMismatch();
-          }
-          return executeBounded(() => services.telemetry.compareReleases(input), maxResultBytes);
+        const input = compareReleasesSchema.parse(rawInput);
+        if (
+          incident !== undefined &&
+          (input.baselineReleaseId !== incident.baselineReleaseId ||
+            input.candidateReleaseId !== incident.degradedReleaseId)
+        ) {
+          return incidentMismatch();
         }
-        if (input.operation === "find-slow-traces") {
-          if (input.untilMs <= input.sinceMs) throw new TypeError("Trace time window is invalid.");
-          if (
-            incident !== undefined &&
-            (input.releaseId !== incident.degradedReleaseId ||
-              input.sinceMs !== incident.traceWindow.sinceMs ||
-              input.untilMs !== incident.traceWindow.untilMs)
-          ) {
-            return incidentMismatch();
-          }
-          const query = {
-            sinceMs: input.sinceMs,
-            untilMs: input.untilMs,
-            limit: input.limit,
-            ...(input.releaseId === undefined ? {} : { releaseId: input.releaseId }),
-          };
-          return executeBounded(() => services.telemetry.findSlowTraces(query), maxResultBytes);
+        return executeBounded(() => services.telemetry.compareReleases(input), maxResultBytes);
+      },
+    }),
+    find_slow_traces: tool({
+      description: "Find a bounded set of slow traces for the configured degraded release.",
+      inputSchema: findSlowTracesSchema,
+      execute: async (rawInput) => {
+        const input = findSlowTracesSchema.parse(rawInput);
+        if (input.untilMs <= input.sinceMs) throw new TypeError("Trace time window is invalid.");
+        if (
+          incident !== undefined &&
+          (input.releaseId !== incident.degradedReleaseId ||
+            input.sinceMs !== incident.traceWindow.sinceMs ||
+            input.untilMs !== incident.traceWindow.untilMs)
+        ) {
+          return incidentMismatch();
         }
+        const query = {
+          sinceMs: input.sinceMs,
+          untilMs: input.untilMs,
+          limit: input.limit,
+          ...(input.releaseId === undefined ? {} : { releaseId: input.releaseId }),
+        };
+        return executeBounded(() => services.telemetry.findSlowTraces(query), maxResultBytes);
+      },
+    }),
+    inspect_trace: tool({
+      description: "Inspect one selected trace and its bounded critical path.",
+      inputSchema: inspectTraceSchema,
+      execute: async (rawInput) => {
+        const input = inspectTraceSchema.parse(rawInput);
         return executeBounded(
           () => services.telemetry.getTraceDetail(input.traceId),
           maxResultBytes,

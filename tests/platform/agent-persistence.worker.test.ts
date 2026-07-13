@@ -24,6 +24,18 @@ describe("RegressionSurgeonAgent persistence", () => {
 
     expect(states.first).toMatchObject({
       status: "investigating",
+      receipt: {
+        investigationId:
+          states.first.status === "investigating" ? states.first.investigationId : "",
+        processedToolCallIds: [],
+        phases: [
+          { toolName: "compare_releases", status: "pending", attempts: [] },
+          { toolName: "find_slow_traces", status: "pending", attempts: [] },
+          { toolName: "inspect_trace", status: "pending", attempts: [] },
+          { toolName: "inspect_release", status: "pending", attempts: [] },
+          { toolName: "read_repo_files", status: "pending", attempts: [] },
+        ],
+      },
       incident: {
         incidentId: "configured-latency-regression",
         baselineReleaseId: "baseline-concurrent",
@@ -35,6 +47,9 @@ describe("RegressionSurgeonAgent persistence", () => {
     }
     expect(states.second).toMatchObject({ incident: states.first.incident });
     expect(states.second.investigationId).not.toBe(states.first.investigationId);
+    if (states.second.status !== "investigating") throw new Error("Expected active investigation");
+    expect(states.second.receipt.investigationId).toBe(states.second.investigationId);
+    expect(states.second.receipt).not.toEqual(states.first.receipt);
 
     await evictDurableObject(stub);
     const restored = await runInDurableObject<

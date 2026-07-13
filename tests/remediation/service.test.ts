@@ -182,6 +182,18 @@ describe("guarded remediation service", () => {
     expect(api.createDraftPullRequest).toHaveBeenCalledOnce();
   });
 
+  it("keeps branch identity stable when a proposal is revised for the same incident", async () => {
+    const { api } = apiFixture();
+    const remediation = service(api, false);
+
+    const first = await remediation.execute(proposal());
+    const revised = await remediation.execute(
+      proposal({ replacementContent: `${replacement}\n// revised for the same incident` }),
+    );
+
+    expect(revised.branch).toBe(first.branch);
+  });
+
   it("returns a named recoverable state after an uncertain write and resumes without a duplicate branch", async () => {
     const { api, state } = apiFixture();
     vi.mocked(api.createDraftPullRequest).mockRejectedValueOnce(new Error("connection reset"));

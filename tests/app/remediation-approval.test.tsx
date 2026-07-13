@@ -16,6 +16,7 @@ const messages = [
         toolCallId: "tool-1",
         approval: { id: "approval-1" },
         input: {
+          proposalFingerprint: "proposal-v1-0123456789abcdef",
           title: "fix: bound health-check concurrency",
           path: "workers/platform/src/api/health.ts",
           replacementContent: "private full source must not render",
@@ -35,9 +36,11 @@ describe("remediation approval panel", () => {
         title: "fix: bound health-check concurrency",
         path: "workers/platform/src/api/health.ts",
         traceId: "scenario-trace-34",
+        proposalFingerprint: "proposal-v1-0123456789abcdef",
+        replacementContent: "private full source must not render",
       },
     ]);
-    expect(JSON.stringify(buildApprovalRequests(messages))).not.toContain("private full source");
+    expect(JSON.stringify(buildApprovalRequests(messages))).toContain("private full source");
   });
 
   it("renders explicit approve and reject controls for the guarded draft PR", () => {
@@ -48,6 +51,8 @@ describe("remediation approval panel", () => {
     expect(markup).toContain('aria-label="Draft pull request approval"');
     expect(markup).toContain("scenario-trace-34");
     expect(markup).toContain("workers/platform/src/api/health.ts");
+    expect(markup).toContain("proposal-v1-0123456789abcdef");
+    expect(markup).toContain("private full source must not render");
     expect(markup).toContain("Approve draft PR");
     expect(markup).toContain("Reject");
   });

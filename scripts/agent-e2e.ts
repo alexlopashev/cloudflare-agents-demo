@@ -34,9 +34,9 @@ try {
   if (!response.ok) throw new Error(`Agent E2E returned HTTP ${response.status}`);
   const result = investigationResultSchema.safeParse(await response.json());
   const expectedTools = [
-    "tool-query_telemetry",
-    "tool-query_telemetry",
-    "tool-query_telemetry",
+    "tool-compare_releases",
+    "tool-find_slow_traces",
+    "tool-inspect_trace",
     "tool-inspect_release",
     "tool-read_repo_files",
   ];

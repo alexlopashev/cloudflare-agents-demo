@@ -53,7 +53,7 @@ describe("platform routing", () => {
   it("keeps the deployed-agent smoke route keyed and invokes one isolated agent", async () => {
     const { bindings } = createBindings();
     const runLocalInvestigation = vi.fn(async () => ({
-      toolTypes: ["tool-query_telemetry"],
+      toolTypes: ["tool-compare_releases"],
       report: "Evidence Inference Confidence Unknowns",
     }));
     const runLocalRemediationPreview = vi.fn(async () => ({

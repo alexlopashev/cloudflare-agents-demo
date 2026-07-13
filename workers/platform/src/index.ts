@@ -8,18 +8,27 @@ import {
   type IncidentReference,
 } from "../../../packages/contracts/src/incident";
 import { remediationFixture } from "../../../packages/test-fixtures/src/remediation";
-import { findRepresentativeTraceId } from "./agent/evidence-identifiers";
 import { createAgentEvidenceServices } from "./agent/evidence-services";
 import {
+  createEvidenceReceipt,
+  evidenceReceiptComplete,
+  evidenceResultsFromModelMessages,
+  evidenceToolNames,
+  nextEvidenceTool,
+  recordEvidenceResult,
+  type EvidenceReceipt,
+  type EvidenceToolName,
+  type EvidenceToolResult,
+} from "./agent/evidence-receipt";
+import {
   evidenceInvestigationRequested,
-  evidenceStepsFromModelMessages,
   messagesForCurrentInvestigation,
-  nextRequiredEvidenceTool,
 } from "./agent/evidence-step-policy";
 import { createAgentModel } from "./agent/model";
 import { createRemediationAction } from "./agent/remediation-action";
 import { createAgentRemediationService } from "./agent/remediation-services";
 import { createInvestigationTools } from "./agent/tools";
+import { remediationProposalFingerprint, type RemediationProposal } from "./remediation/service";
 import { handlePlatformRequest, type PlatformBindings } from "./routing";
 import { createTelemetryStore } from "./telemetry/store";
 
@@ -28,12 +37,22 @@ export interface PlatformEnvironment extends PlatformBindings {
 }
 
 type EvidenceStepConfig = {
-  activeTools: ("query_telemetry" | "inspect_release" | "read_repo_files")[];
-  toolChoice: {
+  activeTools?: EvidenceToolName[];
+  toolChoice?: {
     type: "tool";
-    toolName: "query_telemetry" | "inspect_release" | "read_repo_files";
+    toolName: EvidenceToolName;
   };
   system: string;
+};
+
+type PreparedRemediation = {
+  fingerprint: string;
+  proposal: RemediationProposal;
+  diff: {
+    path: string;
+    expectedBlobSha: string;
+    replacementContent: string;
+  };
 };
 
 export type InvestigationAgentState =
@@ -42,6 +61,8 @@ export type InvestigationAgentState =
       status: "investigating";
       investigationId: string;
       incident: IncidentReference;
+      preparedRemediation?: PreparedRemediation;
+      receipt: EvidenceReceipt;
       startedAtMs: number;
     };
 
@@ -57,8 +78,16 @@ export class RegressionSurgeonAgent extends Think<PlatformEnvironment, Investiga
   override getSystemPrompt(): string {
     const incident = configuredIncidentReference(this.env);
     const measuredEvidence = `The configured incident is ${incident.incidentId}. Its measured baseline release is ${incident.baselineReleaseId} and its measured degraded release is ${incident.degradedReleaseId}. Compare them with windowMs 2592000000. Search degraded traces with sinceMs ${incident.traceWindow.sinceMs}, untilMs ${incident.traceWindow.untilMs}, releaseId ${incident.degradedReleaseId}, and limit 5. Use those exact values.`;
+    const receiptContext =
+      this.state.status === "investigating"
+        ? ` The active evidence receipt is ${this.state.receipt.investigationId}; cite that receipt identifier in the Evidence section.`
+        : "";
+    const prepared =
+      this.state.status === "investigating" && this.state.preparedRemediation !== undefined
+        ? `\nThe complete receipt prepared this exact remediation input. You may call create_draft_pr only with this unchanged JSON: ${JSON.stringify({ ...this.state.preparedRemediation.proposal, proposalFingerprint: this.state.preparedRemediation.fingerprint })}`
+        : "";
     return `You are Regression Surgeon, an evidence-first latency investigator.
-${measuredEvidence}
+${measuredEvidence}${receiptContext}
 Use only the active bounded tools. First compare measured releases, then inspect slow traces
 and one representative trace, then resolve the degraded release to an immutable commit and pull
 request, and finally read only the relevant allowlisted source at that commit. Do not propose a cause
@@ -78,7 +107,7 @@ window identifiers, and measurements),
 Inference (reasoning derived from that evidence), Confidence (high, medium, or low with rationale),
 and Unknowns (remaining uncertainty). Clearly distinguish observed facts from inference. Never claim
 that a write occurred unless the action result proves it. Never claim a merge, deployment, or
-rollback occurred.`;
+rollback occurred.${prepared}`;
   }
 
   override getTools(): ToolSet {
@@ -95,6 +124,9 @@ rollback occurred.`;
   }
 
   override getActions() {
+    if (this.state.status !== "investigating" || this.state.preparedRemediation === undefined) {
+      return {};
+    }
     const writeEnabled =
       this.env.MODEL_MODE === "workers-ai" && this.env.GITHUB_WRITE_ENABLED === "true";
     return { create_draft_pr: this.createRemediationAction(writeEnabled) };
@@ -109,14 +141,63 @@ rollback occurred.`;
     });
     return createRemediationAction(service, {
       idempotencyScope: writeEnabled ? "write" : "preview",
+      authorize: (input) => {
+        if (this.state.status !== "investigating") return false;
+        const prepared = this.state.preparedRemediation;
+        if (prepared === undefined || input.proposalFingerprint !== prepared.fingerprint) {
+          return false;
+        }
+        const { proposalFingerprint: _proposalFingerprint, ...proposal } = input;
+        return JSON.stringify(proposal) === JSON.stringify(prepared.proposal);
+      },
     });
   }
 
+  private async prepareRemediation(
+    receipt: EvidenceReceipt,
+  ): Promise<PreparedRemediation | undefined> {
+    if (!evidenceReceiptComplete(receipt)) return;
+    const evidence = receipt.evidence;
+    if (
+      evidence.inspectedTraceId === undefined ||
+      evidence.commitSha === undefined ||
+      evidence.pullRequest?.status !== "found" ||
+      evidence.sourcePath === undefined ||
+      evidence.blobSha === undefined
+    ) {
+      return;
+    }
+    const proposal: RemediationProposal = {
+      ...remediationFixture,
+      incident: {
+        ...receipt.incident,
+        traceId: evidence.inspectedTraceId,
+        regressionCommitSha: evidence.commitSha,
+        sourcePullRequestNumber: evidence.pullRequest.number,
+      },
+      expectedBaseSha: evidence.commitSha,
+      expectedBlobSha: evidence.blobSha,
+      path: evidence.sourcePath,
+    };
+    return {
+      fingerprint: `proposal-v1-${await remediationProposalFingerprint(proposal)}`,
+      proposal,
+      diff: {
+        path: proposal.path,
+        expectedBlobSha: proposal.expectedBlobSha,
+        replacementContent: proposal.replacementContent,
+      },
+    };
+  }
+
   startConfiguredInvestigation(): Extract<InvestigationAgentState, { status: "investigating" }> {
+    const investigationId = crypto.randomUUID();
+    const incident = configuredIncidentReference(this.env);
     const state = {
       status: "investigating" as const,
-      investigationId: crypto.randomUUID(),
-      incident: configuredIncidentReference(this.env),
+      investigationId,
+      incident,
+      receipt: createEvidenceReceipt(investigationId, incident),
       startedAtMs: Date.now(),
     };
     this.setState(state);
@@ -129,7 +210,11 @@ rollback occurred.`;
     }
     const persisted = parseIncidentReference(this.state.incident);
     const configured = configuredIncidentReference(this.env);
-    if (JSON.stringify(persisted) !== JSON.stringify(configured)) {
+    if (
+      JSON.stringify(persisted) !== JSON.stringify(configured) ||
+      JSON.stringify(this.state.receipt.incident) !== JSON.stringify(configured) ||
+      this.state.receipt.investigationId !== this.state.investigationId
+    ) {
       throw new Error("Persisted investigation incident does not match runtime configuration.");
     }
     return persisted;
@@ -140,21 +225,48 @@ rollback occurred.`;
     if (!context.continuation && evidenceInvestigationRequested(messages)) {
       this.startConfiguredInvestigation();
     }
+    const remediationEligible =
+      this.state.status === "investigating" && this.state.preparedRemediation !== undefined;
     return {
-      activeTools: ["query_telemetry", "inspect_release", "read_repo_files", "create_draft_pr"],
+      activeTools: [...evidenceToolNames, ...(remediationEligible ? ["create_draft_pr"] : [])],
     };
   }
 
-  override beforeStep(context: PrepareStepContext): EvidenceStepConfig | undefined {
+  override async beforeStep(context: PrepareStepContext): Promise<EvidenceStepConfig | undefined> {
+    if (this.state.status !== "investigating") {
+      if (!evidenceInvestigationRequested(context.messages)) return;
+      this.startConfiguredInvestigation();
+    }
+    if (this.state.status !== "investigating") return;
     const currentMessages = messagesForCurrentInvestigation(context.messages);
-    const evidenceSteps = [...evidenceStepsFromModelMessages(currentMessages), ...context.steps];
-    const hasEvidence = evidenceSteps.some((step) => step.toolResults.length > 0);
-    const requiredTool =
-      nextRequiredEvidenceTool(evidenceSteps) ??
-      (!hasEvidence && evidenceInvestigationRequested(currentMessages)
-        ? "query_telemetry"
-        : undefined);
-    if (requiredTool === undefined) return;
+    const currentStepResults: EvidenceToolResult[] = context.steps.flatMap((step) =>
+      step.toolResults.map((result) => ({
+        toolCallId: result.toolCallId,
+        toolName: result.toolName,
+        input: result.input,
+        output: result.output,
+      })),
+    );
+    const results = [...evidenceResultsFromModelMessages(currentMessages), ...currentStepResults];
+    const activeState = this.state;
+    const receipt = results.reduce(
+      (current, result) => recordEvidenceResult(current, result),
+      activeState.receipt,
+    );
+    const preparedRemediation =
+      activeState.preparedRemediation ?? (await this.prepareRemediation(receipt));
+    if (
+      receipt !== activeState.receipt ||
+      preparedRemediation !== activeState.preparedRemediation
+    ) {
+      this.setState({
+        ...activeState,
+        receipt,
+        ...(preparedRemediation === undefined ? {} : { preparedRemediation }),
+      });
+    }
+    const requiredTool = nextEvidenceTool(receipt);
+    if (requiredTool === undefined) return { system: this.getSystemPrompt() };
     return {
       activeTools: [requiredTool],
       toolChoice: { type: "tool", toolName: requiredTool },
@@ -180,29 +292,30 @@ rollback occurred.`;
       .filter((part) => part.type === "text")
       .map((part) => part.text)
       .join("\n");
-    return { incident: this.activeIncident(), toolTypes, report };
+    if (this.state.status !== "investigating") {
+      throw new Error("Investigation state was lost before its report completed.");
+    }
+    return {
+      incident: this.activeIncident(),
+      preparedRemediation: this.state.preparedRemediation,
+      receipt: this.state.receipt,
+      toolTypes,
+      report,
+    };
   }
 
   async runLocalRemediationPreview() {
     await this.onStart();
-    const messages = await this.getMessages();
-    const currentMessages = messagesForCurrentInvestigation(messages);
-    const report = messages
-      .filter((message) => message.role === "assistant")
-      .flatMap((message) => message.parts)
-      .filter((part) => part.type === "text")
-      .map((part) => part.text)
-      .join("\n");
-    const traceId =
-      findRepresentativeTraceId(currentMessages) ??
-      /Representative trace: ([A-Za-z0-9_-]+)/.exec(report)?.[1];
-    if (traceId === undefined) throw new Error("Investigation trace evidence is unavailable.");
-    const incident = this.activeIncident();
+    if (this.state.status !== "investigating" || this.state.preparedRemediation === undefined) {
+      throw new Error("A complete incident-scoped evidence receipt is required for remediation.");
+    }
+    this.activeIncident();
+    const prepared = this.state.preparedRemediation;
     const action = this.createRemediationAction(false, "fake");
     return action.config.execute(
       {
-        ...remediationFixture,
-        incident: { ...remediationFixture.incident, ...incident, traceId },
+        ...prepared.proposal,
+        proposalFingerprint: prepared.fingerprint,
       },
       {} as never,
     );

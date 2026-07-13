@@ -22,6 +22,7 @@ const proposal: RemediationProposal = {
   risk: "Two requests can overlap.",
   validationSteps: ["Run mise run check", "Run mise run e2e"],
 };
+const proposalFingerprint = "proposal-v1-0123456789abcdef";
 
 describe("create_draft_pr Project Think action", () => {
   it("requires explicit approval, a narrow permission, and stable incident idempotency", async () => {
@@ -37,14 +38,19 @@ describe("create_draft_pr Project Think action", () => {
     const idempotency = remediation.config.idempotencyKey;
     if (typeof idempotency !== "function") throw new Error("Expected idempotency function");
     const context = {} as never;
-    expect(await idempotency({ input: proposal, ctx: context })).toBe(
-      "preview:configured-latency-regression:scenario-trace-34:d591869a8ef995f1835ef80152f4de085b10255b:workers/platform/src/api/health.ts",
+    expect(await idempotency({ input: { ...proposal, proposalFingerprint }, ctx: context })).toBe(
+      "preview:configured-latency-regression",
     );
-    expect(await idempotency({ input: proposal, ctx: context })).toBe(
-      "preview:configured-latency-regression:scenario-trace-34:d591869a8ef995f1835ef80152f4de085b10255b:workers/platform/src/api/health.ts",
-    );
+    expect(
+      await idempotency({
+        input: { ...proposal, proposalFingerprint, replacementContent: "a revised proposal" },
+        ctx: context,
+      }),
+    ).toBe("preview:configured-latency-regression");
 
-    await expect(remediation.config.execute(proposal, context)).resolves.toEqual({
+    await expect(
+      remediation.config.execute({ ...proposal, proposalFingerprint }, context),
+    ).resolves.toEqual({
       status: "preview",
     });
     expect(service.execute).toHaveBeenCalledExactlyOnceWith(proposal);
