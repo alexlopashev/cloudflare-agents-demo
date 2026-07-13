@@ -901,6 +901,38 @@ Acceptance criteria:
 - Every documented command and walkthrough matches the delivered artifact.
 - All local and deployed gates pass, and the tracking issue can close with linked evidence.
 
+### Phase 10 — Interactive demo UX
+
+Status: active in issue #25. Deployboard now offers fixed batches of 5, 10, or 20 measured
+interactions. The client rejects other counts before I/O, runs one health interaction at a time,
+waits for each UX telemetry write to be acknowledged, exposes progress, and stops visibly on the
+first failed sample. Refresh and generation share one in-flight guard, while the latest successful
+sample keeps its interaction, trace, and release evidence visible.
+
+The investigator is mounted alongside Deployboard as a bottom-corner support widget. A floating
+launcher carries numeric attention and availability badges; its accessible dialog can collapse and
+reopen without unmounting the Project Think session. `/investigator` deep-links to the same product
+with the widget open. The desktop dialog is bounded, the mobile dialog fills the viewport, and the
+composer retains full-width 44px controls. Assistant reports render as safe GitHub-flavored Markdown,
+raw HTML stays inert, and user requests remain literal.
+
+- Generate a bounded, acknowledged batch of real current-release metrics.
+- Expose progress, failure, and latest trace/release evidence without overlapping work.
+- Present the durable investigator as an accessible collapsible support widget.
+- Render generated report structure, lists, links, code, and tables semantically.
+- Keep model-provided raw HTML inert and user-authored requests literal.
+
+Acceptance criteria:
+
+- Only 5, 10, or 20 sequential samples are accepted, and progress advances only after telemetry
+  acknowledgement.
+- The support launcher, badges, dialog, collapse action, and direct link remain accessible and keep
+  the agent mounted.
+- Generated reports expose semantic Markdown without arbitrary HTML injection.
+- At 390px, the dialog fills the viewport and the submit button is full-width and at least 44px tall.
+- Focused UI tests, the complete local E2E, aggregate quality gates, container contract, and build
+  pass.
+
 ## 17. Scope gates
 
 Implement in this order:
@@ -912,6 +944,7 @@ Implement in this order:
 5. Reproducible local delivery
 6. Public deployment
 7. Release-readiness reconciliation
+8. Post-v1 metric generation and support-widget polish
 
 Explicit non-goals:
 
@@ -932,12 +965,13 @@ Explicit non-goals:
 
 The intended five-minute demonstration is:
 
-1. Open Deployboard and click **Refresh services**.
-2. Observe the slow service-grid experience.
-3. Open Regression Surgeon.
+1. Open Deployboard and generate a five-sample metrics batch.
+2. Watch acknowledged progress and inspect the latest interaction, trace, and release IDs.
+3. Use the floating launcher to open Regression Investigator.
 4. Submit **Investigate the current dashboard latency regression**.
-5. Watch the agent compare releases and inspect traces.
-6. Review its identification of the first bad commit and source PR.
+5. Watch the agent compare the seeded evidence releases and inspect traces.
+6. Review its Markdown-formatted evidence, inference, confidence, and unknowns, including the first
+   bad commit and source PR.
 7. Inspect the proposed bounded-concurrency fix.
 8. Approve draft PR creation.
 9. Follow the returned GitHub link to the evidence-backed PR.

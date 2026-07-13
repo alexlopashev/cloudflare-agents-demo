@@ -1,14 +1,21 @@
 export type Experience =
-  | { kind: "deployboard"; title: "Deployboard" }
-  | { kind: "investigator"; title: "Regression Investigator" }
+  | {
+      kind: "product";
+      title: "Deployboard" | "Regression Investigator";
+      investigatorInitiallyOpen: boolean;
+    }
   | { kind: "not-found"; title: "Not found" };
 
 export function resolveExperience(pathname: string): Experience {
   if (pathname === "/app" || pathname.startsWith("/app/")) {
-    return { kind: "deployboard", title: "Deployboard" };
+    return { kind: "product", title: "Deployboard", investigatorInitiallyOpen: false };
   }
   if (pathname === "/investigator" || pathname.startsWith("/investigator/")) {
-    return { kind: "investigator", title: "Regression Investigator" };
+    return {
+      kind: "product",
+      title: "Regression Investigator",
+      investigatorInitiallyOpen: true,
+    };
   }
   return { kind: "not-found", title: "Not found" };
 }

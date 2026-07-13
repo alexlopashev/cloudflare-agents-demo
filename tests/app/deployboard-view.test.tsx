@@ -4,11 +4,24 @@ import { describe, expect, it } from "vitest";
 import type { HealthReport } from "../../packages/contracts/src/health";
 import {
   DeployboardView,
+  type MetricGenerationState,
   type DeployboardViewState,
 } from "../../apps/web/src/deployboard/Deployboard";
 
-function render(state: DeployboardViewState): string {
-  return renderToStaticMarkup(<DeployboardView onRefresh={() => undefined} state={state} />);
+function render(
+  state: DeployboardViewState,
+  metrics: MetricGenerationState = { status: "idle" },
+): string {
+  return renderToStaticMarkup(
+    <DeployboardView
+      metrics={metrics}
+      onGenerateMetrics={() => undefined}
+      onRefresh={() => undefined}
+      onSampleCountChange={() => undefined}
+      sampleCount={5}
+      state={state}
+    />,
+  );
 }
 
 function partialReport(): HealthReport {
@@ -42,6 +55,12 @@ describe("DeployboardView", () => {
     expect(markup).toContain("Job runner");
     expect(markup).toContain("Object storage");
     expect(markup.match(/Not checked/g)).toHaveLength(3);
+    expect(markup).toContain("Generate metrics data");
+    expect(markup.match(/<option/g)).toHaveLength(3);
+    expect(markup).toContain('<option value="5" selected="">5 samples</option>');
+    expect(markup).toContain('<option value="10">10 samples</option>');
+    expect(markup).toContain('<option value="20">20 samples</option>');
+    expect(markup).toContain("Generate metrics");
   });
 
   it("disables refresh and exposes busy state while one interaction is active", () => {
@@ -82,5 +101,21 @@ describe("DeployboardView", () => {
 
     expect(markup).toContain('role="alert"');
     expect(markup).toContain("0 of 3 services healthy");
+  });
+
+  it("reports bounded metric-generation progress and disables overlapping actions", () => {
+    const markup = render({ status: "loading" }, { status: "generating", completed: 2, total: 5 });
+
+    expect(markup).toContain('value="2"');
+    expect(markup).toContain('max="5"');
+    expect(markup).toContain("2 of 5 measured interactions recorded");
+    expect(markup.match(/disabled/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps completed progress visible and announces a partial generation failure", () => {
+    const markup = render({ status: "idle" }, { status: "error", completed: 3, total: 10 });
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain("Stopped after 3 of 10 measured interactions");
   });
 });

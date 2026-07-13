@@ -11,20 +11,48 @@ export type DeployboardCompletion =
   | {
       status: "failed";
       interactionId: string;
-      error: { code: "refresh-failed"; message: "Health refresh failed." };
+      error:
+        | { code: "refresh-failed"; message: "Health refresh failed." }
+        | { code: "metrics-failed"; message: "Metric generation failed." };
     };
+
+export const metricSampleCounts = [5, 10, 20] as const;
+export type MetricSampleCount = (typeof metricSampleCounts)[number];
+
+export type MetricBatchProgress = {
+  completed: number;
+  total: MetricSampleCount;
+  latestReport: HealthReport;
+};
+
+export type DeployboardMetricBatchOptions = {
+  sampleCount: number;
+  createInteractionId: () => string;
+  fetcher: Fetcher;
+  emitCompletion: (completion: DeployboardCompletion) => void;
+  onProgress: (progress: MetricBatchProgress) => void;
+  now?: () => number;
+};
 
 export type DeployboardRefreshOptions = {
   interactionId: string;
   fetcher: Fetcher;
   emitCompletion: (completion: DeployboardCompletion) => void;
   now?: () => number;
+  telemetryDelivery?: "background" | "required";
 };
 
 export class DeployboardRefreshError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "DeployboardRefreshError";
+  }
+}
+
+export class DeployboardMetricsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DeployboardMetricsError";
   }
 }
 
@@ -104,7 +132,7 @@ export async function runDeployboardRefresh(
   const outcome =
     report.outcome === "healthy" ? "success" : report.outcome === "partial" ? "partial" : "error";
   const origin = typeof location === "undefined" ? "http://localhost" : location.origin;
-  void options
+  const telemetry = options
     .fetcher(
       new Request(new URL("/api/telemetry/ux", origin), {
         method: "POST",
@@ -119,7 +147,55 @@ export async function runDeployboardRefresh(
         }),
       }),
     )
-    .catch(() => undefined);
+    .then((response) => {
+      if (!response.ok) throw new Error("telemetry unavailable");
+    });
+  if (options.telemetryDelivery === "required") {
+    try {
+      await telemetry;
+    } catch {
+      emitSafely(options.emitCompletion, {
+        status: "failed",
+        interactionId: report.interactionId,
+        error: { code: "metrics-failed", message: "Metric generation failed." },
+      });
+      throw new DeployboardMetricsError("Metric generation failed.");
+    }
+  } else {
+    void telemetry.catch(() => undefined);
+  }
   emitSafely(options.emitCompletion, { status: "completed", report });
   return report;
+}
+
+export async function runDeployboardMetricBatch(options: DeployboardMetricBatchOptions): Promise<{
+  sampleCount: MetricSampleCount;
+  latestReport: HealthReport;
+}> {
+  if (!metricSampleCounts.includes(options.sampleCount as MetricSampleCount)) {
+    throw new TypeError("Metric sample count is invalid.");
+  }
+  const sampleCount = options.sampleCount as MetricSampleCount;
+  let latestReport: HealthReport | undefined;
+  for (let index = 0; index < sampleCount; index += 1) {
+    try {
+      latestReport = await runDeployboardRefresh({
+        interactionId: options.createInteractionId(),
+        fetcher: options.fetcher,
+        emitCompletion: options.emitCompletion,
+        ...(options.now === undefined ? {} : { now: options.now }),
+        telemetryDelivery: "required",
+      });
+    } catch (error) {
+      if (error instanceof DeployboardMetricsError) throw error;
+      throw new DeployboardMetricsError("Metric generation failed.");
+    }
+    try {
+      options.onProgress({ completed: index + 1, total: sampleCount, latestReport });
+    } catch {
+      // Progress observers are isolated from acknowledged metric generation.
+    }
+  }
+  if (latestReport === undefined) throw new DeployboardMetricsError("Metric generation failed.");
+  return { sampleCount, latestReport };
 }
