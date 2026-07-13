@@ -1,11 +1,10 @@
 #!/bin/sh
 
-# This file must be sourced; ShellCheck analyzes its defensive exit fallback as unreachable.
-# shellcheck disable=SC2317
+set -eu
 
 if [ ! -f "mise.toml" ]; then
   printf '%s\n' "Run activation from the repository root." >&2
-  return 1 2>/dev/null || exit 1
+  exit 1
 fi
 
 REGRESSION_SURGEON_ROOT=$PWD
@@ -32,25 +31,24 @@ case ":${MISE_IGNORED_CONFIG_PATHS:-}:" in
 esac
 
 if [ ! -x "$MISE_INSTALL_PATH" ]; then
-  printf '%s\n' "The repository-local toolchain is missing; source scripts/bootstrap first." >&2
-  return 1 2>/dev/null || exit 1
+  printf '%s\n' "The repository-local toolchain is missing; run ./scripts/bootstrap first." >&2
+  exit 1
 fi
 
-if [ -n "${ZSH_VERSION:-}" ]; then
-  REGRESSION_SURGEON_SHELL=zsh
-else
-  case "${0##*/}" in
-    *bash) REGRESSION_SURGEON_SHELL=bash ;;
-    *) REGRESSION_SURGEON_SHELL="sh" ;;
-  esac
-fi
-
-if [ "$REGRESSION_SURGEON_SHELL" = "sh" ]; then
-  PATH="$MISE_DATA_DIR/shims:$(dirname "$MISE_INSTALL_PATH"):$PATH"
-  export PATH
-else
-  eval "$("$MISE_INSTALL_PATH" activate "$REGRESSION_SURGEON_SHELL")"
-fi
-REGRESSION_SURGEON_MISE_ACTIVE=$REGRESSION_SURGEON_SHELL
+case ":$PATH:" in
+  *":$(dirname "$MISE_INSTALL_PATH"):"*) ;;
+  *) PATH="$(dirname "$MISE_INSTALL_PATH"):$PATH" ;;
+esac
+case ":$PATH:" in
+  *":$MISE_DATA_DIR/shims:"*) ;;
+  *) PATH="$MISE_DATA_DIR/shims:$PATH" ;;
+esac
+export PATH
+REGRESSION_SURGEON_MISE_ACTIVE=project
 export REGRESSION_SURGEON_MISE_ACTIVE
-unset REGRESSION_SURGEON_SHELL
+
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
+
+exec "${SHELL:-/bin/sh}"

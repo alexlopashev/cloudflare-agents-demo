@@ -1,7 +1,11 @@
-# v1 and v1.1 Release Readiness
+# Historical v1 and v1.1 Release Evidence
 
 The v1 clean-room release was verified on 2026-07-12 from a macOS ARM64 worktree at merged commit
 `e470dd4`. The v1.1 public interface was deployed later that day from main commit `41dee5d`.
+
+This is a dated evidence record, not the current completion claim. The active
+[v1.2 review-readiness milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
+tracks evidence provenance, telemetry integrity, exact verification, and reviewer-flow hardening.
 
 ## Clean-room evidence
 
@@ -12,7 +16,7 @@ The v1 clean-room release was verified on 2026-07-12 from a macOS ARM64 worktree
 - Passed `mise run check`: 26 foundation checks plus one host-only Fish skip, 121 unit and
   integration tests, and 15 Worker tests.
 - Passed `mise run build` for the platform Worker, health-service Worker, and React client.
-- Passed `mise run e2e`: both routes, service binding, telemetry persistence, five evidence tools,
+- Passed `mise run e2e`: both routes, service binding, telemetry persistence, five evidence operations,
   structured report, guarded preview, and zero GitHub writes.
 
 Fish execution and the other three supported OS/architecture combinations are covered by the four
@@ -25,19 +29,18 @@ required GitHub Actions lanes. PR #23 passed macOS ARM64/x64 and Linux ARM64/x64
 - Baseline Worker version: `3cdd02af-a0e5-4258-b795-ab277021300b`, measured p75 328 ms.
 - Degraded Worker version: `9f6f4949-63fb-4d4b-8c97-e0e134deb8b9`, measured p75 493 ms.
 - Investigator Worker version: `eac2cc77-e50c-4c8e-b39d-52a439304b13`, attributed to `41dee5d`.
-- The deployed smoke verifies the exact runtime metadata, both public routes, real Workers AI turn,
-  telemetry comparison, representative trace, commit `d591869…`, PR #19, pinned source, validated
-  remediation preview, and `GITHUB_WRITE_ENABLED=false`.
+- The historical deployed smoke observed runtime metadata, both public routes, a real Workers AI
+  turn, telemetry comparison, representative trace, commit `d591869…`, PR #19, pinned source,
+  validated remediation preview, and `GITHUB_WRITE_ENABLED=false`.
 - Browser verification at 1280 px confirmed the bounded metric generator and badged floating
   launcher. At 390×844, the investigator filled the viewport and its send button measured 350×44.
 
-The issue #27 follow-up was most recently refreshed from main commit `1748e38` as investigator version
-`961b78e2-58ff-4682-a562-f75cc08dfa45`. Browser verification confirms that the redundant header
-pills are absent and the persisted failed session preserves its message while enabling an explicit
-retry. This version is not yet a passing deployed gate: Workers AI returns error 4006 because the
-account exhausted its daily free allocation of 10,000 neurons, so the keyed smoke cannot produce the
-trace evidence required for remediation preview. Issue #27 and milestone 2 remain open until a real
-browser turn and keyed smoke pass after allocation recovery.
+The issue #27 implementation now includes failed-turn retry, the simplified header, bounded evidence
+forcing, and Workers-compatible GitHub fetch invocation. Later live runs recovered Workers AI access
+and reached GitHub inspection, but the supplied fine-grained token returned HTTP 403. No source read,
+proposal, branch, commit, or PR occurred; rollback and secret deletion left the public runtime
+write-disabled. Issue #42 now blocks #27 until a credential-free structured smoke and browser turn
+prove all five incident-scoped evidence phases. A real GitHub write remains optional in issue #30.
 
 Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its ignored
 `.local/deploy/state.json` contains the exact remote version IDs and an owner-only smoke credential.
@@ -60,9 +63,10 @@ Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its 
 
 ## Alignment evidence
 
-- `README.md`, `IMPLEMENTATION_PLAN.md`, `AGENTS.md`, and this release record describe the same v1
-  and focused v1.1 delivery.
-- The GitHub wiki mirrors product, architecture, operations, decisions, development, and roadmap.
-- The v1 milestone is closed. The v1.1 milestone is open for issue #27, which has no native
-  dependency relations and is blocked only by the external Workers AI allocation reset or upgrade.
+- `README.md`, `IMPLEMENTATION_PLAN.md`, and the wiki identify this document as historical evidence
+  and point to v1.2 for the current completion contract.
+- The v1 milestone is closed. The v1.1 milestone remains open only for carried public verification
+  in issue #27; issue #30 is an unmilestoned optional operator extension.
+- The v1.2 milestone and native dependency graph are the executable review-readiness roadmap.
+- `AGENTS.md` and the alignment skill remain the authoritative delivery workflow.
 - The repository-local alignment skill validates successfully.

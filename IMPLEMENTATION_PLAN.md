@@ -2,17 +2,24 @@
 
 ## 1. Product definition
 
-Regression Surgeon is a Cloudflare-native agent that connects a measured UX latency regression to backend traces, identifies the first bad deployment and its GitHub commit or pull request, and proposes a minimal evidence-backed fix as a guarded draft PR.
+Regression Surgeon is a Cloudflare-native agent that connects a measured UX latency regression to
+backend traces, identifies the first bad deployment and its GitHub commit or pull request, and
+prepares a minimal evidence-backed remediation behind a human approval boundary.
 
 The demonstration path is deliberately narrow:
 
-1. A supervised full-stack application reports a degraded UX metric.
-2. The Project Think agent compares the current release with a known-good baseline.
-3. It inspects representative traces and finds the critical path.
-4. It maps the first bad Worker version to a Git commit and PR.
-5. It reads only the relevant repository files.
-6. It explains the likely cause, confidence, and remaining uncertainty.
-7. After explicit approval, it creates or reuses a guarded draft PR.
+1. A configured incident identifies one measured baseline and degraded release pair.
+2. The Project Think agent compares those releases.
+3. It finds slow traces and inspects one representative trace.
+4. It maps the degraded Worker version to an immutable Git commit and PR evidence or an explicit
+   unknown.
+5. It reads only allowlisted repository files at that commit.
+6. It explains the likely cause, evidence, inference, confidence, and remaining uncertainty.
+7. It prepares a validated one-file remediation preview with external writes disabled.
+
+Deployboard can optionally generate bounded current-release samples to demonstrate telemetry
+ingestion. Those samples do not select or modify the configured incident. A real draft PR is a
+separate operator-enabled extension; it is not required for the credential-free reviewer contract.
 
 ## 2. Fixed architectural decisions
 
@@ -25,7 +32,7 @@ The demonstration path is deliberately narrow:
 | Server | Cloudflare Worker API |
 | Agent state | Project Think's SQLite-backed Durable Object |
 | Telemetry | Application-owned, measured telemetry stored in D1 |
-| Repository | pnpm workspace monorepo |
+| Repository | Single-package TypeScript repository with workspace-shaped domain directories |
 | Development method | Strict test-driven development |
 | Local runtime | Cloudflare Vite plugin, Miniflare, and `workerd` |
 | Tool management | mise |
@@ -33,7 +40,7 @@ The demonstration path is deliberately narrow:
 | Supported shells | sh, Bash, Zsh, Fish, and Nu |
 | Optional containers | Colima with Compose |
 | GitHub runtime integration | GitHub REST API through constrained Worker tools |
-| PR behavior | Approved, guarded, idempotent draft PR only |
+| PR behavior | Validated preview by default; optional approved, guarded, idempotent draft PR |
 
 ## 3. Node and Workers runtime
 
@@ -74,9 +81,9 @@ References:
 ├── apps/
 │   └── web/
 │       ├── src/
-│       │   ├── supervised/       # Deployboard UI
+│       │   ├── deployboard/      # Deployboard UI and client
 │       │   ├── investigator/     # Think chat UI
-│       │   └── shared/
+│       │   └── experience.ts     # Route-to-experience contract
 │       └── index.html
 │
 ├── workers/
@@ -100,16 +107,10 @@ References:
 ├── migrations/
 │   └── telemetry/
 ├── scripts/
-│   ├── bootstrap                 # Source from sh/bash/zsh
-│   ├── bootstrap.fish
-│   ├── bootstrap.nu
+│   ├── bootstrap                 # Shell-neutral POSIX setup entrypoint
 │   ├── bootstrap-core.sh
 │   ├── activate
-│   ├── activate.fish
-│   ├── activate.nu
 │   ├── teardown
-│   ├── teardown.fish
-│   ├── teardown.nu
 │   ├── container.ts
 │   ├── doctor.ts
 │   ├── e2e.ts
@@ -205,21 +206,21 @@ References:
 - [Installing mise](https://mise.jdx.dev/installing-mise.html)
 - [mise lockfiles](https://mise.jdx.dev/dev-tools/mise-lock.html)
 
-## 7. Session-local bootstrap contract
+## 7. Shell-neutral bootstrap contract
 
 Bootstrap supports only macOS and Linux on ARM64 and x64.
 
-| Shell | Bootstrap command |
-| --- | --- |
-| sh | `. ./scripts/bootstrap` |
-| Bash | `source ./scripts/bootstrap` |
-| Zsh | `source ./scripts/bootstrap` |
-| Fish | `source ./scripts/bootstrap.fish` |
-| Nu | `source ./scripts/bootstrap.nu` |
+All supported shells use the same command:
+
+```text
+./scripts/bootstrap
+```
 
 The command must be run from the repository root. Each entrypoint verifies that `mise.toml` is present before continuing.
 
-Bootstrap must be sourced because an executed child process cannot modify its parent shell.
+Bootstrap is executed, never sourced. It performs setup in its own POSIX process and cannot modify
+the parent shell. The separate `activate` executable opens a project-scoped child shell or runs one
+command with the project environment.
 
 ### 7.1 Isolation rules
 
@@ -228,14 +229,15 @@ Bootstrap will:
 - Install mise into `.local/bin/mise`.
 - Store mise-installed tools under the repository's `.local/` directory.
 - Store mise cache and state under `.local/`.
-- Add mise and its tools to `PATH` only in the active shell.
-- Activate mise only in the active shell.
+- Add mise and its tools to `PATH` only in the launched project shell or command.
+- Activate the repository toolchain only in the launched project shell or command.
 - Never modify `.profile`, `.bashrc`, `.zshrc`, Fish configuration, or Nu configuration.
 - Never install mise into `/usr/local/bin` or another system path.
-- Never spawn a replacement login shell.
-- Remain idempotent when sourced repeatedly.
+- Never spawn a replacement login shell during bootstrap.
+- Remain idempotent when executed repeatedly or nested through activation.
 
-The shell adapters set repository-local paths before calling the shared core:
+The shared bootstrap and activation entrypoints set repository-local paths before calling the
+bootstrap core or launching the requested shell or command:
 
 ```text
 MISE_INSTALL_PATH=.local/bin/mise
@@ -246,21 +248,18 @@ MISE_GLOBAL_CONFIG_FILE=.local/mise-global.toml
 MISE_CONFIG_DIR=.local/config/mise
 ```
 
-The adapters also add the user's normal global mise config to `MISE_IGNORED_CONFIG_PATHS`. This prevents unrelated personal tools or aliases from leaking into a repository bootstrap.
+The entrypoints also add the user's normal global mise config to `MISE_IGNORED_CONFIG_PATHS`. This prevents unrelated personal tools or aliases from leaking into a repository bootstrap.
 
-When the terminal closes, activation and environment changes disappear. Downloaded repository-local tools remain cached until teardown.
+When the project shell or command exits, activation and environment changes disappear. Downloaded repository-local tools remain cached until teardown.
 
 ### 7.2 Bootstrap implementation
 
 The common `bootstrap-core.sh` performs filesystem and installation work but does not attempt to alter the calling shell.
 
-The shell adapters then expose the repository toolchain:
-
-- sh prepends the repository's mise shims because mise has no plain-`sh` activation mode.
-- Bash uses `mise activate bash`.
-- Zsh uses `mise activate zsh`.
-- Fish pipes `mise activate fish` into `source`.
-- Nu prepends the repository's mise shims and binary directory to its current-session path.
+Both POSIX entrypoints expose the repository toolchain by prepending the repository's mise shims and
+binary directory. They do not generate, evaluate, or source shell-specific activation code.
+`bootstrap` may run an optional command after successful setup; `activate` runs an optional command
+or opens the shell named by `SHELL`.
 
 ### 7.3 Consent behavior
 
@@ -286,15 +285,15 @@ Bootstrap never prompts about shell profiles because persistent activation is fo
 
 ### 7.4 Activation after bootstrap
 
-Subsequent terminal sessions can source a lightweight activation script without repeating installation:
+Subsequent terminal sessions use the same lightweight activation command without repeating
+installation:
 
-| Shell | Activation command |
-| --- | --- |
-| sh | `. ./scripts/activate` |
-| Bash | `source ./scripts/activate` |
-| Zsh | `source ./scripts/activate` |
-| Fish | `source ./scripts/activate.fish` |
-| Nu | `source ./scripts/activate.nu` |
+```text
+./scripts/activate
+```
+
+This opens a project-scoped child shell. A one-off command can instead run as
+`./scripts/activate <command> [args...]`.
 
 ## 8. Teardown behavior
 
@@ -318,7 +317,8 @@ The explicit `--purge-toolchain` flag additionally removes the repository-local 
 and cache. Supplying that flag is the affirmative purge request; the default path preserves the
 toolchain and `node_modules`.
 
-Because bootstrap affects only the current shell, teardown does not attempt to edit the parent shell's environment. The current session ends naturally or can run the matching mise deactivation command.
+Teardown does not attempt to edit the parent shell's environment. Exiting the project shell ends the
+activation naturally.
 
 ## 9. mise tasks
 
@@ -330,16 +330,15 @@ which Node can type-strip without a loader; `tsc --noEmit` remains the separate 
 | --- | --- |
 | `mise run doctor` | Verify versions, ports, configuration, credentials, and bindings |
 | `mise run install` | Install pnpm dependencies |
-| `mise run build` | Build every workspace package and Worker |
+| `mise run build` | Build the implemented web and Worker components |
 | `mise run format` | Apply canonical formatting |
 | `mise run format:check` | Verify formatting without modifying files |
 | `mise run lint` | Run code, configuration, and shell linting with zero warnings |
 | `mise run typecheck` | Run strict TypeScript checks |
-| `mise run check` | Run formatting, linting, type-checking, and tests |
-| `mise run test` | Run focused unit and Worker integration tests |
-| `mise run test:watch` | Run targeted tests continuously during TDD |
+| `mise run check` | Run the current formatting, linting, type-checking, and test aggregate; v1.2 expands it to every non-deployment CI gate |
+| `mise run test` | Run the full foundation, unit, integration, and Worker test suites |
+| `mise run test:watch` | Run the current ordinary Vitest watch pool; v1.2 adds Worker-target selection |
 | `mise run db:migrate` | Apply local D1 migrations |
-| `mise run db:seed` | Load deterministic investigation fixtures |
 | `mise run dev` | Run the complete native stack with a fake local model |
 | `mise run dev:live` | Run locally with remote Workers AI |
 | `mise run e2e` | Run credential-free deterministic end-to-end verification |
@@ -347,10 +346,13 @@ which Node can type-strip without a loader; `tsc --noEmit` remains the separate 
 | `mise run container:down` | Stop project container resources |
 | `mise run container:check` | Validate the Compose model without starting a VM |
 | `mise run auth:cloudflare` | Run Cloudflare authentication and status checks |
-| `mise run auth:github` | Run GitHub authentication and status checks |
+| `mise run github:writes:secret` | Enter a scoped GitHub token directly through Wrangler's TTY prompt |
+| `mise run github:writes:secret:delete` | Remove the scoped token from the Worker |
 | `mise run deploy` | Apply remote migrations and deploy |
 | `mise run deploy:refresh` | Redeploy only the investigator while preserving measured evidence |
 | `mise run deploy:smoke` | Verify public routes, runtime, agent evidence, preview, and write posture |
+| `mise run deploy:writes:enable` | Explicitly enable the guarded optional live-write posture |
+| `mise run deploy:writes:disable` | Return the public runtime to write-disabled posture |
 | `mise run deploy:reset` | Remove only the last measured release pair from remote D1 |
 | `mise run teardown` | Remove repository-owned local state |
 
@@ -469,7 +471,7 @@ The regression exists as a real commit associated with a real PR in repository h
 
 `mise run scenario:reseed` removes only the two controlled releases, sends 20 concurrent and 20
 sequential interactions through the real local service binding, stores their measured D1 evidence,
-then verifies a ready comparison and sequential slow-trace critical path. `mise run scenario:reset`
+then verifies a ready comparison and sequential slow-trace interval coverage. `mise run scenario:reset`
 performs the scoped deletion independently. Neither operation writes an agent conclusion or modifies
 unrelated telemetry.
 
@@ -507,27 +509,33 @@ Native Workers observability is enabled in parallel, but D1 remains the agent's 
 
 ## 13. Project Think agent
 
+The current implementation uses three bounded tools for five evidence operations. The v1.2 target
+replaces inferred completion from undifferentiated tool history with one typed, incident-scoped
+evidence receipt and five single-purpose tools.
+
 Configure:
 
 - Workers AI model through `workers-ai-provider`
-- Maximum eight tool steps per turn
+- Maximum 16 tool steps per turn
 - Evidence-oriented system prompt
 - Tool result size limits
 - Lifecycle logging
 - Persistent conversation state
 - Explicit confidence and unknowns in final reports
 
-Initial tools:
+v1.2 target tools:
 
-### `query_telemetry`
+### `compare_releases`
 
-Supports bounded operations:
+- Compare the configured baseline and degraded releases over equivalent bounded windows.
 
-- Compare release metrics
-- Find slow traces
-- Inspect one trace
+### `find_slow_traces`
 
-It never accepts arbitrary SQL.
+- Find bounded representative traces within the degraded release window.
+
+### `inspect_trace`
+
+- Inspect one selected trace, its parentage, and dependency timing.
 
 ### `inspect_release`
 
@@ -542,9 +550,16 @@ It never accepts arbitrary SQL.
 
 ### `create_draft_pr`
 
-- Require explicit approval
-- Validate proposed changes
-- Create or return an idempotent draft PR
+- Remain unavailable until the same incident has a complete evidence receipt.
+- Prepare and persist an exact bounded diff plus fingerprint.
+- Require explicit approval of that fingerprint.
+- Return a validated preview by default; optionally create or reuse one idempotent draft PR.
+
+Every evidence result is explicitly `complete`, `insufficient`, or `error`. Truncated, null, empty,
+mismatched, or invalid results do not complete a phase. The receipt cross-references the incident,
+baseline and degraded releases, selected and inspected trace, immutable Git SHA, PR evidence or
+unknown, allowlisted paths, and blob SHAs. The same receipt drives step policy, report references,
+remediation eligibility, reviewer UI, and smoke verification. No tool accepts arbitrary SQL.
 
 ## 14. GitHub PR safety
 
@@ -643,8 +658,8 @@ Tests should assert structured messages, tool calls, state transitions, and evid
 
 #### Bootstrap and local operations
 
-- Bootstrap is idempotent for every supported shell adapter.
-- It changes only the current shell environment and repository-local files.
+- Bootstrap is idempotent when launched from every supported shell.
+- It changes only its process environment and repository-local files.
 - It never writes to a shell profile or system installation path.
 - A declined prompt performs no associated mutation.
 - TTY settings are restored after acceptance, rejection, failure, and interruption.
@@ -673,9 +688,9 @@ Tests should assert structured messages, tool calls, state transitions, and evid
 
 #### Shell contract tests
 
-- sh, Bash, and Zsh adapters in isolated temporary homes
-- Fish syntax and session-local activation
-- Nu syntax and session-local activation
+- The shared POSIX bootstrap, activation, and teardown entrypoints in isolated temporary homes
+- sh, Bash, Zsh, Fish, and Nu launch the same lifecycle executables
+- Project-shell and command-scoped activation
 - Profile files remain byte-for-byte unchanged
 - Bootstrap and teardown remain idempotent
 
@@ -712,8 +727,7 @@ End-to-end tests must not depend on a live LLM, GitHub writes, wall-clock sleeps
 - JavaScript, TypeScript, JSON, and JSONC use one canonical formatter and linter configuration.
 - Markdown is linted for structural consistency.
 - POSIX shell is checked with ShellCheck and formatted with `shfmt`.
-- Fish scripts are validated and formatted with Fish tooling.
-- Nu scripts are parsed and checked by Nu.
+- Fish and Nu contract tests launch the same POSIX lifecycle entrypoints.
 - Lint warnings fail CI; warning budgets are not allowed.
 - Suppressions must be narrow, explained inline, and protected by a test when they affect behavior.
 - Generated files are checked for reproducibility and drift.
@@ -724,12 +738,14 @@ The root `AGENTS.md` is the authoritative contributor contract for TDD, quality 
 
 ### Phase 1 — Foundation
 
-Status: complete in issue #2. The real repository-local bootstrap, doctor, build, aggregate checks, and foundation E2E suite pass on macOS ARM64. The macOS/Linux CI matrix supplies cross-platform and Fish execution evidence.
+Status: complete in issue #2. The real repository-local bootstrap, doctor, build, aggregate checks,
+and foundation E2E suite pass on macOS ARM64. The macOS/Linux CI matrix supplies cross-platform
+evidence that every supported shell launches the shared POSIX lifecycle entrypoints.
 
 - Initialize the pnpm workspace.
 - Add mise configuration and lockfile.
 - Add the root `AGENTS.md` contributor contract.
-- Implement shell-local bootstrap and activation adapters.
+- Implement shell-neutral POSIX bootstrap, activation, and teardown entrypoints.
 - Implement doctor, teardown, and build tasks.
 - Add formatting, linting, strict type-checking, and test tasks.
 - Add initial CI verification.
@@ -781,11 +797,13 @@ Acceptance criteria:
 
 ### Phase 4 — Telemetry
 
-Status: complete in issues #5 and #6. D1 stores immutable releases, UX events, traces, and spans from
-real application requests. Fixed query methods enforce time, row, and serialized-result bounds;
-comparisons use equivalent release-relative windows and minimum samples; trace detail handles
-missing parents and overlapping spans. The scoped local reseed supplies measured baseline and
-regression traffic and verifies the degraded release and sequential critical path.
+Status: historically delivered in issues #5 and #6, with integrity hardening planned in issues #40
+and #41. D1 stores immutable releases, UX events, traces, and spans from real application requests.
+Fixed query methods enforce time, row, and serialized-result bounds; comparisons use equivalent
+release-relative windows and minimum samples; trace detail handles missing parents and overlapping
+spans. The current timing field measures merged interval coverage, not a parent-aware path. v1.2
+rejects conflicting identifier reuse and cross-release attribution atomically and gives trace-path
+output a truthful parent-aware contract.
 
 - Add D1 migrations.
 - Record UX events, traces, spans, and releases.
@@ -799,12 +817,13 @@ Acceptance criteria:
 
 ### Phase 5 — Read-only agent
 
-Status: complete in issues #7 and #8. The bounded connector resolves release evidence to immutable
-commits and associated PR metadata. Project Think exposes only `query_telemetry`, `inspect_release`,
-and `read_repo_files`, enforces eight tool steps and deterministic result truncation, and produces a
-report that separates evidence, inference, confidence, and unknowns. The credential-free E2E runs a
-real five-step Think turn over measured local D1 evidence; Worker and browser checks prove durable
-reconnection without duplicate messages or tool effects.
+Status: historically delivered in issues #7 and #8, with evidence-provenance hardening planned in
+issues #38 and #39. The bounded connector resolves release evidence to immutable commits and
+associated PR metadata. Project Think currently exposes `query_telemetry`, `inspect_release`, and
+`read_repo_files`, enforces 16 tool steps and deterministic result truncation, and produces a report
+that separates evidence, inference, confidence, and unknowns. The credential-free E2E runs five
+evidence operations over measured local D1 evidence. Today, phase completion is reconstructed from
+broad tool history; v1.2 replaces that policy with the typed receipt described in section 13.
 
 - Add `query_telemetry`, `inspect_release`, and `read_repo_files`.
 - Configure prompt, step limits, and tool-event UI.
@@ -818,15 +837,19 @@ Acceptance criteria:
 
 ### Phase 6 — Draft PR
 
-Status: complete in issue #9. `create_draft_pr` is a native Project Think action with explicit
-high-risk approval, a narrow permission, and preview/write-scoped incident idempotency. The
+Status: historically delivered in issue #9, with receipt binding planned in issue #39.
+`create_draft_pr` is a native Project Think action with explicit high-risk approval, a narrow
+permission, and preview/write-scoped incident idempotency. The
 server-side service validates configured repository and path, matching regression/base SHA, current
 blob SHA, replacement byte and line bounds, changed-line count, draft-only output, evidence-rich body,
 and deterministic branch state. Fake mode always returns a validated preview without network access.
 The live GitHub REST adapter requires a token and remains write-disabled until the explicit flag is
 set. Existing PRs are reused, and uncertain branch or PR responses return deterministic recoverable
 state without creating another branch. Recovery accepts only a branch exactly one commit ahead of
-the evidenced base with exactly the approved file changed. No merge endpoint or tool exists.
+the evidenced base with exactly the approved file changed. No merge endpoint or tool exists. The
+existing validator trusts proposal-supplied evidence identifiers more than the investigation state;
+v1.2 makes eligibility and approval depend mechanically on the same completed incident receipt and
+prepared fingerprint.
 
 - Add guarded PR proposal creation.
 - Add Project Think approval interaction.
@@ -864,12 +887,13 @@ Acceptance criteria:
 
 ### Phase 8 — Deployment and evidence
 
-Status: complete in issue #11. The deployment task creates or reuses the named D1 database, applies
+Status: historically delivered in issue #11. The deployment task creates or reuses the named D1 database, applies
 remote migrations, measures 20 concurrent and 20 sequential interactions under distinct Cloudflare
 version IDs, and deploys the public GLM 4.7 Flash Project Think investigator. The final configuration
 injects the exact evidence IDs and bounded degraded trace window. A keyed smoke invokes the real
-Durable Object and Workers AI model, verifies the five evidence tools and structured report, validates
-a remediation preview, and proves GitHub writes remain disabled.
+Durable Object and Workers AI model, checks evidence events and a structured report, validates a
+remediation preview, and proves GitHub writes remain disabled. Issue #42 replaces the current
+name/count checks with exact validation of all five receipt phases and their cross-references.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -886,8 +910,8 @@ Acceptance criteria:
 
 ### Phase 9 — Release readiness
 
-Status: complete in issue #12. A clean macOS ARM64 worktree installed the repository-local toolchain
-through the documented sourced bootstrap, applied migrations, regenerated measured evidence, and
+Status: historically complete for v1 in issue #12. A clean macOS ARM64 worktree installed the repository-local toolchain
+through the documented shell-neutral bootstrap, applied migrations, regenerated measured evidence, and
 passed aggregate checks, build, and full local E2E. The public no-login routes and deployed keyed
 smoke were reverified. README, wiki, plan, milestone dependencies, instructions, skills, limitations,
 and evidence were reconciled.
@@ -909,10 +933,9 @@ waits for each UX telemetry write to be acknowledged, exposes progress, and stop
 first failed sample. Refresh and generation share one in-flight guard, while the latest successful
 sample keeps its interaction, trace, and release evidence visible.
 
-The v1.1 interface is deployed publicly from main commit `41dee5d`. Its measured Cloudflare evidence
-pair recorded p75 latency of 328 ms for baseline version `3cdd02af…` and 493 ms for degraded version
-`9f6f4949…`. Investigator version `eac2cc77…` passed the keyed five-tool Workers AI smoke with exact
+The v1.1 interface was deployed publicly and passed its historical keyed Workers AI smoke with
 runtime attribution, a structured report, a validated remediation preview, and GitHub writes off.
+Mutable version IDs and latency snapshots belong in the dated release record rather than this plan.
 
 The investigator is mounted alongside Deployboard as a bottom-corner support widget. A floating
 launcher carries numeric attention and availability badges; its accessible dialog can collapse and
@@ -940,23 +963,14 @@ Acceptance criteria:
 
 ### Phase 11 — Live investigator recovery and header simplification
 
-Status: implemented and merged in PRs #28 and #29 at commit `008969a`. Workers AI capacity recovered
-on 2026-07-13, but two consecutive public smokes finalized before `read_repo_files`. A test-first
-refinement now makes all five evidence operations explicit in both the system policy and the
-programmatic deployment request. The next real browser turn exposed a Workers receiver error before
-the GitHub request received a response; both bounded GitHub adapters now invoke their captured
-platform fetcher as a plain function. A later live smoke proved that prompt guidance alone still
-allowed a premature final response, so the Project Think step hook now forces the next missing
-evidence capability after an investigation begins, restores phase from persisted tool history,
-deduplicates the current step, and stops forcing after the second bounded failure. Deployed
-re-verification remains. The public browser transport now passes absent and empty GitHub
-credentials to the existing no-token path when writes are disabled, while the fail-closed write gate
-requires a non-empty scoped token. A persisted session that recorded the earlier failed stream can
-accept an explicit retry without enabling overlapping submitted or streaming turns.
+Status: implementation merged through PR #37. Empty credentials stay on the no-write path, failed
+persisted turns can retry, the redundant route pills are removed, Workers fetch receiver handling is
+covered, and a bounded step policy forces missing evidence operations with one retry. The durable
+remaining criterion in issue #27 is one credential-free public browser turn against the v1.2
+structured receipt; issue #42 is its native blocker.
 
-The deployed browser verifies the preserved failed message, enabled retry, removed header pills, and
-unchanged write-disabled posture. Close issue #27 and milestone 2 only after the refined deployed
-smoke and real browser turn complete all required evidence operations.
+Close issue #27 and milestone 2 only after the structured deployed smoke and real browser turn
+complete all required evidence phases with an unchanged write-disabled posture.
 
 The investigator is already mounted as a support widget on both product routes, so the separate
 Deployboard and Investigator route pills in the header are redundant. Remove those pills while
@@ -982,11 +996,12 @@ Acceptance criteria:
 
 ### Phase 12 — Explicit guarded draft-PR write enablement
 
-Status: implementation and fail-closed review refinements merged in PRs #31 and #32; issue #27 blocks
-the final real-model gate. The draft-PR action, approval UI, bounded GitHub adapter, and idempotent
-recovery were already implemented. The operator workflow keeps ordinary deployment write-disabled,
-accepts a fine-grained token only through pinned Wrangler's TTY secret prompt, and requires a separate
-explicit deployment command to enable writes.
+Status: optional operator extension in unmilestoned issue #30. Implementation and fail-closed
+refinements merged through PR #36. The draft-PR action, approval UI, bounded GitHub adapter, and
+idempotent recovery are implemented. The operator workflow keeps ordinary deployment write-disabled,
+accepts a fine-grained token only through pinned Wrangler's TTY secret prompt, and requires a
+separate explicit deployment command to enable writes. A real GitHub write is not a v1.2
+review-readiness requirement.
 
 Enabling production writes must not make the keyed deployment smoke write-capable. Smoke continues
 to construct a preview-scoped remediation service, while a real browser turn can reach the
@@ -1019,6 +1034,49 @@ Acceptance criteria:
 - Only a real approved browser action may create or reuse one bounded draft PR; no merge capability
   exists.
 
+### Phase 13 — Reviewer-ready evidence contract and simplification
+
+Status: planned in the
+[v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3), coordinated by
+[issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48). Completion means a
+credential-free measured investigation and validated write-disabled remediation preview. Live
+GitHub write proof remains the optional operator workflow in issue #30.
+
+Work packages:
+
+- Make incident identity explicit and keep metric ingestion separate from incident selection (#38).
+- Replace inferred tool-history completion with one typed evidence receipt and mechanically gate
+  remediation on it (#39).
+- Reject conflicting telemetry retries and cross-release attribution atomically (#40).
+- Implement truthful, parent-aware trace-path semantics (#41).
+- Make targeted tests, watch mode, aggregate checks, reconnection, and remote smoke prove the same
+  structured contract (#42).
+- Make the first-run UX direct, honest, accessible, and explicit about preview versus live writes
+  (#43).
+- Remove test-only runtime composition and normalize external configuration once (#44).
+- Complete clean-room release verification and project-system alignment (#45).
+
+Acceptance criteria:
+
+- A new investigation cannot reuse evidence from a previous incident or from user-authored prose.
+- Only validated, cross-referenced complete results advance a phase; insufficient, truncated, null,
+  empty, mismatched, and failed results remain visibly incomplete.
+- Remediation is unavailable until all five evidence phases complete for the same incident.
+- Approval displays and authorizes the actual bounded diff, rationale, counts, evidence references,
+  fingerprint, and current write posture.
+- Exact telemetry retries are no-ops; conflicting identifier reuse and cross-release attribution
+  fail atomically.
+- Trace-path output follows parentage and deterministic fork/join semantics.
+- Missing, empty, and whitespace-only credentials are normalized once at composition.
+- Targeted tests select only compatible suites, watch mode covers Worker behavior, and `mise run
+  check` aggregates every non-deployment CI gate.
+- Local and remote smoke validate one structured receipt with all five phases, required report
+  sections, and a zero-write preview.
+- The metric generator is visibly optional ingestion and is never presented as the incident source.
+- The production Worker contains no test model or test-fixture implementation.
+- README, wiki, release record, plan, issues, dependencies, instructions, and repository metadata
+  describe the same reviewer journey.
+
 ## 17. Scope gates
 
 Implement in this order:
@@ -1031,6 +1089,7 @@ Implement in this order:
 6. Public deployment
 7. Release-readiness reconciliation
 8. Post-v1 metric generation and support-widget polish
+9. Reviewer-ready evidence integrity, truthful UX, and exact verification
 
 Explicit non-goals:
 
@@ -1051,16 +1110,18 @@ Explicit non-goals:
 
 The intended five-minute demonstration is:
 
-1. Open Deployboard and generate a five-sample metrics batch.
-2. Watch acknowledged progress and inspect the latest interaction, trace, and release IDs.
-3. Use the floating launcher to open Regression Investigator.
-4. Submit **Investigate the current dashboard latency regression**.
-5. Watch the agent compare the seeded evidence releases and inspect traces.
-6. Review its Markdown-formatted evidence, inference, confidence, and unknowns, including the first
+1. Open the public application.
+2. Optionally generate five current-release samples to demonstrate measured telemetry ingestion.
+3. Open Regression Investigator and select **Investigate the seeded latency regression**.
+4. Watch the five incident-scoped evidence phases complete for the configured measured release pair.
+5. Review its Markdown-formatted evidence, inference, confidence, and unknowns, including the first
    bad commit and source PR.
-7. Inspect the proposed bounded-concurrency fix.
-8. Approve draft PR creation.
-9. Follow the returned GitHub link to the evidence-backed PR.
+6. Inspect the exact bounded-concurrency diff, evidence references, fingerprint, and changed-line
+   counts.
+7. Verify that the runtime is write-disabled and the result is a validated preview with zero
+   external writes.
+8. Explain that live draft-PR creation uses the same bounded proposal but is a separate optional
+   operator workflow.
 
 ## 19. Project-system alignment
 
@@ -1078,4 +1139,9 @@ After every meaningful change:
 
 Every delivery issue contains this alignment checklist and cannot close until it is satisfied. The repository-local `align-project-system` skill is the procedural source for the assessment.
 
-Execution is tracked in the [v1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/1) under the parent [delivery issue](https://github.com/alexlopashev/cloudflare-agents-demo/issues/1). Native GitHub blocked-by relations, not checklist ordering alone, define the actionable dependency graph.
+Historical delivery is recorded in the
+[v1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/1). Active hardening is
+tracked in the [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
+under [issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48). The optional live
+GitHub write remains in [issue #30](https://github.com/alexlopashev/cloudflare-agents-demo/issues/30).
+Native GitHub blocked-by relations, not checklist ordering alone, define the actionable graph.

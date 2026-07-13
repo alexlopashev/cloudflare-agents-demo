@@ -121,13 +121,17 @@ Do not assert exact natural-language output from a live model. Assert structured
 
 - Supported hosts are macOS and Linux on ARM64 and x64.
 - Supported shells are sh, Bash, Zsh, Fish, and Nu.
-- Bootstrap affects only the current active shell and repository-local files.
+- Bootstrap, activation, and teardown use one executable POSIX implementation each; do not add
+  shell-specific Fish or Nu lifecycle adapters.
+- Bootstrap affects only its process and repository-local files. Activation confines environment
+  changes to the launched project shell or command.
 - Shell profiles and system installation paths are never modified.
 - Declining consent performs no associated mutation.
 - TTY settings are restored on every exit path.
 - Bootstrap and teardown are idempotent.
 - Teardown removes only project-owned resources.
-- Bootstrap never starts Colima or changes the active Docker context.
+- Bootstrap never starts Colima, spawns a replacement login shell, or changes the active Docker
+  context.
 - The optional project profile mounts only the repository root explicitly and requires 4 GiB of
   memory for the Vite/`workerd` stack.
 - Container lifecycle code must fail closed on invalid ownership markers and retain recovery evidence
@@ -197,8 +201,8 @@ Formatting is automated and non-negotiable.
 - Use the repository's canonical formatter for JavaScript, TypeScript, JSON, and JSONC.
 - Lint Markdown structure and links where practical.
 - Check POSIX shell with ShellCheck and format it with `shfmt`.
-- Validate and format Fish scripts with Fish tooling.
-- Parse and check Nu scripts with Nu.
+- Verify that Fish and Nu can launch the shared POSIX lifecycle entrypoints without shell-specific
+  syntax or adapters.
 - Treat every lint warning as an error.
 - Do not add blanket ignores or disable rules at file or project scope.
 - A narrow suppression must explain why it is safe and why the preferred construct cannot be used.

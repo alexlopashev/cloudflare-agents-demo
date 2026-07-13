@@ -1,18 +1,24 @@
 # Regression Surgeon
 
-Regression Surgeon is a Cloudflare-native agent that investigates measured UX latency regressions, traces them through a supervised full-stack application, correlates the first bad release with its GitHub commit and pull request, and proposes a minimal evidence-backed fix as a guarded draft PR.
+Regression Surgeon is a Cloudflare-native agent that investigates a measured UX latency regression,
+traces it through a supervised full-stack application, correlates the degraded release with immutable
+GitHub evidence, and prepares a minimal evidence-backed remediation preview. A real draft PR is an
+optional, approval-gated operator extension.
 
-The project is a take-home exercise for building and deploying a genuine multi-step AI agent on Cloudflare Workers. The agent and the application it supervises live in this monorepo.
+The project is a take-home exercise for building and deploying a genuine multi-step AI agent on
+Cloudflare Workers. The agent and the application it supervises live in this repository.
 
 ## Intended demonstration
 
-1. Open Deployboard and generate a bounded batch of measured interactions.
-2. Watch acknowledged progress and inspect the latest trace and release evidence.
-3. Open Regression Investigator from its floating support launcher.
-4. Ask it to investigate the seeded latency regression.
-5. Watch Project Think compare releases, inspect traces, and read repository evidence.
-6. Review its structured Markdown report, identified commit, and source PR.
-7. Approve a bounded draft-PR proposal.
+1. Open Regression Investigator from Deployboard's floating launcher.
+2. Start the configured seeded-latency investigation.
+3. Watch five bounded evidence phases connect releases, traces, immutable Git history, and source.
+4. Review the structured evidence, inference, confidence, and unknowns.
+5. Inspect the exact one-file remediation diff and its evidence references.
+6. Verify that the public runtime is write-disabled and the result is a validated preview.
+
+Deployboard's fixed-size metric generator is an optional demonstration of telemetry ingestion. It
+does not select or modify the seeded incident investigated by the agent.
 
 ## Architecture
 
@@ -33,7 +39,9 @@ The initial product supports one controlled repository, one supervised applicati
 - Linux ARM64 and x64
 - sh, Bash, Zsh, Fish, and Nu
 
-Bootstrap is repository-local and affects only the active shell. It never edits a shell profile, installs tools into a system path, or inherits tools from a user's global mise configuration.
+Bootstrap is repository-local and shell-neutral. It never edits a shell profile, installs tools into
+a system path, or inherits tools from a user's global mise configuration. Activation opens a
+project-scoped child shell, so leaving that shell removes its environment changes.
 Repository automation uses `scripts/*.ts`, executed directly through Node 24.18's stable type
 stripping with `erasableSyntaxOnly`; `tsc --noEmit` remains the separate strict type-checking gate.
 
@@ -41,8 +49,10 @@ The reproducible foundation, Cloudflare application skeleton, supervised Deployb
 repository connector, measured telemetry pipeline, and evidence-driven investigation are
 implemented, including guarded remediation preview and write boundaries.
 
-Deployboard can generate fixed batches of 5, 10, or 20 real current-release interactions. Samples
-run sequentially and count only after UX telemetry is stored; refresh and generation cannot overlap.
+Deployboard can generate fixed batches of 5, 10, or 20 real current-release interactions as an
+optional ingestion demonstration. Samples run sequentially and count only after UX telemetry is
+stored; refresh and generation cannot overlap. They do not replace or select the configured
+baseline/degraded evidence pair.
 The investigator remains mounted as a collapsible support-style dialog with a floating launcher,
 attention and availability badges, safe GitHub-flavored Markdown, and literal user requests. The
 desktop panel is bounded, while the mobile panel fills the viewport with a full-width 44px send
@@ -52,21 +62,14 @@ action. `/investigator` opens the same Deployboard experience with the widget ex
 
 From the repository root:
 
-```sh
-# sh
-. ./scripts/bootstrap
-
-# Bash or Zsh
-source ./scripts/bootstrap
+```text
+./scripts/bootstrap
+./scripts/activate
 ```
 
-```fish
-source ./scripts/bootstrap.fish
-```
-
-```nu
-source ./scripts/bootstrap.nu
-```
+The same POSIX entrypoints work from sh, Bash, Zsh, Fish, and Nu. `activate` opens the shell named by
+`SHELL` with the repository-local mise binary and shims available. To run one command without
+opening a child shell, pass it directly, for example `./scripts/activate mise run check`.
 
 Each filesystem-changing bootstrap stage uses a single-keystroke `Y/n` confirmation. The approved
 path installs the locked dependencies, applies repository-local D1 migrations, loads the measured
@@ -110,7 +113,7 @@ only those two releases. `mise run dev:live` builds the app and starts the same 
 explicit Workers AI configuration; Cloudflare authentication and remote usage apply. `mise run e2e`
 verifies both public routes, runtime metadata, the auxiliary service binding, trace persistence,
 correlated browser telemetry, statistically distinguishable scenario evidence, and a credential-free
-five-step Project Think investigation that cites the measured trace, immutable commit, and source PR.
+five-operation Project Think investigation that cites the measured trace, immutable commit, and source PR.
 It also validates an evidence-rich draft-PR preview against base/blob freshness, path, byte, line, and
 changed-line limits while proving that local mode performs no GitHub writes.
 
@@ -123,7 +126,7 @@ creates only the named D1 database, builds both Workers and the web app, applies
 deploys a concurrent baseline and measures 20 interactions, deploys the sequential regression and
 measures 20 interactions, then deploys the public GLM 4.7 Flash investigator with those exact
 Cloudflare version IDs and trace timestamps. It finishes with a keyed smoke that verifies the two
-public routes, runtime metadata, the five-step Workers AI evidence chain, a validated remediation
+public routes, runtime metadata, the five-operation Workers AI evidence chain, a validated remediation
 preview, and the expected GitHub write posture.
 
 `mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
@@ -139,6 +142,8 @@ serves the committed, SHA-gated fixture for commit/PR/source evidence. A supplie
 the live read connector; external writes additionally require `GITHUB_WRITE_ENABLED=true`, explicit
 Project Think approval, and all repository/path/SHA/blob/size gates. The published demo deliberately
 keeps that flag false, so approval yields a preview and cannot create or merge a pull request.
+
+#### Optional live draft PR
 
 To demonstrate a real draft PR, create a short-lived fine-grained GitHub token restricted to this
 repository with **Contents: read and write** and **Pull requests: read and write**; leave Actions,
@@ -191,70 +196,36 @@ Read [AGENTS.md](AGENTS.md) before changing code. It defines the required TDD wo
 ## Project documentation
 
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
-- [v1 release-readiness evidence](RELEASE_READINESS.md)
+- [Historical v1/v1.1 release evidence](RELEASE_READINESS.md)
 - [GitHub wiki](https://github.com/alexlopashev/cloudflare-agents-demo/wiki)
 - [v1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/1)
 - [v1.1 interactive-demo milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/2)
+- [Active v1.2 review-readiness milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
+- [Next-session handoff and delivery tracker](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48)
 - [Interactive demo UX issue](https://github.com/alexlopashev/cloudflare-agents-demo/issues/25)
 - [Delivery tracking issue](https://github.com/alexlopashev/cloudflare-agents-demo/issues/1)
-- [Open delivery issues](https://github.com/alexlopashev/cloudflare-agents-demo/issues?q=is%3Aissue%20state%3Aopen%20milestone%3A%22v1%20%E2%80%94%20Regression%20Surgeon%22)
+- [Open v1.2 delivery issues](https://github.com/alexlopashev/cloudflare-agents-demo/issues?q=is%3Aissue%20state%3Aopen%20milestone%3A%22v1.2%20%E2%80%94%20Review-ready%20evidence%20core%22)
 - [Project alignment skill](.agents/skills/align-project-system/SKILL.md)
 
 After every meaningful change, contributors must reassess and align the implementation plan, GitHub milestone and dependency graph, wiki and README, `AGENTS.md`, and repository-local skills.
 
 ## Current status
 
-The v1.1 interactive-demo UX from PR #26 is live on Cloudflare from main commit `41dee5d`. Deployboard
-now exposes bounded measured-traffic generation, and the mounted investigator uses the responsive
-support-style widget with safe Markdown reports.
+The existing vertical slice works locally and on Cloudflare: measured baseline/degraded evidence,
+bounded repository inspection, a multi-step Project Think investigation, durable conversation state,
+and a guarded zero-write remediation preview. GitHub writes remain disabled by default.
 
-Issue #27 is implemented through PRs #28 and #29 at commit `008969a`. Empty GitHub credentials stay
-on the deterministic no-write preview path, while write-enabled mode still requires a non-empty
-scoped token. A failed persisted turn can now accept an explicit retry without permitting overlap,
-and the redundant Deployboard and Investigator header pills are removed. `/app` and `/investigator`
-retain their collapsed and expanded direct-link behavior.
+The active [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
+hardens that slice rather than expanding it. Work now makes evidence incident-scoped, binds
+remediation mechanically to the same receipt, repairs telemetry semantics, strengthens smoke and
+developer commands, removes test scaffolding from live composition, and makes the first reviewer
+interaction truthful. Until [issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48)
+closes, treat the public deployment as a working implementation under review hardening.
 
-Workers AI capacity recovered on 2026-07-13. Two consecutive live smokes then exposed a narrower
-failure: the model finalized after release inspection without calling `read_repo_files`. A test-first
-refinement now explicitly requires all five evidence operations before the final report; deployed
-smoke passed. The first real browser turn then exposed a Workers-specific fetch receiver error before
-GitHub returned a response. Receiver-sensitive regressions now cover both GitHub adapters, and the
-captured platform fetcher is invoked as a plain function. The next write-enable smoke reached the
-exact Worker version but received the endpoint's unauthenticated 404 while its rotated key was still
-propagating, so fail-closed rollback restored write-disabled version `1ffbd553…` before any model
-turn or GitHub write. Bounded retries now cover only that pre-execution 404. The following live smoke
-reached Project Think but again finalized before reading source, proving prompt guidance alone was
-insufficient. The agent now forces each next missing evidence capability after an investigation
-begins, reconstructs the phase from persisted tool history, and permits only one bounded retry per
-failed operation. Deployed browser re-verification remains; the latest rollback left writes disabled
-as version `7a7a2135…` and created no GitHub state.
-
-PRs #31 and #32 implement the explicit draft-PR write workflow and fail-closed rollback for issue #30,
-which is natively blocked by issue #27 for its real Workers AI approval run. A scoped token is
-provisioned as a Cloudflare secret, but the failed live gate performed no GitHub write and restored
-the current public runtime to writes disabled.
-
-Phases 1 through 8 are implemented and verified locally and on Cloudflare. The real known-good release at `cf25e52`
-loads three service checks concurrently; the current scenario release intentionally serializes them
-to reduce simultaneous downstream pressure. A deterministic reseed measured local p75 latency near
-127 ms versus 380 ms and stored sequential service spans on the degraded critical path. Reset and
-reseed are idempotent and preserve unrelated telemetry. Project Think now performs five bounded
-evidence steps, reports measured latency and trace evidence, resolves commit `d591869…` and PR #19,
-and survives browser reconnection without duplicating messages or tool effects. The guarded
-`create_draft_pr` action now requires explicit Project Think approval, is disabled for external writes
-by default, produces a credential-free local preview, and exposes no merge capability. Its live REST
-adapter restricts repository, path, SHA/blob freshness, request/response size, changed lines, draft
-state, and incident idempotency; deterministic branch names make partial writes recoverable.
-Native bootstrap now reaches the complete local E2E, and the optional Colima lane reproduces the same
-dev task through one isolated Linux service with ownership-safe recovery and teardown. The public
-deployment measured p75 latency of 328 ms for Cloudflare version `3cdd02af…` and 493 ms for version
-`9f6f4949…`; investigator version `eac2cc77…` passed the deployed Workers AI smoke with five
-evidence-tool events, exact version-to-SHA attribution, a structured report, and a no-write
-remediation preview.
-The v1 clean-room bootstrap, local E2E, production build, four-platform CI, and public reviewer smoke
-are recorded in [the release-readiness evidence](RELEASE_READINESS.md). Known limitations and deferred
-work are explicit there. The milestone and native blocked-by issue graph remain the executable
-delivery record.
+Mutable deployment snapshots and incident history live in issue comments and the dated
+[release record](RELEASE_READINESS.md). A real GitHub draft PR remains the optional operator proof in
+[issue #30](https://github.com/alexlopashev/cloudflare-agents-demo/issues/30), not a prerequisite for
+the credential-free reviewer journey.
 
 ## License
 

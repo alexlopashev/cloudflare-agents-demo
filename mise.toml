@@ -129,4 +129,4 @@ run = "node scripts/container.ts down"
 
 [tasks.teardown]
 description = "Remove project-owned local runtime state"
-run = "sh scripts/teardown"
+run = "./scripts/teardown"
