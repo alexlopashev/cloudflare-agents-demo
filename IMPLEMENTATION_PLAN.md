@@ -940,18 +940,17 @@ Acceptance criteria:
 
 ### Phase 11 — Live investigator recovery and header simplification
 
-Status: implemented and merged in PRs #28 and #29 at commit `008969a`. The public stack was most
-recently refreshed from main commit `1748e38`; issue #27 stays open on the final live-model gate. The
-public browser transport now passes absent and empty GitHub
+Status: implemented and merged in PRs #28 and #29 at commit `008969a`. Workers AI capacity recovered
+on 2026-07-13, but two consecutive public smokes finalized before `read_repo_files`. A test-first
+refinement now makes all five evidence operations explicit in both the system policy and the
+programmatic deployment request; deployed re-verification remains. The public browser transport now passes absent and empty GitHub
 credentials to the existing no-token path when writes are disabled, while the fail-closed write gate
 requires a non-empty scoped token. A persisted session that recorded the earlier failed stream can
 accept an explicit retry without enabling overlapping submitted or streaming turns.
 
 The deployed browser verifies the preserved failed message, enabled retry, removed header pills, and
-unchanged write-disabled posture. The keyed Workers AI smoke cannot currently finish because the
-account exhausted its daily free allocation of 10,000 neurons; Cloudflare returns error 4006 before
-the model can produce trace evidence. Retry the deployed gate after the allocation resets or the
-account is upgraded, then close issue #27 and milestone 2 only if the real browser turn also passes.
+unchanged write-disabled posture. Close issue #27 and milestone 2 only after the refined deployed
+smoke and real browser turn complete all required evidence operations.
 
 The investigator is already mounted as a support widget on both product routes, so the separate
 Deployboard and Investigator route pills in the header are redundant. Remove those pills while
@@ -964,7 +963,10 @@ Acceptance criteria:
   are disabled.
 - Write-enabled mode rejects missing, empty, and whitespace-only tokens.
 - A failed turn permits a new explicit submission while submitted and streaming turns remain locked.
-- A real public browser message completes the evidence-tool chain and produces an assistant response.
+- System and programmatic investigation prompts explicitly require release comparison, slow-trace
+  search, representative-trace inspection, degraded-release inspection, and allowlisted source
+  reading before a final report.
+- A real public browser message completes that evidence-tool chain and produces an assistant response.
 - The top-right route pills are absent without changing either public route contract.
 - Full local gates, deployed smoke, responsive browser verification, and project-system alignment pass.
 
@@ -996,6 +998,8 @@ Acceptance criteria:
   attribution.
 - Any enable-path failure after deployment begins automatically redeploys and independently verifies
   the write-disabled posture; a rollback failure preserves both errors.
+- Runtime attribution allows at least 60 seconds of bounded edge propagation before declaring a
+  write-disabled rollback unverifiable.
 - Keyed smoke remains a zero-write preview in both postures.
 - Advanced repository state is accepted only when the allowlisted evidenced blob is unchanged at the
   current base.

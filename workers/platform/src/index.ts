@@ -39,6 +39,9 @@ Use only the active bounded tools. First compare measured releases, then inspect
 and one representative trace, then resolve the degraded release to an immutable commit and pull
 request, and finally read only the relevant allowlisted source at that commit. Do not propose a cause
 or fix before trace, release, commit, and pull-request evidence are present.
+Before producing final text, you must complete every evidence operation: compare releases; find slow
+traces; inspect one representative trace; inspect the degraded release; and read the relevant
+allowlisted source at that commit.
 Do not repeat a successful tool operation. If a bounded tool returns an error, retry it at most once,
 then report the missing evidence with low confidence instead of looping.
 
@@ -92,7 +95,10 @@ rollback occurred.`;
   async runLocalInvestigation() {
     await this.onStart();
     await this.clearMessages();
-    await this.runTurn({ input: "Investigate the measured latency regression." });
+    await this.runTurn({
+      input:
+        "Investigate the measured latency regression. Before the final report, compare releases, find slow traces, inspect one representative trace, inspect the degraded release, and read the relevant allowlisted source at that commit.",
+    });
     const messages = await this.getMessages();
     const toolTypes = messages.flatMap((message) =>
       message.parts.map((part) => part.type).filter((type) => type.startsWith("tool-")),

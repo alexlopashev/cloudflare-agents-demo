@@ -3,6 +3,11 @@ import { z } from "zod";
 const shaSchema = z.string().regex(/^[0-9a-f]{40}$/);
 const uuidSchema = z.string().uuid();
 
+export const runtimeAttributionRetryPolicy = Object.freeze({
+  maxAttempts: 80,
+  delayMs: 750,
+});
+
 export type DeploymentStage =
   | { kind: "baseline"; gitSha: string }
   | { kind: "regression"; gitSha: string }

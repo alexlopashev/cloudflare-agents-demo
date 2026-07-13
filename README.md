@@ -211,15 +211,17 @@ scoped token. A failed persisted turn can now accept an explicit retry without p
 and the redundant Deployboard and Investigator header pills are removed. `/app` and `/investigator`
 retain their collapsed and expanded direct-link behavior.
 
-The latest runtime and UI were refreshed from main commit `1748e38` as investigator version
-`961b78e2…`, but the final live-agent gate is blocked: Cloudflare Workers AI returns error 4006 because
-the account has exhausted its daily free allocation of 10,000 neurons. The keyed smoke and a new
-browser response cannot pass until that allocation resets or the Workers account is upgraded; local
-deterministic gates remain green and public GitHub writes remain disabled.
+Workers AI capacity recovered on 2026-07-13. Two consecutive live smokes then exposed a narrower
+failure: the model finalized after release inspection without calling `read_repo_files`. A test-first
+refinement now explicitly requires all five evidence operations before the final report; deployed
+re-verification remains. The write-enabled attempt safely rolled back to investigator version
+`8be5f30e…` from main commit `195ff04`; repeated public runtime reads confirm GitHub writes disabled
+with the measured evidence IDs preserved.
 
 PRs #31 and #32 implement the explicit draft-PR write workflow and fail-closed rollback for issue #30,
-which is natively blocked by issue #27 for its real Workers AI approval run. Token provisioning and
-production enablement have not been performed; the current public runtime remains write-disabled.
+which is natively blocked by issue #27 for its real Workers AI approval run. A scoped token is
+provisioned as a Cloudflare secret, but the failed live gate performed no GitHub write and restored
+the current public runtime to writes disabled.
 
 Phases 1 through 8 are implemented and verified locally and on Cloudflare. The real known-good release at `cf25e52`
 loads three service checks concurrently; the current scenario release intentionally serializes them
