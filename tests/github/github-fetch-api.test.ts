@@ -8,6 +8,20 @@ import {
 const commitSha = "1111111111111111111111111111111111111111";
 
 describe("GitHubFetchApi", () => {
+  it("invokes a Workers-compatible fetcher without changing its receiver", async () => {
+    async function receiverSensitiveFetcher(this: unknown, _request: Request) {
+      if (this !== undefined) throw new TypeError("Illegal invocation");
+      return Response.json({ ok: true });
+    }
+    const api = new GitHubFetchApi({
+      fetcher: receiverSensitiveFetcher,
+      repository: { owner: "example", repo: "supervised" },
+      maxResponseBytes: 1_024,
+    });
+
+    await expect(api.getCommit(commitSha, 1)).resolves.toEqual({ ok: true });
+  });
+
   it("addresses only the configured repository and pins file reads to a commit", async () => {
     const fetcher = vi.fn(async (request: Request) => {
       void request;

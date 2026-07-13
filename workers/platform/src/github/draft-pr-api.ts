@@ -74,7 +74,8 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
     this.repository = repository.data;
     this.#owner = repository.data.owner;
     this.#repo = repository.data.repo;
-    this.#fetcher = options.fetcher ?? fetch;
+    const fetcher = options.fetcher ?? fetch;
+    this.#fetcher = (request) => fetcher(request);
     this.#maxResponseBytes = options.maxResponseBytes;
     this.#allowedPaths = new Set(options.allowedPaths);
     this.#token = options.token;

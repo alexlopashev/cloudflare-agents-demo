@@ -45,7 +45,8 @@ export class GitHubFetchApi implements GitHubRepositoryApi {
     ) {
       throw new RepositoryConnectorError("invalid-input", "GitHub token is invalid.");
     }
-    this.#fetcher = options.fetcher ?? fetch;
+    const fetcher = options.fetcher ?? fetch;
+    this.#fetcher = (request) => fetcher(request);
     this.#owner = repository.data.owner;
     this.#repo = repository.data.repo;
     this.#maxResponseBytes = options.maxResponseBytes;

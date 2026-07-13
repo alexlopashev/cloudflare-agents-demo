@@ -214,9 +214,11 @@ retain their collapsed and expanded direct-link behavior.
 Workers AI capacity recovered on 2026-07-13. Two consecutive live smokes then exposed a narrower
 failure: the model finalized after release inspection without calling `read_repo_files`. A test-first
 refinement now explicitly requires all five evidence operations before the final report; deployed
-re-verification remains. The write-enabled attempt safely rolled back to investigator version
-`8be5f30e…` from main commit `195ff04`; repeated public runtime reads confirm GitHub writes disabled
-with the measured evidence IDs preserved.
+smoke passed. The first real browser turn then exposed a Workers-specific fetch receiver error before
+GitHub returned a response. Receiver-sensitive regressions now cover both GitHub adapters, and the
+captured platform fetcher is invoked as a plain function; deployed browser re-verification remains.
+The failed turn created no GitHub state and the public runtime was restored to write-disabled version
+`8b49567d…` with the measured evidence IDs preserved.
 
 PRs #31 and #32 implement the explicit draft-PR write workflow and fail-closed rollback for issue #30,
 which is natively blocked by issue #27 for its real Workers AI approval run. A scoped token is

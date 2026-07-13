@@ -943,7 +943,9 @@ Acceptance criteria:
 Status: implemented and merged in PRs #28 and #29 at commit `008969a`. Workers AI capacity recovered
 on 2026-07-13, but two consecutive public smokes finalized before `read_repo_files`. A test-first
 refinement now makes all five evidence operations explicit in both the system policy and the
-programmatic deployment request; deployed re-verification remains. The public browser transport now passes absent and empty GitHub
+programmatic deployment request. The next real browser turn exposed a Workers receiver error before
+the GitHub request received a response; both bounded GitHub adapters now invoke their captured
+platform fetcher as a plain function, with deployed re-verification remaining. The public browser transport now passes absent and empty GitHub
 credentials to the existing no-token path when writes are disabled, while the fail-closed write gate
 requires a non-empty scoped token. A persisted session that recorded the earlier failed stream can
 accept an explicit retry without enabling overlapping submitted or streaming turns.
@@ -966,6 +968,7 @@ Acceptance criteria:
 - System and programmatic investigation prompts explicitly require release comparison, slow-trace
   search, representative-trace inspection, degraded-release inspection, and allowlisted source
   reading before a final report.
+- Both live GitHub adapters invoke the Workers fetch function without changing its receiver.
 - A real public browser message completes that evidence-tool chain and produces an assistant response.
 - The top-right route pills are absent without changing either public route contract.
 - Full local gates, deployed smoke, responsive browser verification, and project-system alignment pass.
