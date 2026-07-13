@@ -52,9 +52,11 @@ function createDeterministicApi(repository: { owner: string; repo: string }): Dr
 }
 
 export function createAgentRemediationService(options: RemediationServiceOptions) {
+  const token =
+    options.token === undefined || options.token.trim().length === 0 ? undefined : options.token;
   if (
     options.mode === "fake" ||
-    (options.mode === "workers-ai" && options.token === undefined && !options.writeEnabled)
+    (options.mode === "workers-ai" && token === undefined && !options.writeEnabled)
   ) {
     return createRemediationService({
       api: createDeterministicApi(options.repository),
@@ -68,15 +70,15 @@ export function createAgentRemediationService(options: RemediationServiceOptions
   if (options.mode !== "workers-ai") {
     throw new TypeError(`Unsupported remediation mode: ${options.mode}`);
   }
-  if (options.writeEnabled && options.token === undefined) {
-    throw new TypeError("GitHub writes require an explicit scoped token.");
+  if (options.writeEnabled && token === undefined) {
+    throw new TypeError("GitHub writes require an explicit non-empty scoped token.");
   }
   const api = new GitHubDraftPrApi({
     repository: options.repository,
     allowedPaths,
     maxResponseBytes: 64 * 1_024,
     ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
-    ...(options.token === undefined ? {} : { token: options.token }),
+    ...(token === undefined ? {} : { token }),
   });
   return createRemediationService({
     api,

@@ -184,6 +184,12 @@ The v1.1 interactive-demo UX from PR #26 is live on Cloudflare from main commit 
 now exposes bounded measured-traffic generation, and the mounted investigator uses the responsive
 support-style widget with safe Markdown reports.
 
+Issue #27 fixes a live browser-turn failure caused by Cloudflare presenting the absent optional
+GitHub credential as an empty string. Empty credentials now stay on the deterministic no-write
+preview path, while write-enabled mode still requires a non-empty scoped token. The redundant
+Deployboard and Investigator header pills are removed; `/app` and `/investigator` retain their
+collapsed and expanded direct-link behavior. Public deployment of this follow-up remains pending.
+
 Phases 1 through 8 are implemented and verified locally and on Cloudflare. The real known-good release at `cf25e52`
 loads three service checks concurrently; the current scenario release intentionally serializes them
 to reduce simultaneous downstream pressure. A deterministic reseed measured local p75 latency near

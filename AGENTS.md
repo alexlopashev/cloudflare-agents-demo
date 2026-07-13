@@ -78,6 +78,8 @@ Do not assert exact natural-language output from a live model. Assert structured
 ### GitHub writes
 
 - Writes are disabled by default.
+- Missing, empty, and whitespace-only GitHub credentials are treated as absent and cannot select a
+  live adapter or satisfy the write gate.
 - Explicit approval is required before every external write.
 - Only the configured repository and allowlisted source paths can change.
 - Base and blob SHAs prevent stale writes.
