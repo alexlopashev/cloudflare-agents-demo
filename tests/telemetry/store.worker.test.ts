@@ -40,6 +40,36 @@ const schema = `
     UNIQUE (interaction_id, metric_name), FOREIGN KEY (trace_id) REFERENCES traces(trace_id),
     FOREIGN KEY (release_id) REFERENCES releases(release_id)
   );
+  CREATE TRIGGER reject_conflicting_release BEFORE UPDATE ON releases
+  WHEN OLD.git_sha IS NOT NEW.git_sha OR OLD.deployed_at_ms IS NOT NEW.deployed_at_ms
+  BEGIN SELECT RAISE(ABORT, 'Release attribution is immutable.'); END;
+  CREATE TRIGGER reject_conflicting_trace BEFORE UPDATE ON traces
+  WHEN OLD.interaction_id IS NOT NEW.interaction_id OR OLD.release_id IS NOT NEW.release_id
+    OR OLD.started_at_ms IS NOT NEW.started_at_ms OR OLD.duration_ms IS NOT NEW.duration_ms
+    OR OLD.outcome IS NOT NEW.outcome
+  BEGIN SELECT RAISE(ABORT, 'Trace identifier conflicts with persisted telemetry.'); END;
+  CREATE TRIGGER reject_conflicting_span BEFORE UPDATE ON spans
+  WHEN OLD.parent_span_id IS NOT NEW.parent_span_id OR OLD.service_id IS NOT NEW.service_id
+    OR OLD.started_at_ms IS NOT NEW.started_at_ms OR OLD.duration_ms IS NOT NEW.duration_ms
+    OR OLD.status IS NOT NEW.status
+  BEGIN SELECT RAISE(ABORT, 'Span identifier conflicts with persisted telemetry.'); END;
+  CREATE TRIGGER validate_ux_event_trace_insert BEFORE INSERT ON ux_events
+  WHEN NOT EXISTS (
+    SELECT 1 FROM traces WHERE trace_id = NEW.trace_id
+      AND interaction_id = NEW.interaction_id AND release_id = NEW.release_id
+  )
+  BEGIN SELECT RAISE(ABORT, 'UX event attribution does not match its trace.'); END;
+  CREATE TRIGGER validate_ux_event_trace_update BEFORE UPDATE ON ux_events
+  WHEN NOT EXISTS (
+    SELECT 1 FROM traces WHERE trace_id = NEW.trace_id
+      AND interaction_id = NEW.interaction_id AND release_id = NEW.release_id
+  )
+  BEGIN SELECT RAISE(ABORT, 'UX event attribution does not match its trace.'); END;
+  CREATE TRIGGER reject_conflicting_ux_event BEFORE UPDATE ON ux_events
+  WHEN OLD.trace_id IS NOT NEW.trace_id OR OLD.release_id IS NOT NEW.release_id
+    OR OLD.duration_ms IS NOT NEW.duration_ms OR OLD.outcome IS NOT NEW.outcome
+    OR OLD.recorded_at_ms IS NOT NEW.recorded_at_ms
+  BEGIN SELECT RAISE(ABORT, 'Interaction identifier conflicts with persisted telemetry.'); END;
 `;
 
 const gitSha = "0123456789abcdef0123456789abcdef01234567";
@@ -84,9 +114,9 @@ describe("D1 telemetry store", () => {
     const store = createTelemetryStore(env.TELEMETRY_DB);
     const input = traceInput("release-a", 1_000, 1, 80);
 
-    await store.recordTrace(input);
-    await store.recordTrace(input);
-    await store.recordUxEvent({
+    await expect(store.recordTrace(input)).resolves.toBeUndefined();
+    await expect(store.recordTrace(input)).resolves.toBeUndefined();
+    const event = {
       interactionId: input.trace.interactionId,
       traceId: input.trace.traceId,
       releaseId: input.trace.releaseId,
@@ -94,16 +124,9 @@ describe("D1 telemetry store", () => {
       durationMs: 125,
       outcome: "success",
       recordedAtMs: 1_100,
-    });
-    await store.recordUxEvent({
-      interactionId: input.trace.interactionId,
-      traceId: input.trace.traceId,
-      releaseId: input.trace.releaseId,
-      metricName: "service_grid_ready_ms",
-      durationMs: 125,
-      outcome: "success",
-      recordedAtMs: 1_100,
-    });
+    } as const;
+    await expect(store.recordUxEvent(event)).resolves.toBeUndefined();
+    await expect(store.recordUxEvent(event)).resolves.toBeUndefined();
 
     const counts = await env.TELEMETRY_DB.prepare(
       `SELECT
@@ -120,6 +143,104 @@ describe("D1 telemetry store", () => {
         release: { ...input.release, gitSha: "ffffffffffffffffffffffffffffffffffffffff" },
       }),
     ).rejects.toThrow("Release attribution is immutable");
+  });
+
+  it("rejects a conflicting trace retry without appending its spans", async () => {
+    const store = createTelemetryStore(env.TELEMETRY_DB);
+    const input = traceInput("release-a", 1_000, 1, 80);
+    const root = input.spans[0];
+    if (root === undefined) throw new Error("fixture root span is missing");
+    await store.recordTrace(input);
+
+    await expect(
+      store.recordTrace({
+        ...input,
+        trace: { ...input.trace, durationMs: 81 },
+        spans: [{ ...root, spanId: "conflict-child", parentSpanId: "root" }],
+      }),
+    ).rejects.toThrow("Trace identifier conflicts with persisted telemetry");
+
+    const counts = await env.TELEMETRY_DB.prepare(
+      "SELECT (SELECT COUNT(*) FROM traces) AS traces, (SELECT COUNT(*) FROM spans) AS spans",
+    ).first<{ traces: number; spans: number }>();
+    expect(counts).toEqual({ traces: 1, spans: 1 });
+  });
+
+  it("rejects a conflicting span retry without appending sibling spans", async () => {
+    const store = createTelemetryStore(env.TELEMETRY_DB);
+    const input = traceInput("release-a", 1_000, 1, 80);
+    const root = input.spans[0];
+    if (root === undefined) throw new Error("fixture root span is missing");
+    await store.recordTrace(input);
+
+    await expect(
+      store.recordTrace({
+        ...input,
+        spans: [
+          { ...root, serviceId: "conflicting-service" },
+          { ...root, spanId: "new-sibling" },
+        ],
+      }),
+    ).rejects.toThrow("Span identifier conflicts with persisted telemetry");
+
+    const spans = await env.TELEMETRY_DB.prepare(
+      "SELECT span_id, service_id FROM spans ORDER BY span_id",
+    ).all<{ span_id: string; service_id: string }>();
+    expect(spans.results).toEqual([{ span_id: "root", service_id: "health-refresh" }]);
+  });
+
+  it("rejects conflicting UX retries without replacing the persisted event", async () => {
+    const store = createTelemetryStore(env.TELEMETRY_DB);
+    const input = traceInput("release-a", 1_000, 1, 80);
+    await store.recordTrace(input);
+    const event = {
+      interactionId: input.trace.interactionId,
+      traceId: input.trace.traceId,
+      releaseId: input.trace.releaseId,
+      metricName: "service_grid_ready_ms",
+      durationMs: 125,
+      outcome: "success",
+      recordedAtMs: 1_100,
+    } as const;
+    await store.recordUxEvent(event);
+
+    await expect(store.recordUxEvent({ ...event, durationMs: 126 })).rejects.toThrow(
+      "Interaction identifier conflicts with persisted telemetry",
+    );
+
+    const rows = await env.TELEMETRY_DB.prepare(
+      "SELECT duration_ms, recorded_at_ms FROM ux_events",
+    ).all<{ duration_ms: number; recorded_at_ms: number }>();
+    expect(rows.results).toEqual([{ duration_ms: 125, recorded_at_ms: 1_100 }]);
+  });
+
+  it("fails UX release and interaction attribution closed against the referenced trace", async () => {
+    const store = createTelemetryStore(env.TELEMETRY_DB);
+    const first = traceInput("release-a", 1_000, 1, 80);
+    const second = traceInput("release-b", 2_000, 1, 90);
+    await store.recordTrace(first);
+    await store.recordTrace(second);
+    const event = {
+      interactionId: first.trace.interactionId,
+      traceId: first.trace.traceId,
+      releaseId: first.trace.releaseId,
+      metricName: "service_grid_ready_ms",
+      durationMs: 125,
+      outcome: "success",
+      recordedAtMs: 1_100,
+    } as const;
+
+    await expect(
+      store.recordUxEvent({ ...event, releaseId: second.trace.releaseId }),
+    ).rejects.toThrow("UX event attribution does not match its trace");
+    await expect(
+      store.recordUxEvent({ ...event, interactionId: second.trace.interactionId }),
+    ).rejects.toThrow("UX event attribution does not match its trace");
+
+    const count = await env.TELEMETRY_DB.prepare("SELECT COUNT(*) AS events FROM ux_events").first<{
+      events: number;
+    }>();
+    expect(count).toEqual({ events: 0 });
   });
 
   it("compares equivalent release-relative windows with exact UX statistics", async () => {

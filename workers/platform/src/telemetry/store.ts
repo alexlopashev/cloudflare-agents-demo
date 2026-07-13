@@ -168,14 +168,23 @@ export function createTelemetryStore(database: D1Database, options: TelemetrySto
       const statements = [
         database
           .prepare(
-            "INSERT OR IGNORE INTO releases (release_id, git_sha, deployed_at_ms) VALUES (?1, ?2, ?3)",
+            `INSERT INTO releases (release_id, git_sha, deployed_at_ms) VALUES (?1, ?2, ?3)
+             ON CONFLICT (release_id) DO UPDATE SET
+               git_sha = excluded.git_sha,
+               deployed_at_ms = excluded.deployed_at_ms`,
           )
           .bind(input.release.releaseId, input.release.gitSha, input.release.deployedAtMs),
         database
           .prepare(
-            `INSERT OR IGNORE INTO traces
+            `INSERT INTO traces
               (trace_id, interaction_id, release_id, started_at_ms, duration_ms, outcome)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT (trace_id) DO UPDATE SET
+               interaction_id = excluded.interaction_id,
+               release_id = excluded.release_id,
+               started_at_ms = excluded.started_at_ms,
+               duration_ms = excluded.duration_ms,
+               outcome = excluded.outcome`,
           )
           .bind(
             input.trace.traceId,
@@ -188,9 +197,15 @@ export function createTelemetryStore(database: D1Database, options: TelemetrySto
         ...input.spans.map((span) =>
           database
             .prepare(
-              `INSERT OR IGNORE INTO spans
+              `INSERT INTO spans
                 (trace_id, span_id, parent_span_id, service_id, started_at_ms, duration_ms, status)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+               ON CONFLICT (trace_id, span_id) DO UPDATE SET
+                 parent_span_id = excluded.parent_span_id,
+                 service_id = excluded.service_id,
+                 started_at_ms = excluded.started_at_ms,
+                 duration_ms = excluded.duration_ms,
+                 status = excluded.status`,
             )
             .bind(
               span.traceId,
@@ -218,9 +233,15 @@ export function createTelemetryStore(database: D1Database, options: TelemetrySto
       requireOutcome(event.outcome);
       await database
         .prepare(
-          `INSERT OR IGNORE INTO ux_events
+          `INSERT INTO ux_events
             (interaction_id, trace_id, release_id, metric_name, duration_ms, outcome, recorded_at_ms)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+           ON CONFLICT (interaction_id, metric_name) DO UPDATE SET
+             trace_id = excluded.trace_id,
+             release_id = excluded.release_id,
+             duration_ms = excluded.duration_ms,
+             outcome = excluded.outcome,
+             recorded_at_ms = excluded.recorded_at_ms`,
         )
         .bind(
           event.interactionId,

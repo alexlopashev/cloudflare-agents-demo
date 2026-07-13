@@ -9,6 +9,7 @@ function asRequest(input: string | URL | Request): Request {
 
 describe("local stack contract", () => {
   it("requires both experiences, the auxiliary service, and runtime metadata", async () => {
+    const createInteractionId = vi.fn(() => "e2e-interaction");
     const fetcher = vi.fn(async (input: string | URL | Request) => {
       const request = asRequest(input);
       const path = new URL(request.url).pathname;
@@ -42,12 +43,15 @@ describe("local stack contract", () => {
       return new Response("Not found", { status: 404 });
     });
 
-    await expect(verifyLocalStack("http://127.0.0.1:5173", fetcher)).resolves.toEqual({
+    await expect(
+      verifyLocalStack("http://127.0.0.1:5173", fetcher, createInteractionId),
+    ).resolves.toEqual({
       health: "healthy",
       mode: "fake",
       routes: ["/app", "/investigator"],
       telemetry: "accepted",
     });
+    expect(createInteractionId).toHaveBeenCalledOnce();
   });
 
   it("fails when the service binding does not prove the auxiliary worker responded", async () => {
