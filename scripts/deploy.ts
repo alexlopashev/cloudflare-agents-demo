@@ -8,9 +8,11 @@ import { z } from "zod";
 import {
   buildPlatformDeploymentConfig,
   buildEvidenceResetSql,
+  deploymentSmokeRetryPolicy,
   parseD1DatabaseId,
   parseDeploymentResult,
   parseGitHubWriteSecretInventory,
+  requestDeploymentSmokeWithRetry,
   runtimeAttributionRetryPolicy,
   runWithFailClosedRollback,
 } from "./deploy-lib.ts";
@@ -211,14 +213,21 @@ async function smoke(state: z.infer<typeof stateSchema>) {
   const runtime = await assertRuntimeAttribution(state);
   const smokeSession = `deployment-smoke-${crypto.randomUUID()}`;
   await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 10_000));
-  const smokeResponse = await fetch(`${state.publicUrl}/api/deployment-smoke`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-deploy-smoke-key": state.smokeKey,
-    },
-    body: JSON.stringify({ session: smokeSession }),
-  });
+  const smokeResponse = await requestDeploymentSmokeWithRetry(
+    async () =>
+      fetch(`${state.publicUrl}/api/deployment-smoke`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-deploy-smoke-key": state.smokeKey,
+        },
+        body: JSON.stringify({ session: smokeSession }),
+      }),
+    async () =>
+      new Promise<void>((resolveDelay) =>
+        setTimeout(resolveDelay, deploymentSmokeRetryPolicy.delayMs),
+      ),
+  );
   if (!smokeResponse.ok) {
     throw new Error(`Public agent smoke returned HTTP ${smokeResponse.status}.`);
   }
