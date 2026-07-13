@@ -11,6 +11,7 @@ import {
   parseD1DatabaseId,
   parseDeploymentResult,
   parseGitHubWriteSecretInventory,
+  runWithFailClosedRollback,
 } from "./deploy-lib.ts";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -136,6 +137,26 @@ async function requestWithRetry(url: string, init?: RequestInit): Promise<Respon
   throw new Error(`Public deployment did not become ready (last HTTP status ${lastStatus}).`);
 }
 
+async function assertRuntimeAttribution(state: z.infer<typeof stateSchema>) {
+  const runtimeSchema = z.object({
+    mode: z.literal("workers-ai"),
+    versionId: z.literal(state.investigatorReleaseId),
+    gitSha: z.literal(state.deployedGitSha),
+    githubWriteEnabled: z.literal(state.githubWriteEnabled),
+    evidence: z.object({
+      baselineReleaseId: z.literal(state.baselineReleaseId),
+      degradedReleaseId: z.literal(state.degradedReleaseId),
+    }),
+  });
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const response = await requestWithRetry(`${state.publicUrl}/api/runtime`);
+    const parsed = runtimeSchema.safeParse(await response.json());
+    if (parsed.success) return parsed.data;
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 750));
+  }
+  throw new Error("The exact deployed runtime did not reach the edge.");
+}
+
 async function seedMeasuredTraffic(url: string, expectedReleaseId: string, label: string) {
   const startedAtMs = Date.now();
   const durations: number[] = [];
@@ -184,27 +205,7 @@ async function smoke(state: z.infer<typeof stateSchema>) {
     const body = await response.text();
     if (!body.includes("Regression Surgeon")) throw new Error(`${route} did not serve the app.`);
   }
-  const runtimeSchema = z.object({
-    mode: z.literal("workers-ai"),
-    versionId: z.literal(state.investigatorReleaseId),
-    gitSha: z.literal(state.deployedGitSha),
-    githubWriteEnabled: z.literal(state.githubWriteEnabled),
-    evidence: z.object({
-      baselineReleaseId: z.literal(state.baselineReleaseId),
-      degradedReleaseId: z.literal(state.degradedReleaseId),
-    }),
-  });
-  let runtime: z.infer<typeof runtimeSchema> | undefined;
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const response = await requestWithRetry(`${state.publicUrl}/api/runtime`);
-    const parsed = runtimeSchema.safeParse(await response.json());
-    if (parsed.success) {
-      runtime = parsed.data;
-      break;
-    }
-    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 750));
-  }
-  if (runtime === undefined) throw new Error("The exact deployed runtime did not reach the edge.");
+  const runtime = await assertRuntimeAttribution(state);
   const smokeSession = `deployment-smoke-${crypto.randomUUID()}`;
   await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 10_000));
   const smokeResponse = await fetch(`${state.publicUrl}/api/deployment-smoke`, {
@@ -321,12 +322,11 @@ async function deploy() {
   await smoke(state);
 }
 
-async function refreshInvestigator(githubWriteEnabled = false) {
-  run("wrangler", ["whoami"]);
-  if (githubWriteEnabled) assertGitHubWriteSecret();
-  run("pnpm", ["build"]);
-  const previous = refreshStateSchema.parse(JSON.parse(readFileSync(statePath, "utf8")));
-  const deployedGitSha = run("git", ["rev-parse", "HEAD"]).trim();
+function deployRefreshedInvestigator(
+  previous: z.infer<typeof refreshStateSchema>,
+  deployedGitSha: string,
+  githubWriteEnabled: boolean,
+) {
   const smokeKey = crypto.randomUUID();
   const investigatorConfig = buildPlatformDeploymentConfig({
     databaseId: previous.databaseId,
@@ -353,7 +353,30 @@ async function refreshInvestigator(githubWriteEnabled = false) {
     smokeKey,
   });
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
-  await smoke(state);
+  return state;
+}
+
+async function refreshInvestigator(githubWriteEnabled = false) {
+  run("wrangler", ["whoami"]);
+  if (githubWriteEnabled) assertGitHubWriteSecret();
+  run("pnpm", ["build"]);
+  const previous = refreshStateSchema.parse(JSON.parse(readFileSync(statePath, "utf8")));
+  const deployedGitSha = run("git", ["rev-parse", "HEAD"]).trim();
+  if (!githubWriteEnabled) {
+    await smoke(deployRefreshedInvestigator(previous, deployedGitSha, false));
+    return;
+  }
+  await runWithFailClosedRollback(
+    async () => deployRefreshedInvestigator(previous, deployedGitSha, true),
+    smoke,
+    async () => {
+      const rollbackState = deployRefreshedInvestigator(previous, deployedGitSha, false);
+      await assertRuntimeAttribution(rollbackState);
+      console.error(
+        "Write enablement failed; the public runtime was rolled back to writes disabled.",
+      );
+    },
+  );
 }
 
 function resetRemoteEvidence() {

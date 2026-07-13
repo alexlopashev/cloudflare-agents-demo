@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   buildPlatformDeploymentConfig,
@@ -9,6 +9,7 @@ import {
   parseD1DatabaseId,
   parseDeploymentResult,
   parseGitHubWriteSecretInventory,
+  runWithFailClosedRollback,
   type DeploymentStage,
 } from "../../scripts/deploy-lib.ts";
 
@@ -121,6 +122,42 @@ describe("Cloudflare deployment contract", () => {
       ),
     ).toBe(false);
     expect(() => parseGitHubWriteSecretInventory("not-json")).toThrow(/secret inventory/i);
+  });
+
+  it("rolls a failed write enablement back and preserves the original failure", async () => {
+    const enableFailure = new Error("Workers AI smoke failed");
+    const rollback = vi.fn(async () => undefined);
+
+    await expect(
+      runWithFailClosedRollback(
+        async () => ({ githubWriteEnabled: true }),
+        async () => {
+          throw enableFailure;
+        },
+        rollback,
+      ),
+    ).rejects.toBe(enableFailure);
+    expect(rollback).toHaveBeenCalledOnce();
+  });
+
+  it("surfaces both enablement and rollback failures", async () => {
+    const enableFailure = new Error("enabled deployment failed");
+    const rollbackFailure = new Error("disabled deployment could not be verified");
+
+    await expect(
+      runWithFailClosedRollback(
+        async () => {
+          throw enableFailure;
+        },
+        async () => undefined,
+        async () => {
+          throw rollbackFailure;
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: "AggregateError",
+      errors: [enableFailure, rollbackFailure],
+    });
   });
 
   it("parses existing/created D1 resources and Wrangler deployment evidence", () => {

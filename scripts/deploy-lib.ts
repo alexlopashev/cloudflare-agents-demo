@@ -157,6 +157,28 @@ export function parseGitHubWriteSecretInventory(output: string): boolean {
   return parsed.data.some((secret) => secret.name === "GITHUB_TOKEN");
 }
 
+export async function runWithFailClosedRollback<T>(
+  enable: () => Promise<T>,
+  verify: (enabled: T) => Promise<void>,
+  rollback: () => Promise<void>,
+): Promise<T> {
+  try {
+    const enabled = await enable();
+    await verify(enabled);
+    return enabled;
+  } catch (enableError) {
+    try {
+      await rollback();
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [enableError, rollbackError],
+        "GitHub write enablement failed and the write-disabled rollback could not be verified.",
+      );
+    }
+    throw enableError;
+  }
+}
+
 export function buildEvidenceResetSql(
   baselineReleaseId: string,
   degradedReleaseId: string,
