@@ -72,6 +72,7 @@ Do not assert exact natural-language output from a live model. Assert structured
 
 - Worker versions map to immutable Git SHAs.
 - Repository content is read at an explicit commit.
+- Workers platform fetch functions are invoked without rebinding their receiver.
 - Path traversal, disallowed paths, oversized files, and excessive reads fail closed.
 - Missing GitHub PR metadata degrades to an evidence-backed unknown rather than a fabricated answer.
 

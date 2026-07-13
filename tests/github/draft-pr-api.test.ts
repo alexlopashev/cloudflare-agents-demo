@@ -8,6 +8,26 @@ const blobSha = "3".repeat(40);
 const commitSha = "4".repeat(40);
 
 describe("GitHubDraftPrApi", () => {
+  it("invokes a Workers-compatible fetcher without changing its receiver", async () => {
+    async function receiverSensitiveFetcher(this: unknown, request: Request) {
+      if (this !== undefined) throw new TypeError("Illegal invocation");
+      const path = new URL(request.url).pathname;
+      if (path.endsWith("/git/ref/heads/main")) {
+        return Response.json({ object: { sha: baseSha } });
+      }
+      return Response.json({ sha: baseSha, tree: { sha: treeSha } });
+    }
+    const api = new GitHubDraftPrApi({
+      fetcher: receiverSensitiveFetcher,
+      repository: { owner: "example", repo: "supervised" },
+      allowedPaths: ["workers/platform/src/api/health.ts"],
+      maxResponseBytes: 1_024,
+      token: "scoped-token",
+    });
+
+    await expect(api.getBase("main")).resolves.toEqual({ sha: baseSha, treeSha });
+  });
+
   it("uses only configured-repository draft-PR endpoints with bounded authenticated requests", async () => {
     const requests: { method: string; url: string; body: unknown }[] = [];
     const fetcher = vi.fn(async (request: Request) => {
