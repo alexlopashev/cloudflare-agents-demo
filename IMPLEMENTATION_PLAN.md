@@ -940,8 +940,9 @@ Acceptance criteria:
 
 ### Phase 11 — Live investigator recovery and header simplification
 
-Status: implemented, merged in PRs #28 and #29, and deployed at main commit `008969a`; issue #27 stays
-open on the final live-model gate. The public browser transport now passes absent and empty GitHub
+Status: implemented and merged in PRs #28 and #29 at commit `008969a`. The public stack was most
+recently refreshed from main commit `1748e38`; issue #27 stays open on the final live-model gate. The
+public browser transport now passes absent and empty GitHub
 credentials to the existing no-token path when writes are disabled, while the fail-closed write gate
 requires a non-empty scoped token. A persisted session that recorded the earlier failed stream can
 accept an explicit retry without enabling overlapping submitted or streaming turns.

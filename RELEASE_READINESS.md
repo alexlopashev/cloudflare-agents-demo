@@ -31,8 +31,8 @@ required GitHub Actions lanes. PR #23 passed macOS ARM64/x64 and Linux ARM64/x64
 - Browser verification at 1280 px confirmed the bounded metric generator and badged floating
   launcher. At 390×844, the investigator filled the viewport and its send button measured 350×44.
 
-The issue #27 follow-up is deployed from main commit `008969a` as investigator version
-`e69e1a38-5abd-4cda-94ba-96ef981a5656`. Browser verification confirms that the redundant header
+The issue #27 follow-up was most recently refreshed from main commit `1748e38` as investigator version
+`961b78e2-58ff-4682-a562-f75cc08dfa45`. Browser verification confirms that the redundant header
 pills are absent and the persisted failed session preserves its message while enabling an explicit
 retry. This version is not yet a passing deployed gate: Workers AI returns error 4006 because the
 account exhausted its daily free allocation of 10,000 neurons, so the keyed smoke cannot produce the
