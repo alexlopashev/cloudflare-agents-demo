@@ -8,6 +8,7 @@ import {
   buildEvidenceResetSql,
   parseD1DatabaseId,
   parseDeploymentResult,
+  parseGitHubWriteSecretInventory,
   type DeploymentStage,
 } from "../../scripts/deploy-lib.ts";
 
@@ -29,8 +30,20 @@ describe("Cloudflare deployment contract", () => {
     );
     expect(mise).toContain('run = "pnpm run deploy"');
     expect(mise).toContain('run = "pnpm run deploy:smoke"');
+    expect(mise).toContain(
+      'run = "wrangler secret put GITHUB_TOKEN --name regression-surgeon-platform"',
+    );
+    expect(mise).toContain(
+      'run = "wrangler secret delete GITHUB_TOKEN --name regression-surgeon-platform"',
+    );
+    expect(mise).toContain('run = "pnpm run deploy:writes:enable"');
+    expect(mise).toContain('run = "pnpm run deploy:writes:disable"');
     expect(deployScript).toContain('"--secrets-file"');
     expect(deployScript).not.toContain('"secret", "put"');
+    expect(deployScript).not.toContain("gh auth token");
+    expect(
+      deployScript.match(/if \(githubWriteEnabled\) assertGitHubWriteSecret\(\);/g),
+    ).toHaveLength(2);
   });
 
   it("builds measured baseline and regression stages against the real D1 database", () => {
@@ -60,6 +73,7 @@ describe("Cloudflare deployment contract", () => {
       degradedSinceMs: 1_783_840_086_000,
       degradedUntilMs: 1_783_840_100_000,
       smokeKey: "deployment-smoke-key-123456",
+      githubWriteEnabled: false,
     });
 
     expect(deployed.vars).toMatchObject({
@@ -75,6 +89,38 @@ describe("Cloudflare deployment contract", () => {
     expect(deployed.main).toBe(`${root}/workers/platform/src/index.ts`);
     expect(deployed.assets.directory).toBe(`${root}/apps/web/dist/client`);
     expect(deployed.d1_databases[0]?.migrations_dir).toBe(`${root}/migrations/telemetry`);
+  });
+
+  it("enables writes only for an explicit investigator deployment", () => {
+    const deployed = config({
+      kind: "investigator",
+      gitSha: "c".repeat(40),
+      baselineReleaseId: baselineVersionId,
+      degradedReleaseId: degradedVersionId,
+      degradedSinceMs: 1_783_840_086_000,
+      degradedUntilMs: 1_783_840_100_000,
+      smokeKey: "deployment-smoke-key-123456",
+      githubWriteEnabled: true,
+    });
+
+    expect(deployed.vars.GITHUB_WRITE_ENABLED).toBe("true");
+  });
+
+  it("requires an exact remote GitHub token secret before enabling writes", () => {
+    expect(
+      parseGitHubWriteSecretInventory(
+        JSON.stringify([
+          { name: "DEPLOY_SMOKE_KEY", type: "secret_text" },
+          { name: "GITHUB_TOKEN", type: "secret_text" },
+        ]),
+      ),
+    ).toBe(true);
+    expect(
+      parseGitHubWriteSecretInventory(
+        JSON.stringify([{ name: "DEPLOY_SMOKE_KEY", type: "secret_text" }]),
+      ),
+    ).toBe(false);
+    expect(() => parseGitHubWriteSecretInventory("not-json")).toThrow(/secret inventory/i);
   });
 
   it("parses existing/created D1 resources and Wrangler deployment evidence", () => {
@@ -119,6 +165,7 @@ describe("Cloudflare deployment contract", () => {
         degradedSinceMs: 1,
         degradedUntilMs: 2,
         smokeKey: "deployment-smoke-key-123456",
+        githubWriteEnabled: false,
       }),
     ).toThrow(/cloudflare version/i);
   });

@@ -14,6 +14,7 @@ export type DeploymentStage =
       degradedSinceMs: number;
       degradedUntilMs: number;
       smokeKey: string;
+      githubWriteEnabled: boolean;
     };
 
 type DeploymentConfigOptions = {
@@ -86,7 +87,10 @@ export function buildPlatformDeploymentConfig(options: DeploymentConfigOptions) 
       GIT_SHA: gitSha,
       GITHUB_OWNER: "alexlopashev",
       GITHUB_REPO: "cloudflare-agents-demo",
-      GITHUB_WRITE_ENABLED: "false",
+      GITHUB_WRITE_ENABLED:
+        options.stage.kind === "investigator" && options.stage.githubWriteEnabled
+          ? "true"
+          : "false",
       HEALTH_LOADING_MODE: loadingMode,
       MODEL_MODE: "workers-ai",
       SCENARIO_CONTROL_ENABLED: "false",
@@ -129,6 +133,28 @@ export function parseDeploymentResult(output: string): { url: string; versionId:
     throw new Error("Cloudflare deployment evidence is unavailable.");
   }
   return { url, versionId };
+}
+
+export function parseGitHubWriteSecretInventory(output: string): boolean {
+  let value: unknown;
+  try {
+    value = JSON.parse(output) as unknown;
+  } catch {
+    throw new Error("Cloudflare secret inventory is invalid.");
+  }
+  const parsed = z
+    .array(
+      z
+        .object({
+          name: z.string().min(1).max(128),
+          type: z.literal("secret_text"),
+        })
+        .passthrough(),
+    )
+    .max(32)
+    .safeParse(value);
+  if (!parsed.success) throw new Error("Cloudflare secret inventory is invalid.");
+  return parsed.data.some((secret) => secret.name === "GITHUB_TOKEN");
 }
 
 export function buildEvidenceResetSql(

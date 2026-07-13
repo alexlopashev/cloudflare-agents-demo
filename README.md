@@ -86,9 +86,13 @@ mise run dev
 mise run dev:live
 mise run e2e
 mise run auth:cloudflare
+mise run github:writes:secret
+mise run github:writes:secret:delete
 mise run deploy
 mise run deploy:smoke
 mise run deploy:refresh
+mise run deploy:writes:enable
+mise run deploy:writes:disable
 mise run deploy:reset
 mise run container:check
 mise run container:up
@@ -120,7 +124,7 @@ deploys a concurrent baseline and measures 20 interactions, deploys the sequenti
 measures 20 interactions, then deploys the public GLM 4.7 Flash investigator with those exact
 Cloudflare version IDs and trace timestamps. It finishes with a keyed smoke that verifies the two
 public routes, runtime metadata, the five-step Workers AI evidence chain, a validated remediation
-preview, and the default-off GitHub write posture.
+preview, and the expected GitHub write posture.
 
 `mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
 `mise run deploy:smoke` repeats the deployed verification. `mise run deploy:reset` deletes only the
@@ -135,6 +139,20 @@ serves the committed, SHA-gated fixture for commit/PR/source evidence. A supplie
 the live read connector; external writes additionally require `GITHUB_WRITE_ENABLED=true`, explicit
 Project Think approval, and all repository/path/SHA/blob/size gates. The published demo deliberately
 keeps that flag false, so approval yields a preview and cannot create or merge a pull request.
+
+To demonstrate a real draft PR, create a short-lived fine-grained GitHub token restricted to this
+repository with **Contents: read and write** and **Pull requests: read and write**; leave Actions,
+Administration, Secrets, and every other write permission disabled. Run
+`mise run github:writes:secret` and enter the token only at Wrangler's terminal prompt. Then run
+`mise run deploy:writes:enable`. The task fails closed unless Cloudflare reports the exact secret,
+preserves the measured evidence pair, deploys the explicit write posture, and runs a preview-only
+smoke that cannot create a PR. A real PR can be created only when the browser agent requests the
+high-risk action and a human clicks Approve. If `main` has advanced, the write service proceeds only
+when the allowlisted source blob is unchanged from the evidenced regression commit, then parents the
+new one-file commit on current `main`; otherwise it fails stale. Run
+`mise run deploy:writes:disable` immediately after the demonstration; ordinary `deploy` and
+`deploy:refresh` also return to the default-off posture.
+After disabling writes, run `mise run github:writes:secret:delete` to revoke the Worker credential.
 
 ### Optional Colima parity
 
@@ -195,6 +213,10 @@ The latest runtime and UI were refreshed from main commit `1748e38` as investiga
 the account has exhausted its daily free allocation of 10,000 neurons. The keyed smoke and a new
 browser response cannot pass until that allocation resets or the Workers account is upgraded; local
 deterministic gates remain green and public GitHub writes remain disabled.
+
+Issue #30 implements the explicit draft-PR write workflow locally and is natively blocked by issue #27
+for its real Workers AI approval run. Token provisioning and production enablement have not been
+performed; the current public runtime remains write-disabled.
 
 Phases 1 through 8 are implemented and verified locally and on Cloudflare. The real known-good release at `cf25e52`
 loads three service checks concurrently; the current scenario release intentionally serializes them

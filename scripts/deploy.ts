@@ -10,6 +10,7 @@ import {
   buildEvidenceResetSql,
   parseD1DatabaseId,
   parseDeploymentResult,
+  parseGitHubWriteSecretInventory,
 } from "./deploy-lib.ts";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -28,6 +29,7 @@ const stateSchema = z.object({
   degradedUntilMs: z.number().int().positive(),
   investigatorReleaseId: z.string().uuid(),
   deployedGitSha: z.string().regex(/^[0-9a-f]{40}$/),
+  githubWriteEnabled: z.boolean().default(false),
   smokeKey: z.string().min(20).max(128),
 });
 const refreshStateSchema = stateSchema.omit({ smokeKey: true });
@@ -60,6 +62,22 @@ function findOrCreateDatabase(): string {
   } catch {
     return parseD1DatabaseId(
       run("wrangler", ["d1", "create", "regression-surgeon-telemetry", "--location", "wnam"]),
+    );
+  }
+}
+
+function assertGitHubWriteSecret() {
+  const inventory = run("wrangler", [
+    "secret",
+    "list",
+    "--name",
+    "regression-surgeon-platform",
+    "--format",
+    "json",
+  ]);
+  if (!parseGitHubWriteSecretInventory(inventory)) {
+    throw new Error(
+      "GitHub writes require the remote GITHUB_TOKEN secret; run mise run github:writes:secret.",
     );
   }
 }
@@ -170,7 +188,7 @@ async function smoke(state: z.infer<typeof stateSchema>) {
     mode: z.literal("workers-ai"),
     versionId: z.literal(state.investigatorReleaseId),
     gitSha: z.literal(state.deployedGitSha),
-    githubWriteEnabled: z.literal(false),
+    githubWriteEnabled: z.literal(state.githubWriteEnabled),
     evidence: z.object({
       baselineReleaseId: z.literal(state.baselineReleaseId),
       degradedReleaseId: z.literal(state.degradedReleaseId),
@@ -220,7 +238,7 @@ async function smoke(state: z.infer<typeof stateSchema>) {
     }
   }
   console.log(
-    `Public smoke passed at ${state.publicUrl}: routes, Workers AI mode, version ${runtime.versionId}, measured evidence IDs, ${agentResult.toolTypes.length} evidence tool events, GitHub writes off.`,
+    `Public smoke passed at ${state.publicUrl}: routes, Workers AI mode, version ${runtime.versionId}, measured evidence IDs, ${agentResult.toolTypes.length} evidence tool events, preview performed zero writes, production GitHub writes ${runtime.githubWriteEnabled ? "enabled" : "disabled"}.`,
   );
 }
 
@@ -283,6 +301,7 @@ async function deploy() {
       degradedSinceMs: degradedWindow.sinceMs,
       degradedUntilMs: degradedWindow.untilMs,
       smokeKey,
+      githubWriteEnabled: false,
     },
   });
   const investigator = deployPlatformWithSmokeSecret(investigatorConfig, smokeKey);
@@ -295,14 +314,16 @@ async function deploy() {
     degradedUntilMs: degradedWindow.untilMs,
     investigatorReleaseId: investigator.versionId,
     deployedGitSha,
+    githubWriteEnabled: false,
     smokeKey,
   });
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
   await smoke(state);
 }
 
-async function refreshInvestigator() {
+async function refreshInvestigator(githubWriteEnabled = false) {
   run("wrangler", ["whoami"]);
+  if (githubWriteEnabled) assertGitHubWriteSecret();
   run("pnpm", ["build"]);
   const previous = refreshStateSchema.parse(JSON.parse(readFileSync(statePath, "utf8")));
   const deployedGitSha = run("git", ["rev-parse", "HEAD"]).trim();
@@ -318,14 +339,17 @@ async function refreshInvestigator() {
       degradedSinceMs: previous.degradedSinceMs,
       degradedUntilMs: previous.degradedUntilMs,
       smokeKey,
+      githubWriteEnabled,
     },
   });
   const investigator = deployPlatformWithSmokeSecret(investigatorConfig, smokeKey);
+  if (githubWriteEnabled) assertGitHubWriteSecret();
   const state = stateSchema.parse({
     ...previous,
     publicUrl: investigator.url,
     investigatorReleaseId: investigator.versionId,
     deployedGitSha,
+    githubWriteEnabled,
     smokeKey,
   });
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
@@ -346,6 +370,7 @@ function resetRemoteEvidence() {
         degradedSinceMs: state.degradedSinceMs,
         degradedUntilMs: state.degradedUntilMs,
         smokeKey: state.smokeKey,
+        githubWriteEnabled: state.githubWriteEnabled,
       },
     }),
   );
@@ -364,8 +389,13 @@ function resetRemoteEvidence() {
 
 const action = process.argv[2] ?? "deploy";
 if (action === "deploy") await deploy();
-else if (action === "refresh") await refreshInvestigator();
+else if (action === "refresh") await refreshInvestigator(false);
+else if (action === "enable-writes") await refreshInvestigator(true);
+else if (action === "disable-writes") await refreshInvestigator(false);
 else if (action === "reset") resetRemoteEvidence();
 else if (action === "smoke")
   await smoke(stateSchema.parse(JSON.parse(readFileSync(statePath, "utf8"))));
-else throw new Error("Usage: node scripts/deploy.ts <deploy|refresh|reset|smoke>");
+else
+  throw new Error(
+    "Usage: node scripts/deploy.ts <deploy|refresh|enable-writes|disable-writes|reset|smoke>",
+  );
