@@ -1,0 +1,62 @@
+import { describe, expect, it } from "vitest";
+
+import { composeExternalConfiguration } from "../../workers/platform/src/config";
+
+const validInput = {
+  versionMetadata: { id: "worker-version-1", timestamp: "2026-07-14T12:00:00.000Z" },
+  gitSha: "0123456789abcdef0123456789abcdef01234567",
+  githubOwner: "alexlopashev",
+  githubRepo: "cloudflare-agents-demo",
+  githubWriteEnabled: "false",
+  modelMode: "workers-ai",
+};
+
+describe("external runtime composition", () => {
+  it.each([undefined, "", "   "])("normalizes an absent GitHub token once (%s)", (token) => {
+    const configuration = composeExternalConfiguration({
+      ...validInput,
+      ...(token === undefined ? {} : { githubToken: token }),
+    });
+
+    expect(configuration.github).toEqual({
+      owner: "alexlopashev",
+      repo: "cloudflare-agents-demo",
+      writeEnabled: false,
+    });
+  });
+
+  it("requires a normalized scoped token before enabling writes", () => {
+    expect(() =>
+      composeExternalConfiguration({
+        ...validInput,
+        githubToken: "  ",
+        githubWriteEnabled: "true",
+      }),
+    ).toThrow(/token/i);
+
+    expect(
+      composeExternalConfiguration({
+        ...validInput,
+        githubToken: "  scoped-token  ",
+        githubWriteEnabled: "true",
+      }).github,
+    ).toEqual({
+      owner: "alexlopashev",
+      repo: "cloudflare-agents-demo",
+      token: "scoped-token",
+      writeEnabled: true,
+    });
+  });
+
+  it.each([
+    { gitSha: "", label: "Git SHA" },
+    { gitSha: "not-a-sha", label: "Git SHA" },
+    { versionMetadata: { id: "", timestamp: "2026-07-14T12:00:00.000Z" }, label: "version" },
+    { versionMetadata: { id: "worker-version-1" }, label: "timestamp" },
+    { versionMetadata: { id: "worker-version-1", timestamp: "not-a-date" }, label: "timestamp" },
+  ])("rejects malformed runtime identity: $label", (invalid) => {
+    expect(() => composeExternalConfiguration({ ...validInput, ...invalid })).toThrow(
+      new RegExp(invalid.label, "i"),
+    );
+  });
+});

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { remediationFixture } from "../../packages/test-fixtures/src/remediation";
+import {
+  regressionHealthSource,
+  remediationFixture,
+} from "../../packages/test-fixtures/src/remediation";
 import { createAgentRemediationService } from "../../workers/platform/src/agent/remediation-services";
 
 describe("agent remediation services", () => {
@@ -23,7 +26,28 @@ describe("agent remediation services", () => {
 
   it("allows credential-free Workers AI previews but requires a token before enabling writes", async () => {
     const repository = { owner: "alexlopashev", repo: "cloudflare-agents-demo" };
-    const fetcher = vi.fn(async () => new Response("network must not be used"));
+    const treeSha = "1111111111111111111111111111111111111111";
+    const encodedSource = btoa(regressionHealthSource);
+    const fetcher = vi.fn(async (request: Request) => {
+      const url = new URL(request.url);
+      if (url.pathname.endsWith("/git/ref/heads/main")) {
+        return Response.json({ object: { sha: remediationFixture.expectedBaseSha } });
+      }
+      if (url.pathname.endsWith(`/git/commits/${remediationFixture.expectedBaseSha}`)) {
+        return Response.json({ sha: remediationFixture.expectedBaseSha, tree: { sha: treeSha } });
+      }
+      if (url.pathname.endsWith("/contents/workers/platform/src/api/health.ts")) {
+        return Response.json({
+          type: "file",
+          path: remediationFixture.path,
+          sha: remediationFixture.expectedBlobSha,
+          size: new TextEncoder().encode(regressionHealthSource).byteLength,
+          encoding: "base64",
+          content: encodedSource,
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
 
     for (const token of [undefined, "", "   "]) {
       const preview = createAgentRemediationService({
@@ -38,7 +62,10 @@ describe("agent remediation services", () => {
         writesPerformed: false,
       });
     }
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledTimes(9);
+    expect(fetcher.mock.calls.every(([request]) => !request.headers.has("authorization"))).toBe(
+      true,
+    );
     for (const token of [undefined, "", "   "]) {
       expect(() =>
         createAgentRemediationService({

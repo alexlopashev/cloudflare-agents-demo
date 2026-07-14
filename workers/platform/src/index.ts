@@ -7,8 +7,7 @@ import {
   parseIncidentReference,
   type IncidentReference,
 } from "../../../packages/contracts/src/incident";
-import { remediationFixture } from "../../../packages/test-fixtures/src/remediation";
-import { createAgentEvidenceServices } from "./agent/evidence-services";
+import { agentComposition } from "./agent/active-composition";
 import {
   createEvidenceReceipt,
   evidenceReceiptComplete,
@@ -25,10 +24,10 @@ import {
   messagesForCurrentInvestigation,
   remediationPreviewRequested,
 } from "./agent/evidence-step-policy";
-import { createAgentModel } from "./agent/model";
 import { createRemediationAction } from "./agent/remediation-action";
-import { createAgentRemediationService } from "./agent/remediation-services";
 import { createInvestigationTools } from "./agent/tools";
+import { composeAgentConfiguration, type AgentConfiguration } from "./config";
+import { createHealthRemediationProposal } from "./remediation/health-proposal";
 import {
   remediationChangeCounts,
   remediationProposalFingerprint,
@@ -78,12 +77,25 @@ export type InvestigationAgentState =
     };
 
 export class RegressionSurgeonAgent extends Think<PlatformEnvironment, InvestigationAgentState> {
+  #agentConfiguration: AgentConfiguration | undefined;
+
   override initialState: InvestigationAgentState = { status: "idle" };
   override maxSteps = 16;
   override workspaceBash = false;
 
+  private agentConfiguration(): AgentConfiguration {
+    this.#agentConfiguration ??= composeAgentConfiguration({
+      githubOwner: this.env.GITHUB_OWNER,
+      githubRepo: this.env.GITHUB_REPO,
+      ...(this.env.GITHUB_TOKEN === undefined ? {} : { githubToken: this.env.GITHUB_TOKEN }),
+      githubWriteEnabled: this.env.GITHUB_WRITE_ENABLED,
+      modelMode: this.env.MODEL_MODE,
+    });
+    return this.#agentConfiguration;
+  }
+
   override getModel(): LanguageModel {
-    return createAgentModel(this.env);
+    return agentComposition.createModel(this.env, this.agentConfiguration());
   }
 
   override getSystemPrompt(): string {
@@ -122,30 +134,35 @@ rollback occurred.${prepared}`;
   }
 
   override getTools(): ToolSet {
+    const configuration = this.agentConfiguration();
     const store = createTelemetryStore(this.env.TELEMETRY_DB);
     return createInvestigationTools(
-      createAgentEvidenceServices({
-        mode: this.env.MODEL_MODE,
-        repository: { owner: this.env.GITHUB_OWNER, repo: this.env.GITHUB_REPO },
+      agentComposition.createEvidenceServices({
+        repository: {
+          owner: configuration.github.owner,
+          repo: configuration.github.repo,
+        },
         store,
-        ...(this.env.GITHUB_TOKEN === undefined ? {} : { token: this.env.GITHUB_TOKEN }),
+        ...(configuration.github.token === undefined ? {} : { token: configuration.github.token }),
       }),
       { incident: configuredIncidentReference(this.env) },
     );
   }
 
   override getActions() {
-    const writeEnabled =
-      this.env.MODEL_MODE === "workers-ai" && this.env.GITHUB_WRITE_ENABLED === "true";
+    const writeEnabled = agentComposition.writeEnabled(this.agentConfiguration());
     return { create_draft_pr: this.createRemediationAction(writeEnabled) };
   }
 
-  createRemediationAction(writeEnabled: boolean, mode = this.env.MODEL_MODE) {
-    const service = createAgentRemediationService({
-      mode,
-      repository: { owner: this.env.GITHUB_OWNER, repo: this.env.GITHUB_REPO },
+  createRemediationAction(writeEnabled: boolean) {
+    const configuration = this.agentConfiguration();
+    const service = agentComposition.createRemediationService({
+      repository: {
+        owner: configuration.github.owner,
+        repo: configuration.github.repo,
+      },
       writeEnabled,
-      ...(this.env.GITHUB_TOKEN === undefined ? {} : { token: this.env.GITHUB_TOKEN }),
+      ...(configuration.github.token === undefined ? {} : { token: configuration.github.token }),
     });
     return createRemediationAction(service, {
       idempotencyScope: writeEnabled ? "write" : "preview",
@@ -176,8 +193,8 @@ rollback occurred.${prepared}`;
     ) {
       return;
     }
-    const proposal: RemediationProposal = {
-      ...remediationFixture,
+    const proposal = createHealthRemediationProposal({
+      currentContent: evidence.sourceContent,
       incident: {
         ...receipt.incident,
         traceId: evidence.inspectedTraceId,
@@ -187,12 +204,11 @@ rollback occurred.${prepared}`;
       expectedBaseSha: evidence.commitSha,
       expectedBlobSha: evidence.blobSha,
       path: evidence.sourcePath,
-    };
+    });
     const changes = remediationChangeCounts(evidence.sourceContent, proposal.replacementContent);
     return {
       fingerprint: `proposal-v1-${await remediationProposalFingerprint(proposal)}`,
-      writeEnabled:
-        this.env.MODEL_MODE === "workers-ai" && this.env.GITHUB_WRITE_ENABLED === "true",
+      writeEnabled: agentComposition.writeEnabled(this.agentConfiguration()),
       proposal,
       diff: {
         additions: changes.additions,
@@ -336,7 +352,7 @@ rollback occurred.${prepared}`;
     }
     this.activeIncident();
     const prepared = this.state.preparedRemediation;
-    const action = this.createRemediationAction(false, "fake");
+    const action = this.createRemediationAction(false);
     return action.config.execute(
       {
         ...prepared.proposal,

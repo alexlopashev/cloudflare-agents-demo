@@ -1,22 +1,13 @@
+import { createHealthRemediationProposal } from "../../../workers/platform/src/remediation/health-proposal";
+
 import { regressionSource } from "./scenario";
 
-export const regressionHealthSource = `const services: ServiceHealthResult[] = [];
-if (options.loadingMode === "sequential") {
-  for (const service of serviceDefinitions) {
-    services.push(await loadService(service));
-  }
-} else {
-  services.push(...(await Promise.all(serviceDefinitions.map(loadService))));
-}`;
+export const regressionHealthSource =
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: The fixture preserves exact source bytes without evaluating its template placeholders.
+  'import {\n  dependencyHealthResponseSchema,\n  evidenceIdSchema,\n  serviceDefinitions,\n  type HealthReport,\n  type ServiceHealthResult,\n} from "../../../../packages/contracts/src/health";\nimport type { SpanRecord } from "../telemetry/store";\n\ntype Fetcher = (request: Request) => Promise<Response>;\nexport type HealthLoadingMode = "concurrent" | "sequential";\n\nexport type HealthAggregatorOptions = {\n  fetcher: Fetcher;\n  createTraceId: () => string;\n  loadingMode?: HealthLoadingMode;\n  now?: () => number;\n  observeSpan?: (span: SpanRecord) => void;\n};\n\nexport class HealthAggregationError extends Error {\n  readonly code: "invalid-input";\n\n  constructor(message: string) {\n    super(message);\n    this.name = "HealthAggregationError";\n    this.code = "invalid-input";\n  }\n}\n\nexport function createHealthAggregator(options: HealthAggregatorOptions) {\n  return {\n    async collect(input: { interactionId: string; releaseId: string }): Promise<HealthReport> {\n      const interactionId = evidenceIdSchema.safeParse(input.interactionId);\n      const releaseId = evidenceIdSchema.safeParse(input.releaseId);\n      const traceId = evidenceIdSchema.safeParse(options.createTraceId());\n      if (!interactionId.success || !releaseId.success || !traceId.success) {\n        throw new HealthAggregationError("Health evidence identifiers are invalid.");\n      }\n\n      const loadService = async (\n        service: (typeof serviceDefinitions)[number],\n      ): Promise<ServiceHealthResult> => {\n        const startedAtMs = (options.now ?? Date.now)();\n        let spanStatus: SpanRecord["status"] = "error";\n        const unavailable = {\n          ...service,\n          status: "unavailable" as const,\n          error: {\n            code: "dependency-unavailable" as const,\n            message: "Health check unavailable." as const,\n          },\n        };\n        try {\n          const request = new Request(`https://health-service/health/${service.id}`, {\n            headers: {\n              "x-interaction-id": interactionId.data,\n              "x-service-id": service.id,\n              "x-trace-id": traceId.data,\n            },\n          });\n          const response = await options.fetcher(request);\n          if (!response.ok) return unavailable;\n          const text = await response.text();\n          if (new TextEncoder().encode(text).byteLength > 1_024) return unavailable;\n          let payload: unknown;\n          try {\n            payload = JSON.parse(text) as unknown;\n          } catch {\n            return unavailable;\n          }\n          const health = dependencyHealthResponseSchema.safeParse(payload);\n          if (!health.success || health.data.serviceId !== service.id) return unavailable;\n          spanStatus = "success";\n          return { ...service, status: "healthy" };\n        } catch {\n          return unavailable;\n        } finally {\n          const endedAtMs = (options.now ?? Date.now)();\n          try {\n            options.observeSpan?.({\n              traceId: traceId.data,\n              spanId: `service-${service.id}`,\n              parentSpanId: "request",\n              serviceId: service.id,\n              startedAtMs,\n              durationMs: Math.max(0, endedAtMs - startedAtMs),\n              status: spanStatus,\n            });\n          } catch {\n            // Instrumentation observers cannot alter the health result.\n          }\n        }\n      };\n      const services: ServiceHealthResult[] = [];\n      if (options.loadingMode === "sequential") {\n        for (const service of serviceDefinitions) services.push(await loadService(service));\n      } else {\n        services.push(...(await Promise.all(serviceDefinitions.map(loadService))));\n      }\n      const healthyCount = services.filter((service) => service.status === "healthy").length;\n      const outcome =\n        healthyCount === services.length ? "healthy" : healthyCount === 0 ? "failed" : "partial";\n      return {\n        interactionId: interactionId.data,\n        traceId: traceId.data,\n        releaseId: releaseId.data,\n        outcome,\n        services,\n      };\n    },\n  };\n}';
 
-export const boundedConcurrencyHealthSource = `const services: ServiceHealthResult[] = [];
-const maximumConcurrentChecks = 2;
-for (let index = 0; index < serviceDefinitions.length; index += maximumConcurrentChecks) {
-  const batch = serviceDefinitions.slice(index, index + maximumConcurrentChecks);
-  services.push(...(await Promise.all(batch.map(loadService))));
-}`;
-
-export const remediationFixture = {
+export const remediationFixture = createHealthRemediationProposal({
+  currentContent: regressionHealthSource,
   incident: {
     incidentId: "configured-latency-regression",
     baselineReleaseId: "baseline-concurrent",
@@ -29,10 +20,6 @@ export const remediationFixture = {
   expectedBaseSha: regressionSource.commitSha,
   expectedBlobSha: "3333333333333333333333333333333333333333",
   path: "workers/platform/src/api/health.ts",
-  replacementContent: boundedConcurrencyHealthSource,
-  title: "fix: bound health-check concurrency",
-  rationale:
-    "Preserve the downstream-pressure intent while removing the fully serialized critical path.",
-  risk: "A bound of two permits limited overlap and must remain within downstream capacity.",
-  validationSteps: ["Run mise run check", "Run mise run e2e"],
-};
+});
+
+export const boundedConcurrencyHealthSource = remediationFixture.replacementContent;

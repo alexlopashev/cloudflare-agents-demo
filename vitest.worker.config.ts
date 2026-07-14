@@ -2,6 +2,14 @@ import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "./agent/active-composition": new URL(
+        "./workers/platform/src/demo/active-composition.ts",
+        import.meta.url,
+      ).pathname,
+    },
+  },
   plugins: [
     cloudflareTest({
       main: "./workers/platform/src/index.ts",

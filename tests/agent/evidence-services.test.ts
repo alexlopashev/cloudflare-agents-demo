@@ -51,23 +51,67 @@ describe("agent evidence services", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("uses SHA-gated repository evidence for a credential-free Workers AI deployment", async () => {
+  it.each([
+    undefined,
+    "",
+    "   ",
+  ])("uses unauthenticated live repository reads for a normalized absent token (%s)", async (token) => {
     const store = telemetryStore();
-    const fetcher = vi.fn(async () => new Response("network must not be used"));
+    const fetcher = vi.fn(async (request: Request) => {
+      const url = new URL(request.url);
+      if (url.pathname.endsWith(`/commits/${regressionSha}`)) {
+        return Response.json({
+          sha: regressionSha,
+          html_url: `https://github.com/alexlopashev/cloudflare-agents-demo/commit/${regressionSha}`,
+          commit: {
+            message: "perf: serialize health checks",
+            committer: { date: "2026-07-12T01:42:21Z" },
+          },
+          author: { login: "alexlopashev" },
+          files: [
+            {
+              filename: "workers/platform/src/api/health.ts",
+              status: "modified",
+              additions: 14,
+              deletions: 4,
+            },
+          ],
+        });
+      }
+      if (url.pathname.endsWith(`/commits/${regressionSha}/pulls`)) {
+        return Response.json([
+          {
+            number: 19,
+            title: "Scenario: serialize health checks",
+            html_url: "https://github.com/alexlopashev/cloudflare-agents-demo/pull/19",
+            state: "closed",
+            merged_at: "2026-07-12T01:42:21Z",
+            user: { login: "alexlopashev" },
+            base: { sha: "cf25e5253b106b1e7514340abe94bd42fd748725" },
+            head: { sha: regressionSha },
+          },
+        ]);
+      }
+      return new Response("not found", { status: 404 });
+    });
     const services = createAgentEvidenceServices({
       mode: "workers-ai",
       repository: { owner: "alexlopashev", repo: "cloudflare-agents-demo" },
       store,
       fetcher,
+      ...(token === undefined ? {} : { token }),
     });
 
     await expect(
-      services.repository.inspectRelease("01e7b428-ac68-4875-b178-b1fcf7874a7c"),
+      services.repository.inspectRelease("regression-sequential"),
     ).resolves.toMatchObject({
-      release: { commitSha: regressionSha },
+      commit: { sha: regressionSha },
       pullRequest: { status: "found", number: 19 },
     });
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls.every(([request]) => !request.headers.has("authorization"))).toBe(
+      true,
+    );
   });
 
   it("fails closed for mismatched fake attribution and unsupported modes", async () => {

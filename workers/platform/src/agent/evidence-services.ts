@@ -1,7 +1,10 @@
 import { regressionSource } from "../../../../packages/test-fixtures/src/scenario";
 import { regressionHealthSource } from "../../../../packages/test-fixtures/src/remediation";
-import { GitHubFetchApi, RepositoryConnector, RepositoryConnectorError } from "../github";
+import { RepositoryConnectorError } from "../github";
+import { createLiveEvidenceServices } from "./live-evidence-services";
 import type { InvestigationEvidenceServices } from "./tools";
+
+export { createLiveEvidenceServices } from "./live-evidence-services";
 
 type EvidenceStore = InvestigationEvidenceServices["telemetry"] & {
   getReleaseAttribution(releaseId: string): Promise<{
@@ -10,8 +13,7 @@ type EvidenceStore = InvestigationEvidenceServices["telemetry"] & {
   } | null>;
 };
 
-type EvidenceServiceOptions = {
-  mode: string;
+export type EvidenceServiceOptions = {
   repository: { owner: string; repo: string };
   store: EvidenceStore;
   fetcher?: (request: Request) => Promise<Response>;
@@ -108,52 +110,19 @@ function createDeterministicRepository(
   };
 }
 
-export function createAgentEvidenceServices(
+export function createDeterministicEvidenceServices(
   options: EvidenceServiceOptions,
 ): InvestigationEvidenceServices {
-  if (options.mode === "fake") {
-    return {
-      telemetry: options.store,
-      repository: createDeterministicRepository(options.store, options.repository),
-    };
-  }
-  if (options.mode !== "workers-ai") {
-    throw new TypeError(`Unsupported evidence mode: ${options.mode}`);
-  }
-  if (options.token === undefined) {
-    return {
-      telemetry: options.store,
-      repository: createDeterministicRepository(options.store, options.repository),
-    };
-  }
+  return {
+    telemetry: options.store,
+    repository: createDeterministicRepository(options.store, options.repository),
+  };
+}
 
-  const api = new GitHubFetchApi({
-    repository: options.repository,
-    maxResponseBytes: 64 * 1_024,
-    ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
-    ...(options.token === undefined ? {} : { token: options.token }),
-  });
-  const repository = new RepositoryConnector({
-    api,
-    releases: {
-      resolve: async (versionId) => {
-        const release = await options.store.getReleaseAttribution(versionId);
-        if (release === null) {
-          throw new RepositoryConnectorError("unavailable", "Release evidence is unavailable.");
-        }
-        return release;
-      },
-    },
-    repository: options.repository,
-    allowedPathPrefixes: ["apps/web/src/", "workers/platform/src/api/"],
-    limits: {
-      maxApiResponseBytes: 64 * 1_024,
-      maxChangedFiles: 32,
-      maxFiles: 4,
-      maxFileBytes: 32 * 1_024,
-      maxPatchBytes: 32 * 1_024,
-      maxTotalBytes: 64 * 1_024,
-    },
-  });
-  return { telemetry: options.store, repository };
+export function createAgentEvidenceServices(
+  options: EvidenceServiceOptions & { mode: string },
+): InvestigationEvidenceServices {
+  if (options.mode === "fake") return createDeterministicEvidenceServices(options);
+  if (options.mode === "workers-ai") return createLiveEvidenceServices(options);
+  throw new TypeError(`Unsupported evidence mode: ${options.mode}`);
 }
