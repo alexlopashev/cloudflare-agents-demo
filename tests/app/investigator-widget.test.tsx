@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   canSubmitInvestigatorRequest,
+  configuredInvestigationPrompt,
   InvestigationStarter,
   InvestigatorWidgetChrome,
 } from "../../apps/web/src/investigator/InvestigatorWidget";
@@ -45,6 +46,9 @@ describe("investigator support widget", () => {
     expect(chrome).not.toContain("notification-badge");
     expect(starter).toContain("Investigate the seeded latency regression");
     expect(starter).toContain('type="button"');
+    expect(configuredInvestigationPrompt).toMatch(
+      /investigate the seeded latency regression[\s\S]+prepare the guarded remediation preview/i,
+    );
   });
 
   it("opens a named dialog with status and a collapse action", () => {

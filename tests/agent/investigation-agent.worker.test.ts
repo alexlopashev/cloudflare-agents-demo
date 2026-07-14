@@ -114,8 +114,8 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     });
 
     expect(policy).toEqual({
-      actionApproval: undefined,
-      actions: [],
+      actionApproval: true,
+      actions: ["create_draft_pr"],
       activeTools: [
         "compare_releases",
         "find_slow_traces",
@@ -576,6 +576,77 @@ describe("RegressionSurgeonAgent investigation policy", () => {
       output: undefined,
       state: "approval-requested",
     });
+  });
+
+  it("reaches evidence-gated remediation approval from the configured reviewer action", async () => {
+    await seedRegressionEvidence();
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("configured-reviewer-remediation");
+
+    const result = await runInDurableObject<
+      RegressionSurgeonAgent,
+      {
+        actionFingerprint: string | undefined;
+        actionState: string | undefined;
+        actionTraceId: string | undefined;
+        phaseStatuses: string[];
+        preparedFingerprint: string | undefined;
+        preparedTraceId: string | undefined;
+        toolTypes: string[];
+      }
+    >(stub, async (instance) => {
+      await instance.onStart();
+      await instance.runTurn({
+        input:
+          "Investigate the seeded latency regression and prepare the guarded remediation preview.",
+      });
+      const messages = await instance.getMessages();
+      const parts = messages.flatMap((message) => message.parts);
+      const action = parts.find((part) => part.type === "tool-create_draft_pr");
+      const actionInput =
+        action !== undefined && "input" in action && typeof action.input === "object"
+          ? action.input
+          : undefined;
+      const actionIncident =
+        actionInput !== undefined && actionInput !== null
+          ? Reflect.get(actionInput, "incident")
+          : undefined;
+      const prepared =
+        instance.state.status === "investigating" ? instance.state.preparedRemediation : undefined;
+      return {
+        actionFingerprint:
+          actionInput !== undefined && actionInput !== null
+            ? Reflect.get(actionInput, "proposalFingerprint")
+            : undefined,
+        actionState:
+          action !== undefined && "state" in action && typeof action.state === "string"
+            ? action.state
+            : undefined,
+        actionTraceId:
+          typeof actionIncident === "object" && actionIncident !== null
+            ? Reflect.get(actionIncident, "traceId")
+            : undefined,
+        phaseStatuses:
+          instance.state.status === "investigating"
+            ? instance.state.receipt.phases.map((phase) => phase.status)
+            : [],
+        preparedFingerprint: prepared?.fingerprint,
+        preparedTraceId: prepared?.proposal.incident.traceId,
+        toolTypes: parts.map((part) => part.type).filter((type) => type.startsWith("tool-")),
+      };
+    });
+
+    expect(result.phaseStatuses).toEqual(Array.from({ length: 5 }, () => "complete"));
+    expect(result.toolTypes).toEqual([
+      "tool-compare_releases",
+      "tool-find_slow_traces",
+      "tool-inspect_trace",
+      "tool-inspect_release",
+      "tool-read_repo_files",
+      "tool-create_draft_pr",
+    ]);
+    expect(result.actionState).toBe("approval-requested");
+    expect(result.actionFingerprint).toBe(result.preparedFingerprint);
+    expect(result.actionTraceId).toBe(result.preparedTraceId);
   });
 
   it("rejects a changed proposal after the receipt fingerprint is prepared", async () => {

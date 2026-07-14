@@ -89,19 +89,62 @@ export function createDeterministicModel(): LanguageModel {
     visit(value);
     return found;
   };
+  const findPreparedProposal = (value: unknown): Record<string, unknown> | undefined => {
+    const marker = "unchanged JSON: ";
+    let found: Record<string, unknown> | undefined;
+    const visit = (candidate: unknown) => {
+      if (found !== undefined || candidate === null) return;
+      if (typeof candidate === "string") {
+        const markerIndex = candidate.indexOf(marker);
+        if (markerIndex < 0) return;
+        try {
+          const parsed: unknown = JSON.parse(candidate.slice(markerIndex + marker.length).trim());
+          if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+            found = parsed as Record<string, unknown>;
+          }
+        } catch {
+          return;
+        }
+        return;
+      }
+      if (typeof candidate !== "object") return;
+      for (const nested of Array.isArray(candidate)
+        ? candidate
+        : Object.values(candidate as Record<string, unknown>)) {
+        visit(nested);
+      }
+    };
+    visit(value);
+    return found;
+  };
   const next = (prompt: unknown) => {
     const serializedPrompt = JSON.stringify(prompt);
+    const preparedProposal = findPreparedProposal(prompt);
     const receiptId =
       /active evidence receipt is ([A-Za-z0-9_-]+)/i.exec(serializedPrompt)?.[1] ?? "unknown";
     const remediationRequested = serializedPrompt
       .toLowerCase()
       .includes("prepare the guarded remediation preview");
-    if (remediationRequested) {
+    const remediationPrepared = preparedProposal !== undefined;
+    const priorEvidenceReport = serializedPrompt.includes("## Evidence");
+    if (remediationRequested && (remediationPrepared || priorEvidenceReport)) {
       if (serializedPrompt.includes('"status":"preview"')) {
         return {
           type: "text" as const,
-          text: `## Remediation
-The guarded change passed repository, path, SHA, blob, byte, line, and changed-line validation.
+          text: `## Evidence
+The configured incident completed its five incident-scoped evidence phases. The guarded one-file
+change then passed repository, path, SHA, blob, byte, line, and changed-line validation.
+
+## Inference
+The evidenced sequential service loading is the likely cause of the measured latency regression,
+and the bounded-concurrency replacement is the narrowest supported remediation.
+
+## Confidence
+High. The release comparison, representative trace, immutable commit and pull request, pinned source,
+and validated remediation input agree.
+
+## Unknowns
+The optimal concurrency bound still requires downstream capacity validation in production.
 
 ## Result
 A validated preview is ready. No GitHub write occurred because writes are disabled in this mode.
@@ -132,9 +175,10 @@ approved action to reconcile or create the draft pull request without creating a
         };
       }
       const evidencePresent =
-        serializedPrompt.includes("## Evidence") &&
-        serializedPrompt.includes(regressionSource.commitSha) &&
-        serializedPrompt.includes(`PR #${regressionSource.pullRequestNumber}`);
+        remediationPrepared ||
+        (priorEvidenceReport &&
+          serializedPrompt.includes(regressionSource.commitSha) &&
+          serializedPrompt.includes(`PR #${regressionSource.pullRequestNumber}`));
       if (!evidencePresent) {
         return {
           type: "text" as const,
@@ -144,13 +188,15 @@ approved action to reconcile or create the draft pull request without creating a
       const reportTrace =
         /Representative trace: ([A-Za-z0-9_-]+)/.exec(serializedPrompt)?.[1] ??
         remediationFixture.incident.traceId;
-      const proposal = {
-        ...remediationFixture,
-        incident: { ...remediationFixture.incident, traceId: reportTrace },
-        expectedBlobSha: findProperty(prompt, "blobSha") ?? remediationFixture.expectedBlobSha,
-        proposalFingerprint:
-          findProperty(prompt, "proposalFingerprint") ?? "proposal-v1-0000000000000000",
-      };
+      const proposal =
+        preparedProposal ??
+        ({
+          ...remediationFixture,
+          incident: { ...remediationFixture.incident, traceId: reportTrace },
+          expectedBlobSha: findProperty(prompt, "blobSha") ?? remediationFixture.expectedBlobSha,
+          proposalFingerprint:
+            findProperty(prompt, "proposalFingerprint") ?? "proposal-v1-0000000000000000",
+        } satisfies Record<string, unknown>);
       step += 1;
       return { type: "tool" as const, toolName: "create_draft_pr" as const, input: proposal };
     }

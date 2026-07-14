@@ -499,11 +499,31 @@ h1 {
   background: transparent;
   color: #7b3f2f;
 }
+.chat-panel:has(.approval-panel) .tool-timeline {
+  max-height: 150px;
+  flex: 0 0 auto;
+  padding-top: 12px;
+  overflow: auto;
+}
+.chat-panel:has(.approval-panel) .tool-timeline ol {
+  gap: 3px;
+  margin-bottom: 10px;
+}
+.chat-panel:has(.approval-panel) .tool-timeline li {
+  padding: 3px 8px;
+}
+.chat-panel:has(.approval-panel) .approval-panel {
+  min-height: 220px;
+  flex: 1 1 auto;
+}
 .messages {
   flex: 1;
   min-height: 120px;
   padding: 20px;
   overflow: auto;
+}
+.chat-panel:has(.approval-panel) .messages {
+  display: none;
 }
 .empty-state {
   max-width: 260px;

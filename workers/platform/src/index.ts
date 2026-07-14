@@ -1,7 +1,7 @@
 import type { PrepareStepContext, TurnConfig, TurnContext } from "@cloudflare/think";
 import { Think } from "@cloudflare/think";
 import { routeAgentRequest } from "agents";
-import type { LanguageModel, ToolSet } from "ai";
+import { hasToolCall, type LanguageModel, type ToolSet } from "ai";
 import {
   configuredIncidentReference,
   parseIncidentReference,
@@ -23,6 +23,7 @@ import {
 import {
   evidenceInvestigationRequested,
   messagesForCurrentInvestigation,
+  remediationPreviewRequested,
 } from "./agent/evidence-step-policy";
 import { createAgentModel } from "./agent/model";
 import { createRemediationAction } from "./agent/remediation-action";
@@ -40,11 +41,13 @@ export interface PlatformEnvironment extends PlatformBindings {
   REGRESSION_SURGEON_AGENT: DurableObjectNamespace<RegressionSurgeonAgent>;
 }
 
+type AgentToolName = EvidenceToolName | "create_draft_pr";
+
 type EvidenceStepConfig = {
-  activeTools?: EvidenceToolName[];
+  activeTools?: AgentToolName[];
   toolChoice?: {
     type: "tool";
-    toolName: EvidenceToolName;
+    toolName: AgentToolName;
   };
   system: string;
 };
@@ -132,9 +135,6 @@ rollback occurred.${prepared}`;
   }
 
   override getActions() {
-    if (this.state.status !== "investigating" || this.state.preparedRemediation === undefined) {
-      return {};
-    }
     const writeEnabled =
       this.env.MODEL_MODE === "workers-ai" && this.env.GITHUB_WRITE_ENABLED === "true";
     return { create_draft_pr: this.createRemediationAction(writeEnabled) };
@@ -244,6 +244,7 @@ rollback occurred.${prepared}`;
       this.state.status === "investigating" && this.state.preparedRemediation !== undefined;
     return {
       activeTools: [...evidenceToolNames, ...(remediationEligible ? ["create_draft_pr"] : [])],
+      stopWhen: hasToolCall("create_draft_pr"),
     };
   }
 
@@ -281,7 +282,16 @@ rollback occurred.${prepared}`;
       });
     }
     const requiredTool = nextEvidenceTool(receipt);
-    if (requiredTool === undefined) return { system: this.getSystemPrompt() };
+    if (requiredTool === undefined) {
+      if (preparedRemediation !== undefined && remediationPreviewRequested(currentMessages)) {
+        return {
+          activeTools: ["create_draft_pr"],
+          toolChoice: { type: "tool", toolName: "create_draft_pr" },
+          system: `Submit the exact prepared remediation through create_draft_pr now. Do not replace or omit its receipt-bound input.\n\n${this.getSystemPrompt()}`,
+        };
+      }
+      return { system: this.getSystemPrompt() };
+    }
     return {
       activeTools: [requiredTool],
       toolChoice: { type: "tool", toolName: requiredTool },

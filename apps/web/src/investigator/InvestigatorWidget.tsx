@@ -111,7 +111,8 @@ export function InvestigatorWidgetChrome({
   );
 }
 
-export const configuredInvestigationPrompt = "Investigate the seeded latency regression.";
+export const configuredInvestigationPrompt =
+  "Investigate the seeded latency regression and prepare the guarded remediation preview.";
 
 export function InvestigationStarter({
   disabled,
