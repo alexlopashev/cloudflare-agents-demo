@@ -937,6 +937,9 @@ contract-surface names, without returning values, validation messages, secrets, 
 Issue #77 replaces the unavailable credential-free commit-patch origin with configured PR #19's
 bounded patch and exact immutable `health.ts` source equality; it does not generalize PR discovery,
 repository paths, or release selection.
+Issue #79 caps each failed evidence phase at two persisted attempts and removes all evidence tools
+after that retry is exhausted, so a model can report bounded uncertainty but cannot produce a third
+attempt or prepare remediation.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1111,6 +1114,8 @@ Work packages:
 - Bind source selection and server-authoritative evidence selectors, expose bounded invalid receipt
   diagnostics, and prove configured PR provenance by exact immutable source equality (#71, #73, #75,
   and #77; implementation complete pending the public smoke).
+- Enforce the one-retry evidence limit in both receipt persistence and step tool availability (#79,
+  implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:

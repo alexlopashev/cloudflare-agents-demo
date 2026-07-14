@@ -256,6 +256,25 @@ describe("incident-scoped evidence receipt", () => {
     expect(nextEvidenceTool(duplicate)).toBe("find_slow_traces");
   });
 
+  it("records at most two distinct attempts for an incomplete evidence phase", () => {
+    const receipt = ["first-failure", "retry-failure", "forbidden-third-failure"].reduce(
+      (current, toolCallId) =>
+        recordEvidenceResult(current, {
+          ...completeResults[0],
+          toolCallId,
+          output: { status: "error", code: "unavailable" },
+        }),
+      createEvidenceReceipt("investigation-1", incident),
+    );
+
+    expect(receipt.phases[0]?.attempts).toEqual([
+      expect.objectContaining({ toolCallId: "first-failure", status: "error" }),
+      expect.objectContaining({ toolCallId: "retry-failure", status: "error" }),
+    ]);
+    expect(receipt.processedToolCallIds).toEqual(["first-failure", "retry-failure"]);
+    expect(nextEvidenceTool(receipt)).toBeUndefined();
+  });
+
   it.each([
     [null, "insufficient"],
     [[], "insufficient"],

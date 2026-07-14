@@ -383,6 +383,7 @@ export function recordEvidenceResult(
     return receipt;
   }
   if (receipt.phases[toolIndex]?.status === "complete") return receipt;
+  if ((receipt.phases[toolIndex]?.attempts.length ?? 0) >= 2) return receipt;
 
   const expectedIndex = receipt.phases.findIndex((phase) => phase.status !== "complete");
   const validation =

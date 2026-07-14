@@ -2,7 +2,11 @@ import { env } from "cloudflare:workers";
 import { evictDurableObject, runInDurableObject, SELF } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PlatformEnvironment, RegressionSurgeonAgent } from "../../workers/platform/src/index";
+import type {
+  InvestigationAgentState,
+  PlatformEnvironment,
+  RegressionSurgeonAgent,
+} from "../../workers/platform/src/index";
 import { createTelemetryStore } from "../../workers/platform/src/telemetry/store";
 import { openAgentChatProtocol } from "../support/agent-chat-protocol";
 
@@ -275,6 +279,49 @@ describe("RegressionSurgeonAgent investigation policy", () => {
       toolChoice: { type: "tool", toolName: "read_repo_files" },
     });
     expect(policy?.system).toMatch(/complete the missing evidence operation/i);
+  });
+
+  it("removes evidence tools after the current phase exhausts its one retry", async () => {
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("evidence-retry-exhaustion");
+    const result = await runInDurableObject<
+      RegressionSurgeonAgent,
+      {
+        policy: Awaited<ReturnType<RegressionSurgeonAgent["beforeStep"]>>;
+        receipt: InvestigationAgentState;
+      }
+    >(stub, async (instance) => {
+      instance.startConfiguredInvestigation();
+      const policy = await instance.beforeStep({
+        messages: [],
+        stepNumber: 2,
+        steps: ["first-failure", "retry-failure"].map((toolCallId) => ({
+          toolResults: [
+            {
+              toolCallId,
+              toolName: "compare_releases",
+              input: {},
+              output: { status: "error", code: "unavailable" },
+            },
+          ],
+        })),
+      } as never);
+      return { policy, receipt: instance.state };
+    });
+
+    expect(result.policy).toMatchObject({ activeTools: [] });
+    expect(result.policy).not.toHaveProperty("toolChoice");
+    expect(result.policy?.system).toMatch(/bounded retry is exhausted/i);
+    expect(result.receipt.status).toBe("investigating");
+    if (result.receipt.status !== "investigating") throw new Error("Investigation state was lost.");
+    expect(result.receipt.receipt.phases[0]).toEqual({
+      toolName: "compare_releases",
+      status: "error",
+      attempts: [
+        expect.objectContaining({ toolCallId: "first-failure" }),
+        expect.objectContaining({ toolCallId: "retry-failure" }),
+      ],
+    });
+    expect(result.receipt).not.toHaveProperty("preparedRemediation");
   });
 
   it("starts the evidence chain for an investigation request but not ordinary chat", async () => {

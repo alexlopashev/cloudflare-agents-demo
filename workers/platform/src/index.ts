@@ -300,6 +300,12 @@ rollback occurred.${prepared}`;
     }
     const requiredTool = nextEvidenceTool(receipt);
     if (requiredTool === undefined) {
+      if (!evidenceReceiptComplete(receipt)) {
+        return {
+          activeTools: [],
+          system: `${this.getSystemPrompt()}\n\nThe current evidence phase's bounded retry is exhausted. Call no tool, report the missing evidence with low confidence, and do not propose remediation.`,
+        };
+      }
       if (preparedRemediation !== undefined && remediationPreviewRequested(currentMessages)) {
         return {
           activeTools: ["create_draft_pr"],

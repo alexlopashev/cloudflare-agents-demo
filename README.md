@@ -268,7 +268,9 @@ selection, trace inspection, immutable release inspection, and allowlisted sourc
 truncated or malformed output, cross-release identifiers, and out-of-order results cannot complete a
 phase. The server—not model-generated arguments—binds the configured release pair, comparison
 window, degraded trace window, trace limit, and degraded release lookup. Validated tool output still
-has to match that incident. The final report cites the receipt. Only a complete receipt can persist
+has to match that incident. A failed phase gets one retry; after its second failed attempt, receipt
+persistence rejects additional attempts and the step policy exposes no evidence tools, allowing only
+a low-confidence report. The final report cites the receipt. Only a complete receipt can persist
 the exact one-file replacement and proposal fingerprint; approval shows that replacement and rejects
 a changed payload, while preview and write retries keep one branch identity per incident.
 
