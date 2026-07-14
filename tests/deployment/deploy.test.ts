@@ -224,7 +224,7 @@ describe("Cloudflare deployment contract", () => {
   });
 
   it("retries only pre-execution 404s while a rotated smoke key propagates", async () => {
-    const responses = [new Response(null, { status: 404 }), new Response(null, { status: 404 })];
+    const responses = Array.from({ length: 16 }, () => new Response(null, { status: 404 }));
     responses.push(new Response("ok", { status: 200 }));
     const request = vi.fn(async () => responses.shift() ?? new Response(null, { status: 500 }));
     const wait = vi.fn(async () => undefined);
@@ -232,8 +232,8 @@ describe("Cloudflare deployment contract", () => {
     const response = await requestDeploymentSmokeWithRetry(request, wait);
 
     expect(response.status).toBe(200);
-    expect(request).toHaveBeenCalledTimes(3);
-    expect(wait).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenCalledTimes(17);
+    expect(wait).toHaveBeenCalledTimes(16);
   });
 
   it("never retries a smoke response that may follow endpoint execution", async () => {

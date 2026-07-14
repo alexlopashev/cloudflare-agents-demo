@@ -30,7 +30,7 @@ export const deploymentVersionPropagationPolicy = Object.freeze({
 });
 
 export const deploymentSmokeRetryPolicy = Object.freeze({
-  maxAttempts: 16,
+  maxAttempts: 80,
   delayMs: 750,
 });
 
