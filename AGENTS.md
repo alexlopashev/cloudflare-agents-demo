@@ -62,6 +62,8 @@ The following invariants are especially important and must remain covered.
 - Step limits stop runaway loops.
 - Tool results are size-bounded before entering context.
 - Reports distinguish evidence, inference, confidence, and unknowns.
+- Live report verification recognizes only those four exact ordered sections at line-level Markdown,
+  bold, or colon-label headings; it never asserts or exposes the section prose.
 - Reconnection does not duplicate committed messages or side effects.
 
 Do not assert exact natural-language output from a live model. Assert structured messages, selected tools, evidence references, approvals, and terminal state.
