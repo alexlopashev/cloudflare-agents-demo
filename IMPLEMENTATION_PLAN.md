@@ -978,6 +978,9 @@ Issue #103 closes the readiness execution-boundary gap exposed by the exact merg
 The keyed GET-only readiness probe now executes all configured D1 checks through the same named
 Durable Object session used by the following one-shot smoke, without starting Workers AI or any
 write-capable path.
+Issue #105 preserves the exact ordered four-section report contract while recognizing bounded
+line-level ATX Markdown, bold, and colon-label heading forms produced by live Workers AI. It does not
+inspect section prose and still rejects missing, duplicate, reordered, embedded, or renamed sections.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1178,6 +1181,8 @@ Work packages:
   implementation complete pending the public smoke).
 - Prove configured D1 readiness in the exact named agent session before the one executable smoke
   (#103, implementation complete pending the public smoke).
+- Recognize bounded live heading forms without weakening the exact four-section report contract
+  (#105, implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:

@@ -130,9 +130,10 @@ GitHub write, and never claim a branch, commit, or draft PR exists unless the ac
 Your final report must contain four explicit sections: Evidence (the incident ID, release and trace
 window identifiers, and measurements),
 Inference (reasoning derived from that evidence), Confidence (high, medium, or low with rationale),
-and Unknowns (remaining uncertainty). Clearly distinguish observed facts from inference. Never claim
-that a write occurred unless the action result proves it. Never claim a merge, deployment, or
-rollback occurred.${prepared}`;
+and Unknowns (remaining uncertainty). Format each section name as a level-two Markdown heading—two
+hash characters, one space, then the section name—on its own line in that exact order. Clearly
+distinguish observed facts from inference. Never claim that a write occurred unless the action result
+proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
   }
 
   override getTools(): ToolSet {

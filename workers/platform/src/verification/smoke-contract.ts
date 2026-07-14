@@ -286,6 +286,26 @@ function includesReference(value: string, reference: string): boolean {
   return value.includes(reference);
 }
 
+const reportSectionNames = ["Evidence", "Inference", "Confidence", "Unknowns"] as const;
+
+function reportSectionHeading(line: string): (typeof reportSectionNames)[number] | undefined {
+  const trimmed = line.trim();
+  const match =
+    /^#{1,6}\s+(Evidence|Inference|Confidence|Unknowns)\s*$/i.exec(trimmed) ??
+    /^\*\*(Evidence|Inference|Confidence|Unknowns):?\*\*\s*:?\s*$/i.exec(trimmed) ??
+    /^__(Evidence|Inference|Confidence|Unknowns):?__\s*:?\s*$/i.exec(trimmed) ??
+    /^(Evidence|Inference|Confidence|Unknowns)\s*:\s*$/i.exec(trimmed);
+  const section = match?.[1]?.toLowerCase();
+  return reportSectionNames.find((name) => name.toLowerCase() === section);
+}
+
+function structuredReportSections(report: string): (typeof reportSectionNames)[number][] {
+  return report
+    .split(/\r?\n/)
+    .map(reportSectionHeading)
+    .filter((section): section is (typeof reportSectionNames)[number] => section !== undefined);
+}
+
 type SmokeVerificationInvalidField = z.infer<typeof smokeVerificationInvalidFieldSchema>;
 
 class SmokeVerificationContractError extends TypeError {
@@ -317,10 +337,7 @@ export function createSmokeVerificationReceipt(input: unknown): SmokeVerificatio
   const { receipt, preparedRemediation } = investigation;
   const evidence = receipt.evidence;
   const proposal = preparedRemediation.proposal;
-  const reportSections = Array.from(
-    investigation.report.matchAll(/^#{1,6}\s+(Evidence|Inference|Confidence|Unknowns)\s*$/gim),
-    (match) => match[1],
-  );
+  const reportSections = structuredReportSections(investigation.report);
   const remediationReferences = [
     investigation.incident.incidentId,
     evidence.selectedTraceId,

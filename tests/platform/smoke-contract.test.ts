@@ -173,6 +173,36 @@ describe("deployment smoke verification receipt", () => {
     });
   });
 
+  it("recognizes the exact ordered sections when the live model uses bold headings", () => {
+    const input = validInput();
+    input.investigation.report =
+      "**Evidence:**\nPersisted receipt complete.\n**Inference:**\nBounded cause.\n**Confidence:**\nHigh.\n**Unknowns:**\nNone material.";
+
+    expect(createSmokeVerificationReceipt(input).reportSections).toEqual([
+      "Evidence",
+      "Inference",
+      "Confidence",
+      "Unknowns",
+    ]);
+  });
+
+  it.each([
+    [
+      "embedded prose",
+      "The Evidence: is complete.\nInference: bounded.\nConfidence: high.\nUnknowns: none.",
+    ],
+    [
+      "duplicate section",
+      "Evidence:\nA.\nInference:\nB.\nConfidence:\nC.\nUnknowns:\nD.\nUnknowns:\nE.",
+    ],
+    ["reordered sections", "Inference:\nB.\nEvidence:\nA.\nConfidence:\nC.\nUnknowns:\nD."],
+  ])("rejects %s instead of weakening the report structure", (_label, report) => {
+    const input = validInput();
+    input.investigation.report = report;
+
+    expect(() => createSmokeVerificationReceipt(input)).toThrow(/verification/i);
+  });
+
   it("classifies final verification failures with only whitelisted surface names", () => {
     const input = validInput();
     input.investigation.report = "private model prose without structured sections";
