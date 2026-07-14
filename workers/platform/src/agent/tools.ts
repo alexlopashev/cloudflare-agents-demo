@@ -66,6 +66,8 @@ const readFilesSchema = z
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+class ConfiguredSelectorUnavailableError extends Error {}
+
 function byteLength(value: unknown): number {
   return encoder.encode(JSON.stringify(value)).byteLength;
 }
@@ -93,6 +95,13 @@ function truncateResult(value: unknown, maxResultBytes: number): unknown {
 }
 
 function boundedError(error: unknown) {
+  if (error instanceof ConfiguredSelectorUnavailableError) {
+    return {
+      status: "error" as const,
+      code: "invalid-input" as const,
+      message: "Configured evidence selector is unavailable." as const,
+    };
+  }
   if (error instanceof RepositoryConnectorError || error instanceof TelemetryBoundsError) {
     return {
       status: "error" as const,
@@ -194,7 +203,9 @@ export function createInvestigationTools(
         }
         configuredInputSchema.parse(rawInput);
         return executeBounded(async () => {
-          const selectedTraceId = evidenceId.parse(options.selectedTraceId?.());
+          const selected = evidenceId.safeParse(options.selectedTraceId?.());
+          if (!selected.success) throw new ConfiguredSelectorUnavailableError();
+          const selectedTraceId = selected.data;
           return services.telemetry.getTraceDetail(selectedTraceId);
         }, maxResultBytes);
       },
@@ -217,16 +228,20 @@ export function createInvestigationTools(
         "Read a small allowlisted set of repository files at one full immutable commit SHA.",
       inputSchema: incident === undefined ? readFilesSchema : configuredInputSchema,
       execute: async (rawInput) => {
-        const input = (() => {
-          if (incident === undefined) return readFilesSchema.parse(rawInput);
-          configuredInputSchema.parse(rawInput);
+        if (incident === undefined) {
+          const input = readFilesSchema.parse(rawInput);
+          return executeBounded(() => services.repository.readFiles(input), maxResultBytes);
+        }
+        configuredInputSchema.parse(rawInput);
+        return executeBounded(async () => {
           const selected = options.selectedSource?.();
-          return readFilesSchema.parse({
+          const input = readFilesSchema.safeParse({
             commitSha: selected?.commitSha,
             paths: selected === undefined ? undefined : [selected.path],
           });
-        })();
-        return executeBounded(() => services.repository.readFiles(input), maxResultBytes);
+          if (!input.success) throw new ConfiguredSelectorUnavailableError();
+          return services.repository.readFiles(input.data);
+        }, maxResultBytes);
       },
     }),
   };

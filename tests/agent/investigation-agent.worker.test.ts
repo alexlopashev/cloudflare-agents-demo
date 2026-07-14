@@ -281,6 +281,67 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     expect(policy?.system).toMatch(/complete the missing evidence operation/i);
   });
 
+  it("hands the current-step receipt selector to the immediately following trace tool", async () => {
+    await seedRegressionEvidence();
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("current-step-trace-selector");
+    const result = await runInDurableObject<RegressionSurgeonAgent, unknown>(
+      stub,
+      async (instance) => {
+        instance.startConfiguredInvestigation();
+        await instance.beforeStep({
+          messages: [],
+          stepNumber: 2,
+          steps: [
+            {
+              toolResults: [
+                {
+                  toolCallId: "compare-current-step",
+                  toolName: "compare_releases",
+                  input: {},
+                  output: {
+                    status: "ready",
+                    windowMs: 30 * 24 * 60 * 60 * 1_000,
+                    baseline: { count: 20, p50Ms: 130, p75Ms: 130, p95Ms: 130, errorRate: 0 },
+                    candidate: { count: 20, p50Ms: 381, p75Ms: 381, p95Ms: 381, errorRate: 0 },
+                    delta: { p75Ms: 251 },
+                  },
+                },
+              ],
+            },
+            {
+              toolResults: [
+                {
+                  toolCallId: "slow-current-step",
+                  toolName: "find_slow_traces",
+                  input: {},
+                  output: [
+                    {
+                      traceId: "regression-sequential-trace-20",
+                      interactionId: "regression-sequential-interaction-20",
+                      releaseId: "regression-sequential",
+                      startedAtMs: 1_700_086_420_000,
+                      durationMs: 381,
+                      outcome: "success",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        } as never);
+        const tool = instance.getTools().inspect_trace as {
+          execute?: (input: unknown, options: unknown) => Promise<unknown>;
+        };
+        if (tool.execute === undefined) throw new Error("Trace tool was not executable.");
+        return tool.execute({}, {});
+      },
+    );
+
+    expect(result).toMatchObject({
+      trace: { traceId: "regression-sequential-trace-20", releaseId: "regression-sequential" },
+    });
+  });
+
   it("removes evidence tools after the current phase exhausts its one retry", async () => {
     const stub = env.REGRESSION_SURGEON_AGENT.getByName("evidence-retry-exhaustion");
     const result = await runInDurableObject<

@@ -215,7 +215,8 @@ invalid receipt shape exposes only a bounded whitelist of contract surfaces—ne
 validation messages. Deployment prints that safe diagnostic, and the smoke stops without invoking
 preview or exposing model prose. All five configured tools derive selectors from runtime
 configuration or that receipt; model-generated releases, windows, traces, commits, and paths cannot
-redirect or block the investigation.
+redirect or block the investigation. A missing receipt selector is fixed `invalid-input`, while an
+actual evidence-service failure is fixed `unavailable`; neither diagnostic exposes values.
 
 The real WebSocket protocol contract is also exercised locally: reconnect replays the persisted
 pending approval, and a repeated approval response commits one guarded preview result without
