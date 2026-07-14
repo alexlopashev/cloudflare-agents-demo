@@ -206,9 +206,10 @@ new one-file commit on current `main`; otherwise it fails stale. Run
 `mise run deploy:writes:disable` immediately after the demonstration; ordinary `deploy` and
 `deploy:refresh` also return to the default-off posture.
 After disabling writes, run `mise run github:writes:secret:delete` to revoke the Worker credential.
-The keyed smoke may retry the endpoint's pre-execution 404 briefly while a newly rotated smoke key
-propagates across Cloudflare. It returns every other status immediately, so a Workers AI turn or
-other endpoint work is never duplicated. Before remediation, the keyed route classifies the fixed
+The keyed smoke may retry the endpoint's pre-execution 404 for at most one minute while a newly
+rotated smoke key propagates across Cloudflare. It returns every other status immediately, so a
+Workers AI turn or other endpoint work is never duplicated. Before remediation, the keyed route
+classifies the fixed
 five-phase receipt. An incomplete receipt returns only bounded tool names and statuses, while an
 invalid receipt shape exposes only a bounded whitelist of contract surfaces—never values or
 validation messages. Deployment prints that safe diagnostic, and the smoke stops without invoking
