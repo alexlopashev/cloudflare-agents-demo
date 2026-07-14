@@ -7,6 +7,7 @@ import {
 } from "../../../../packages/contracts/src/incident";
 import { RepositoryConnectorError } from "../github";
 import { TelemetryBoundsError } from "../telemetry/store";
+import { configuredComparisonWindowMs, configuredSlowTraceLimit } from "./evidence-policy";
 
 type TelemetryEvidence = {
   compareReleases(input: {
@@ -127,52 +128,52 @@ export function createInvestigationTools(
   }
   const incident =
     options.incident === undefined ? undefined : parseIncidentReference(options.incident);
-  const incidentMismatch = () =>
-    truncateResult(
-      {
-        status: "error" as const,
-        code: "incident-mismatch" as const,
-        message: "Evidence request does not match the configured incident." as const,
-      },
-      maxResultBytes,
-    );
+  const configuredCompareReleasesSchema = compareReleasesSchema.partial();
+  const configuredFindSlowTracesSchema = findSlowTracesSchema.partial();
+  const configuredInspectReleaseSchema = inspectReleaseSchema.partial();
 
   return {
     compare_releases: tool({
       description: "Compare only the configured measured release pair in one bounded window.",
-      inputSchema: compareReleasesSchema,
+      inputSchema: incident === undefined ? compareReleasesSchema : configuredCompareReleasesSchema,
       execute: async (rawInput) => {
-        const input = compareReleasesSchema.parse(rawInput);
-        if (
-          incident !== undefined &&
-          (input.baselineReleaseId !== incident.baselineReleaseId ||
-            input.candidateReleaseId !== incident.degradedReleaseId)
-        ) {
-          return incidentMismatch();
-        }
-        return executeBounded(() => services.telemetry.compareReleases(input), maxResultBytes);
+        const query = (() => {
+          if (incident === undefined) return compareReleasesSchema.parse(rawInput);
+          configuredCompareReleasesSchema.parse(rawInput);
+          return {
+            baselineReleaseId: incident.baselineReleaseId,
+            candidateReleaseId: incident.degradedReleaseId,
+            windowMs: configuredComparisonWindowMs,
+          };
+        })();
+        return executeBounded(() => services.telemetry.compareReleases(query), maxResultBytes);
       },
     }),
     find_slow_traces: tool({
       description: "Find a bounded set of slow traces for the configured degraded release.",
-      inputSchema: findSlowTracesSchema,
+      inputSchema: incident === undefined ? findSlowTracesSchema : configuredFindSlowTracesSchema,
       execute: async (rawInput) => {
-        const input = findSlowTracesSchema.parse(rawInput);
-        if (input.untilMs <= input.sinceMs) throw new TypeError("Trace time window is invalid.");
-        if (
-          incident !== undefined &&
-          (input.releaseId !== incident.degradedReleaseId ||
-            input.sinceMs !== incident.traceWindow.sinceMs ||
-            input.untilMs !== incident.traceWindow.untilMs)
-        ) {
-          return incidentMismatch();
-        }
-        const query = {
-          sinceMs: input.sinceMs,
-          untilMs: input.untilMs,
-          limit: input.limit,
-          ...(input.releaseId === undefined ? {} : { releaseId: input.releaseId }),
-        };
+        const query = (() => {
+          if (incident === undefined) {
+            const input = findSlowTracesSchema.parse(rawInput);
+            if (input.untilMs <= input.sinceMs) {
+              throw new TypeError("Trace time window is invalid.");
+            }
+            return {
+              sinceMs: input.sinceMs,
+              untilMs: input.untilMs,
+              limit: input.limit,
+              ...(input.releaseId === undefined ? {} : { releaseId: input.releaseId }),
+            };
+          }
+          configuredFindSlowTracesSchema.parse(rawInput);
+          return {
+            releaseId: incident.degradedReleaseId,
+            sinceMs: incident.traceWindow.sinceMs,
+            untilMs: incident.traceWindow.untilMs,
+            limit: configuredSlowTraceLimit,
+          };
+        })();
         return executeBounded(() => services.telemetry.findSlowTraces(query), maxResultBytes);
       },
     }),
@@ -191,16 +192,14 @@ export function createInvestigationTools(
     inspect_release: tool({
       description:
         "Resolve one measured release to its immutable Git commit, associated pull request, and bounded changed-file evidence.",
-      inputSchema: inspectReleaseSchema,
+      inputSchema: incident === undefined ? inspectReleaseSchema : configuredInspectReleaseSchema,
       execute: async (rawInput) => {
-        const input = inspectReleaseSchema.parse(rawInput);
-        if (incident !== undefined && input.versionId !== incident.degradedReleaseId) {
-          return incidentMismatch();
-        }
-        return executeBounded(
-          () => services.repository.inspectRelease(input.versionId),
-          maxResultBytes,
-        );
+        const versionId = (() => {
+          if (incident === undefined) return inspectReleaseSchema.parse(rawInput).versionId;
+          configuredInspectReleaseSchema.parse(rawInput);
+          return incident.degradedReleaseId;
+        })();
+        return executeBounded(() => services.repository.inspectRelease(versionId), maxResultBytes);
       },
     }),
     read_repo_files: tool({

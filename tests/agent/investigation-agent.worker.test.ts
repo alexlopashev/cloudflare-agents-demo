@@ -193,7 +193,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
                 },
                 output: {
                   status: "ready",
-                  windowMs: 60_000,
+                  windowMs: 30 * 24 * 60 * 60 * 1_000,
                   baseline: { count: 20, p50Ms: 130, p75Ms: 130, p95Ms: 130, errorRate: 0 },
                   candidate: { count: 20, p50Ms: 380, p75Ms: 380, p95Ms: 380, errorRate: 0 },
                   delta: { p75Ms: 250 },

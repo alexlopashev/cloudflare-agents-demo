@@ -265,9 +265,11 @@ metric ingestion cannot replace the configured incident.
 Five single-purpose tools advance one persisted receipt in order: release comparison, slow-trace
 selection, trace inspection, immutable release inspection, and allowlisted source reading. Prose,
 truncated or malformed output, cross-release identifiers, and out-of-order results cannot complete a
-phase. The final report cites the receipt. Only a complete receipt can persist the exact one-file
-replacement and proposal fingerprint; approval shows that replacement and rejects a changed payload,
-while preview and write retries keep one branch identity per incident.
+phase. The server—not model-generated arguments—binds the configured release pair, comparison
+window, degraded trace window, trace limit, and degraded release lookup. Validated tool output still
+has to match that incident. The final report cites the receipt. Only a complete receipt can persist
+the exact one-file replacement and proposal fingerprint; approval shows that replacement and rejects
+a changed payload, while preview and write retries keep one branch identity per incident.
 
 Telemetry ingestion is retry-safe at its D1 boundary. Exact release, trace, span, and UX-event
 replays remain idempotent; conflicting identifier reuse aborts the whole write before related rows

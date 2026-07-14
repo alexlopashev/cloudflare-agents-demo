@@ -19,6 +19,7 @@ import {
   type EvidenceToolName,
   type EvidenceToolResult,
 } from "./agent/evidence-receipt";
+import { configuredComparisonWindowMs, configuredSlowTraceLimit } from "./agent/evidence-policy";
 import {
   evidenceInvestigationRequested,
   messagesForCurrentInvestigation,
@@ -100,7 +101,7 @@ export class RegressionSurgeonAgent extends Think<PlatformEnvironment, Investiga
 
   override getSystemPrompt(): string {
     const incident = configuredIncidentReference(this.env);
-    const measuredEvidence = `The configured incident is ${incident.incidentId}. Its measured baseline release is ${incident.baselineReleaseId} and its measured degraded release is ${incident.degradedReleaseId}. Compare them with windowMs 2592000000. Search degraded traces with sinceMs ${incident.traceWindow.sinceMs}, untilMs ${incident.traceWindow.untilMs}, releaseId ${incident.degradedReleaseId}, and limit 5. Use those exact values.`;
+    const measuredEvidence = `The configured incident is ${incident.incidentId}. Its measured baseline release is ${incident.baselineReleaseId} and its measured degraded release is ${incident.degradedReleaseId}. The server binds comparison windowMs ${configuredComparisonWindowMs} and slow-trace selectors sinceMs ${incident.traceWindow.sinceMs}, untilMs ${incident.traceWindow.untilMs}, releaseId ${incident.degradedReleaseId}, and limit ${configuredSlowTraceLimit}; you cannot select or modify them.`;
     const receiptContext =
       this.state.status === "investigating"
         ? ` The active evidence receipt is ${this.state.receipt.investigationId}; cite that receipt identifier in the Evidence section.`
