@@ -8,7 +8,10 @@ import { composeExternalConfiguration } from "./config";
 import { generateRegressionScenario } from "./scenario/generator";
 import { handleScenarioRequest } from "./scenario/handler";
 import { createTelemetryStore } from "./telemetry/store";
-import { createSmokeVerificationReceipt } from "./verification/smoke-contract";
+import {
+  createSmokeEvidenceDiagnostic,
+  createSmokeVerificationReceipt,
+} from "./verification/smoke-contract";
 import { handleUxTelemetryRequest } from "./telemetry/ux-handler";
 
 export interface FetchBinding {
@@ -191,6 +194,8 @@ export async function handlePlatformRequest(
       runLocalRemediationPreview(): Promise<unknown>;
     };
     const investigation = await agent.runLocalInvestigation();
+    const diagnostic = createSmokeEvidenceDiagnostic(investigation);
+    if (diagnostic !== undefined) return Response.json(diagnostic, { status: 422 });
     const remediation = await agent.runLocalRemediationPreview();
     const verification = createSmokeVerificationReceipt({ investigation, remediation });
     return Response.json({ verification });

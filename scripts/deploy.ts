@@ -12,6 +12,7 @@ import {
   buildPlatformDeploymentConfig,
   buildEvidenceResetSql,
   deploymentSmokeRetryPolicy,
+  deploymentSmokeFailureMessage,
   deploymentVersionPropagationPolicy,
   parseD1DatabaseId,
   parseDeploymentResult,
@@ -270,7 +271,13 @@ async function smoke(state: z.infer<typeof stateSchema>) {
       ),
   );
   if (!smokeResponse.ok) {
-    throw new Error(`Public agent smoke returned HTTP ${smokeResponse.status}.`);
+    let failureBody: unknown;
+    try {
+      failureBody = await smokeResponse.json();
+    } catch {
+      failureBody = undefined;
+    }
+    throw new Error(deploymentSmokeFailureMessage(smokeResponse.status, failureBody));
   }
   const smokeResult = await smokeResponse.json();
   const returned = z.object({ verification: smokeVerificationReceiptSchema }).parse(smokeResult);

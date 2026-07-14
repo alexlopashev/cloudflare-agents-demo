@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { parseIncidentReference } from "../packages/contracts/src/incident.ts";
+import { smokeEvidenceDiagnosticSchema } from "../workers/platform/src/verification/smoke-contract.ts";
 
 const shaSchema = z.string().regex(/^[0-9a-f]{40}$/);
 const uuidSchema = z.string().uuid();
@@ -20,6 +21,17 @@ export const deploymentSmokeRetryPolicy = Object.freeze({
   maxAttempts: 16,
   delayMs: 750,
 });
+
+export function deploymentSmokeFailureMessage(status: number, body: unknown): string {
+  const parsed = smokeEvidenceDiagnosticSchema.safeParse(body);
+  if (!parsed.success) return `Public agent smoke returned HTTP ${status}.`;
+  const incompletePhases = parsed.data.error.phases.filter((phase) => phase.status !== "complete");
+  const detail =
+    incompletePhases.length > 0
+      ? incompletePhases.map((phase) => `${phase.toolName}=${phase.status}`).join(", ")
+      : "prepared_remediation=missing";
+  return `Public agent smoke returned HTTP ${status}: ${parsed.data.error.code} (${detail}).`;
+}
 
 export function buildDeploymentInteractionId(
   label: "baseline" | "degraded",

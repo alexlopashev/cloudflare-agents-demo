@@ -910,7 +910,9 @@ polling remains isolated from those request paths. A narrow readiness route expo
 version/Git attribution so deployment can wait for the exact baseline or degraded version at the
 public edge for three consecutive observations before starting any measured POST. Deployment health
 also carries the expected release through a narrow media type so an older or stale edge rejects the
-request before dependency calls or trace persistence.
+request before dependencies or persistence. Issue #64 makes the keyed smoke classify the fixed
+five-phase receipt before remediation: incomplete evidence returns only bounded phase/status
+diagnostics, deployment surfaces the non-complete phases, and preview is never invoked.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1078,6 +1080,10 @@ Work packages:
 - Make the first-run UX direct, honest, accessible, and explicit about preview versus live writes
   (#43, implemented and browser-verified at desktop and 390px widths).
 - Remove test-only runtime composition and normalize external configuration once (#44, implemented).
+- Keep executable deployment traffic one-shot and make public edge handoff release-safe (#59,
+  implemented).
+- Diagnose incomplete live evidence with bounded phase statuses before remediation, then restore the
+  exact five-phase public smoke (#64, diagnostic implemented; live recovery in progress).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:

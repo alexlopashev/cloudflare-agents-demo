@@ -9,6 +9,7 @@ import {
   buildEvidenceResetSql,
   deploymentSmokeRetryPolicy,
   deploymentVersionPropagationPolicy,
+  deploymentSmokeFailureMessage,
   parseD1DatabaseId,
   parseDeploymentResult,
   parseGitHubWriteSecretInventory,
@@ -230,6 +231,31 @@ describe("Cloudflare deployment contract", () => {
     expect(response.status).toBe(500);
     expect(request).toHaveBeenCalledOnce();
     expect(wait).not.toHaveBeenCalled();
+  });
+
+  it("surfaces only bounded incomplete evidence phase diagnostics", () => {
+    const message = deploymentSmokeFailureMessage(422, {
+      error: {
+        code: "incomplete-evidence-receipt",
+        phases: [
+          { toolName: "compare_releases", status: "complete" },
+          { toolName: "find_slow_traces", status: "complete" },
+          { toolName: "inspect_trace", status: "complete" },
+          { toolName: "inspect_release", status: "complete" },
+          { toolName: "read_repo_files", status: "insufficient" },
+        ],
+      },
+    });
+
+    expect(message).toBe(
+      "Public agent smoke returned HTTP 422: incomplete-evidence-receipt (read_repo_files=insufficient).",
+    );
+    expect(
+      deploymentSmokeFailureMessage(500, {
+        error: "secret model prose",
+        token: "credential-must-not-surface",
+      }),
+    ).toBe("Public agent smoke returned HTTP 500.");
   });
 
   it("attempts a side-effecting deployment endpoint exactly once", async () => {
