@@ -6,4 +6,15 @@ export const evidenceToolNames = [
   "read_repo_files",
 ] as const;
 
+export const evidenceErrorCodes = [
+  "invalid-input",
+  "not-allowed",
+  "limit-exceeded",
+  "rate-limited",
+  "unavailable",
+  "malformed-response",
+  "not-found",
+  "incident-mismatch",
+] as const;
+
 export type EvidenceToolName = (typeof evidenceToolNames)[number];

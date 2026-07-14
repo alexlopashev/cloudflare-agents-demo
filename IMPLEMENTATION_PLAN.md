@@ -912,7 +912,8 @@ public edge for three consecutive observations before starting any measured POST
 also carries the expected release through a narrow media type so an older or stale edge rejects the
 request before dependencies or persistence. Issue #64 makes the keyed smoke classify the fixed
 five-phase receipt before remediation: incomplete evidence returns only bounded phase/status
-diagnostics, deployment surfaces the non-complete phases, and preview is never invoked.
+diagnostics plus a whitelisted reason code for errors, deployment surfaces the non-complete phases,
+and preview is never invoked.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.

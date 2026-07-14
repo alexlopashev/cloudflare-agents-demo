@@ -186,6 +186,26 @@ describe("incident-scoped evidence receipt", () => {
     expect(evidenceReceiptComplete(receipt)).toBe(false);
   });
 
+  it("preserves only the bounded tool error code as the failed attempt reason", () => {
+    const receipt = recordEvidenceResult(createEvidenceReceipt("investigation-1", incident), {
+      ...completeResults[0],
+      output: {
+        status: "error",
+        code: "rate-limited",
+        message: "Untrusted upstream detail must not be persisted.",
+      },
+    });
+
+    expect(receipt.phases[0]?.attempts).toEqual([
+      {
+        toolCallId: "compare_releases",
+        status: "error",
+        reason: "rate-limited",
+      },
+    ]);
+    expect(JSON.stringify(receipt)).not.toContain("Untrusted upstream detail");
+  });
+
   it("rejects the former interval-duration field as trace-path evidence", () => {
     const readyForTrace = completeResults
       .slice(0, 2)

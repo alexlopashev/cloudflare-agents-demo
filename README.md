@@ -189,7 +189,8 @@ The keyed smoke may retry the endpoint's pre-execution 404 briefly while a newly
 propagates across Cloudflare. It returns every other status immediately, so a Workers AI turn or
 other endpoint work is never duplicated. Before remediation, the keyed route classifies the fixed
 five-phase receipt. An incomplete receipt returns only bounded tool names and statuses, deployment
-prints the non-complete phases, and the smoke stops without invoking preview or exposing model prose.
+prints the non-complete phases plus a whitelisted reason code for errors, and the smoke stops without
+invoking preview or exposing model prose.
 
 The real WebSocket protocol contract is also exercised locally: reconnect replays the persisted
 pending approval, and a repeated approval response commits one guarded preview result without
