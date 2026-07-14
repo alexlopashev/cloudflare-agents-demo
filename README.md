@@ -158,8 +158,10 @@ Every keyed smoke applies the same consecutive exact-version gate to the recorde
 investigator before it checks public routes or submits executable verification.
 It then polls a smoke-key-protected, GET-only evidence-readiness route until the configured D1
 comparison, representative trace, source receipt, and exact deployed-main preview receipt are
-readable. Only 404/503 from that side-effect-free route may retry; it cannot call Workers AI,
-remediation, GitHub, health, or telemetry writes. The executable agent smoke remains single-shot.
+readable through the exact named Durable Object session that will run the smoke. This proves
+availability at the agent execution boundary instead of only at the outer Worker. Only 404/503 from
+that side-effect-free route may retry; it cannot call Workers AI, remediation, GitHub, health, or
+telemetry writes. The executable agent smoke remains single-shot.
 If a complete evidence receipt fails afterward, deployment reports only whether the bounded preview
 failed (with one whitelisted policy code) or which bounded final-verification contract surfaces were
 invalid. Exception text, source, model prose, identifiers, and credentials are never returned.

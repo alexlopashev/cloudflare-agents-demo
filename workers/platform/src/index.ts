@@ -36,6 +36,7 @@ import {
 } from "./remediation/service";
 import { handlePlatformRequest, type PlatformBindings } from "./routing";
 import { createTelemetryStore } from "./telemetry/store";
+import { assertConfiguredEvidenceReady } from "./verification/evidence-readiness";
 
 export interface PlatformEnvironment extends PlatformBindings {
   REGRESSION_SURGEON_AGENT: DurableObjectNamespace<RegressionSurgeonAgent>;
@@ -369,6 +370,14 @@ rollback occurred.${prepared}`;
       toolTypes,
       report,
     };
+  }
+
+  async runLocalEvidenceReadiness(): Promise<void> {
+    await assertConfiguredEvidenceReady(
+      createTelemetryStore(this.env.TELEMETRY_DB),
+      configuredIncidentReference(this.env),
+      this.env.GIT_SHA,
+    );
   }
 
   async runLocalRemediationPreview() {

@@ -78,6 +78,12 @@ describe("Cloudflare deployment contract", () => {
     expect(deployScript.indexOf("await waitForDeploymentEvidenceReady")).toBeLessThan(
       deployScript.indexOf("await requestDeploymentSmokeWithRetry"),
     );
+    expect(deployScript.indexOf("const smokeSession =")).toBeLessThan(
+      deployScript.indexOf("await waitForDeploymentEvidenceReady"),
+    );
+    expect(deployScript).toContain(
+      "deployment-evidence-readiness?session=$" + "{encodeURIComponent(smokeSession)}",
+    );
     expect(deployScript.match(/prepareRemoteSourceEvidence\(/g)).toHaveLength(3);
     expect(deployScript).toContain('"migrations",\n    "apply"');
     expect(deployScript).toContain('"--file",\n      sourceEvidencePath');

@@ -974,6 +974,10 @@ selectors, and the persisted receipt supplies trace and source commit/path selec
 Issue #101 distinguishes a missing receipt-backed selector (`invalid-input`) from an evidence-service
 failure (`unavailable`) without exposing values or exception text. A real Durable Object regression
 also proves the current-step receipt reaches the immediately following trace tool locally.
+Issue #103 closes the readiness execution-boundary gap exposed by the exact merged #101 deployment.
+The keyed GET-only readiness probe now executes all configured D1 checks through the same named
+Durable Object session used by the following one-shot smoke, without starting Workers AI or any
+write-capable path.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1172,6 +1176,8 @@ Work packages:
   (#99, implementation complete pending the public smoke).
 - Classify receipt-selector absence separately from evidence-source unavailability (#101,
   implementation complete pending the public smoke).
+- Prove configured D1 readiness in the exact named agent session before the one executable smoke
+  (#103, implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:
