@@ -18,10 +18,18 @@ const schema = `
   DROP TABLE IF EXISTS ux_events;
   DROP TABLE IF EXISTS spans;
   DROP TABLE IF EXISTS traces;
+  DROP TABLE IF EXISTS release_source_evidence;
   DROP TABLE IF EXISTS releases;
   PRAGMA foreign_keys = ON;
   CREATE TABLE releases (
     release_id TEXT PRIMARY KEY, git_sha TEXT NOT NULL, deployed_at_ms INTEGER NOT NULL
+  );
+  CREATE TABLE release_source_evidence (
+    release_id TEXT PRIMARY KEY, commit_sha TEXT NOT NULL, commit_subject TEXT NOT NULL,
+    committed_at TEXT NOT NULL, pull_request_number INTEGER NOT NULL,
+    pull_request_head_sha TEXT NOT NULL, source_path TEXT NOT NULL, blob_sha TEXT NOT NULL,
+    byte_length INTEGER NOT NULL, content TEXT NOT NULL,
+    FOREIGN KEY (release_id) REFERENCES releases(release_id) ON DELETE CASCADE
   );
   CREATE TABLE traces (
     trace_id TEXT PRIMARY KEY, interaction_id TEXT NOT NULL, release_id TEXT NOT NULL,
@@ -43,6 +51,14 @@ const schema = `
   CREATE TRIGGER reject_conflicting_release BEFORE UPDATE ON releases
   WHEN OLD.git_sha IS NOT NEW.git_sha OR OLD.deployed_at_ms IS NOT NEW.deployed_at_ms
   BEGIN SELECT RAISE(ABORT, 'Release attribution is immutable.'); END;
+  CREATE TRIGGER reject_conflicting_release_source BEFORE UPDATE ON release_source_evidence
+  WHEN OLD.commit_sha IS NOT NEW.commit_sha OR OLD.commit_subject IS NOT NEW.commit_subject
+    OR OLD.committed_at IS NOT NEW.committed_at
+    OR OLD.pull_request_number IS NOT NEW.pull_request_number
+    OR OLD.pull_request_head_sha IS NOT NEW.pull_request_head_sha
+    OR OLD.source_path IS NOT NEW.source_path OR OLD.blob_sha IS NOT NEW.blob_sha
+    OR OLD.byte_length IS NOT NEW.byte_length OR OLD.content IS NOT NEW.content
+  BEGIN SELECT RAISE(ABORT, 'Release source evidence is immutable.'); END;
   CREATE TRIGGER reject_conflicting_trace BEFORE UPDATE ON traces
   WHEN OLD.interaction_id IS NOT NEW.interaction_id OR OLD.release_id IS NOT NEW.release_id
     OR OLD.started_at_ms IS NOT NEW.started_at_ms OR OLD.duration_ms IS NOT NEW.duration_ms
@@ -379,5 +395,39 @@ describe("D1 telemetry store", () => {
       commitSha: gitSha,
     });
     await expect(store.getReleaseAttribution("missing-release")).resolves.toBeNull();
+  });
+
+  it("persists one immutable bounded source receipt and removes it with its owned release", async () => {
+    const store = createTelemetryStore(env.TELEMETRY_DB);
+    const regressionCommitSha = "d591869a8ef995f1835ef80152f4de085b10255b";
+    await store.recordTrace({
+      ...traceInput("release-a", 1_000, 1, 120),
+      release: { releaseId: "release-a", gitSha: regressionCommitSha, deployedAtMs: 1_000 },
+    });
+    const evidence = {
+      releaseId: "release-a",
+      commitSha: regressionCommitSha,
+      commitSubject: "perf: serialize health checks (#19)",
+      committedAt: "2026-07-12T01:42:21.000Z",
+      pullRequestNumber: 19,
+      pullRequestHeadSha: "9af361e5a9420323b2c86f2670e3bf812ac58620",
+      sourcePath: "workers/platform/src/api/health.ts",
+      blobSha: "58477bb417f47e0edf26725e9638e781b69f124c",
+      byteLength: 11,
+      content: "sequential\n",
+    } as const;
+
+    await expect(store.recordReleaseSourceEvidence(evidence)).resolves.toBeUndefined();
+    await expect(store.recordReleaseSourceEvidence(evidence)).resolves.toBeUndefined();
+    await expect(store.getReleaseSourceEvidence("release-a")).resolves.toEqual(evidence);
+    await expect(
+      store.recordReleaseSourceEvidence({
+        ...evidence,
+        commitSubject: "perf: serialize altered health checks (#19)",
+      }),
+    ).rejects.toThrow(/source evidence is immutable/i);
+
+    await store.resetScenarioEvidence(["release-a"]);
+    await expect(store.getReleaseSourceEvidence("release-a")).resolves.toBeNull();
   });
 });

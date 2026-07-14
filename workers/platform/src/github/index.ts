@@ -9,6 +9,11 @@ export {
 } from "./github-public-preview-api";
 export { GitHubDraftPrApi } from "./draft-pr-api";
 export {
+  PersistedSourceRepository,
+  type PersistedSourceRepositoryOptions,
+  type PersistedSourceStore,
+} from "./persisted-source-repository";
+export {
   RepositoryConnector,
   RepositoryConnectorError,
   type GitHubRepositoryApi,

@@ -39,7 +39,7 @@ separate operator-enabled extension; it is not required for the credential-free 
 | Supported hosts | macOS and Linux, ARM64 and x64 |
 | Supported shells | sh, Bash, Zsh, Fish, and Nu |
 | Optional containers | Colima with Compose |
-| GitHub runtime integration | Immutable public patch/raw evidence by default; optional GitHub REST through constrained Worker tools |
+| GitHub runtime integration | Immutable deployment-seeded D1 source evidence by default; optional GitHub REST through constrained Worker tools |
 | PR behavior | Validated preview by default; optional approved, guarded, idempotent draft PR |
 
 ## 3. Node and Workers runtime
@@ -91,7 +91,7 @@ References:
 │   │   └── src/
 │   │       ├── agent/            # Think model, evidence tools, and services
 │   │       ├── api/              # Supervised application API
-│   │       ├── github/           # Public patch/raw and optional GitHub REST adapters
+│   │       ├── github/           # Persisted source and optional GitHub REST adapters
 │   │       ├── telemetry/        # D1 ingestion and queries
 │   │       └── index.ts
 │   │
@@ -148,9 +148,9 @@ flowchart LR
     App["Deployboard API"]
     Agent["Project Think agent"]
     Health["Health-service Worker"]
-    D1["D1 telemetry"]
+    D1["D1 telemetry and source receipt"]
     DO["Agent Durable Object"]
-    GitHub["GitHub public evidence and REST API"]
+    GitHub["GitHub preview and optional REST API"]
     AI["Workers AI"]
 
     Browser -->|"/app and RUM"| Platform
@@ -562,8 +562,9 @@ remediation eligibility, reviewer UI, and smoke verification. No tool accepts ar
 
 ## 14. GitHub PR safety
 
-The deployed Worker uses immutable GitHub public patch/raw endpoints and optional REST through
-`fetch`; it cannot invoke the mise-installed `gh` executable.
+The deployed Worker uses one immutable deployment-seeded D1 source receipt by default and optional
+REST through `fetch`; it cannot invoke the mise-installed `gh` executable. The credential-free
+release/source evidence path performs no GitHub request.
 
 `gh` is used for repository setup, authentication checks, and operator workflows.
 
@@ -850,12 +851,12 @@ permission, and preview/write-scoped incident idempotency. The
 server-side service validates configured repository and path, matching regression/base SHA, current
 blob SHA, replacement byte and line bounds, changed-line count, draft-only output, evidence-rich body,
 and deterministic branch state. Fake mode always returns a validated preview without network access.
-Credential-free live release inspection reads only `workers/platform/src/api/health.ts` from
-configured PR #19's raw head ref, configured immutable base/head SHAs, and the D1-attributed
-regression SHA. The PR ref, expected head, and regression source must match exactly by bytes and
-locally computed Git blob identity, while the configured base source must differ. Unavailable
-regression commit, PR, and diff-count metadata remains explicitly partial rather than borrowing the
-PR head's metadata. Write-disabled
+Credential-free live release inspection reads only the deployment-seeded D1 receipt for
+`workers/platform/src/api/health.ts`. Deployment derives it from configured PR #19's immutable local
+base/head/regression Git objects, requires exact head/regression bytes and Git blob identity, and
+requires the base source to differ before tying it to the measured degraded release. Runtime commit
+subject/date are evidenced; author, PR title/author/base/merge, and diff-count metadata remain
+explicitly partial. Write-disabled
 preview validation resolves the current `main` SHA from its bounded public Atom feed and compares only
 the allowlisted source at the evidenced and current immutable SHAs. Tree metadata remains mandatory
 for writes. A normalized scoped token selects the bounded REST adapter, is required before writes can
@@ -922,11 +923,11 @@ also carries the expected release through a narrow media type so an older or sta
 request before dependencies or persistence. Issue #64 makes the keyed smoke classify the fixed
 five-phase receipt before remediation: incomplete evidence returns only bounded phase/status
 diagnostics plus a whitelisted reason code for errors, deployment surfaces the non-complete phases,
-and preview is never invoked. Credential-free live evidence uses configured PR #19's narrow raw head
-ref and proves the exact remediation source matches at its immutable expected head and the
-D1-attributed regression SHA, while differing from the configured immutable base. It avoids shared
-unauthenticated REST quota and a broad patch; incomplete commit, PR, and diff-count metadata remains
-explicit rather than fabricated. Its write-disabled remediation preview resolves `main` from
+and preview is never invoked. Credential-free live evidence uses one immutable D1 source receipt
+seeded from configured PR #19's local base/head/regression Git objects and tied to the measured
+degraded release. The runtime performs no GitHub request for release/source evidence; incomplete
+author, PR, and diff-count metadata remains explicit rather than fabricated. Its write-disabled
+remediation preview resolves `main` from
 the bounded public Atom feed and validates the allowlisted file at immutable SHAs. Issue #71 binds
 the one configured incident to its exact `workers/platform/src/api/health.ts` remediation source
 rather than treating the first allowlisted commit change as the target. Issue #73 makes the configured
@@ -944,6 +945,8 @@ after that retry is exhausted, so a model can report bounded uncertainty but can
 attempt or prepare remediation.
 Issue #81 replaces the Cloudflare-unavailable PR patch transport with a raw-only proof over the
 configured PR ref, immutable base/head, regression SHA, and exact `health.ts` bytes/blob identities.
+Issue #83 supersedes that still-unreachable public transport with a deployment-seeded immutable D1
+receipt derived from the same local Git proof; the credential-free runtime reads only that receipt.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1033,8 +1036,8 @@ direct-link contracts.
 
 Acceptance criteria:
 
-- Empty and whitespace-only GitHub tokens are normalized as absent; live evidence and preview use
-  bounded unauthenticated reads while deterministic local verification stays behind its demo adapter.
+- Empty and whitespace-only GitHub tokens are normalized as absent; live release/source evidence uses
+  only the bounded D1 receipt while preview freshness remains a separate write-disabled public read.
 - Write-enabled mode rejects missing, empty, and whitespace-only tokens.
 - A failed turn permits a new explicit submission while submitted and streaming turns remain locked.
 - System and programmatic investigation prompts explicitly require release comparison, slow-trace
@@ -1122,6 +1125,8 @@ Work packages:
   implementation complete pending the public smoke).
 - Replace the unavailable PR patch transport with the configured raw PR source proof (#81,
   implementation complete pending the public smoke).
+- Replace the still-unreachable public source transport with a deployment-seeded immutable D1 receipt
+  (#83, implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:

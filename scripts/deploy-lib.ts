@@ -1,6 +1,13 @@
+import { createHash } from "node:crypto";
+
 import { z } from "zod";
 
 import { parseIncidentReference } from "../packages/contracts/src/incident.ts";
+import {
+  configuredSourceEvidencePolicy,
+  parseReleaseSourceEvidence,
+  type ReleaseSourceEvidence,
+} from "../packages/contracts/src/source-evidence.ts";
 import { smokeEvidenceDiagnosticSchema } from "../workers/platform/src/verification/smoke-contract.ts";
 
 const shaSchema = z.string().regex(/^[0-9a-f]{40}$/);
@@ -302,6 +309,104 @@ export function buildEvidenceResetSql(
     `DELETE FROM ux_events WHERE release_id IN (${ids})`,
     `DELETE FROM spans WHERE trace_id IN (SELECT trace_id FROM traces WHERE release_id IN (${ids}))`,
     `DELETE FROM traces WHERE release_id IN (${ids})`,
+    `DELETE FROM release_source_evidence WHERE release_id IN (${ids})`,
     `DELETE FROM releases WHERE release_id IN (${ids})`,
   ].join("; ");
+}
+
+type ImmutableGitSource = {
+  sha: string;
+  content: string;
+  blobSha: string;
+};
+
+type RegressionGitSource = ImmutableGitSource & {
+  subject: string;
+  committedAt: string;
+};
+
+export type ConfiguredSourceEvidenceInput = {
+  releaseId: string;
+  regression: RegressionGitSource;
+  head: ImmutableGitSource;
+  base: ImmutableGitSource;
+};
+
+function gitBlobSha(content: string): string {
+  const bytes = Buffer.from(content, "utf8");
+  return createHash("sha1").update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex");
+}
+
+function sourceProofError(): TypeError {
+  return new TypeError("Configured local Git source proof is invalid.");
+}
+
+export function buildConfiguredSourceEvidence(
+  input: ConfiguredSourceEvidenceInput,
+): ReleaseSourceEvidence {
+  const policy = configuredSourceEvidencePolicy;
+  if (
+    input.regression.sha !== policy.regressionCommitSha ||
+    input.head.sha !== policy.pullRequestHeadSha ||
+    input.base.sha !== policy.pullRequestBaseSha ||
+    input.regression.blobSha !== gitBlobSha(input.regression.content) ||
+    input.head.blobSha !== gitBlobSha(input.head.content) ||
+    input.base.blobSha !== gitBlobSha(input.base.content) ||
+    input.regression.content !== input.head.content ||
+    input.regression.blobSha !== input.head.blobSha ||
+    input.regression.content === input.base.content ||
+    input.regression.blobSha === input.base.blobSha
+  ) {
+    throw sourceProofError();
+  }
+  try {
+    return parseReleaseSourceEvidence({
+      releaseId: input.releaseId,
+      commitSha: input.regression.sha,
+      commitSubject: input.regression.subject,
+      committedAt: input.regression.committedAt,
+      pullRequestNumber: policy.pullRequestNumber,
+      pullRequestHeadSha: input.head.sha,
+      sourcePath: policy.sourcePath,
+      blobSha: input.regression.blobSha,
+      byteLength: Buffer.byteLength(input.regression.content, "utf8"),
+      content: input.regression.content,
+    });
+  } catch {
+    throw sourceProofError();
+  }
+}
+
+function sqlString(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+export function buildReleaseSourceEvidenceSql(input: ReleaseSourceEvidence): string {
+  const evidence = parseReleaseSourceEvidence(input);
+  const values = [
+    sqlString(evidence.releaseId),
+    sqlString(evidence.commitSha),
+    sqlString(evidence.commitSubject),
+    sqlString(evidence.committedAt),
+    String(evidence.pullRequestNumber),
+    sqlString(evidence.pullRequestHeadSha),
+    sqlString(evidence.sourcePath),
+    sqlString(evidence.blobSha),
+    String(evidence.byteLength),
+    sqlString(evidence.content),
+  ].join(", ");
+  return `INSERT INTO release_source_evidence
+    (release_id, commit_sha, commit_subject, committed_at, pull_request_number,
+     pull_request_head_sha, source_path, blob_sha, byte_length, content)
+    VALUES (${values})
+    ON CONFLICT (release_id) DO UPDATE SET
+      commit_sha = excluded.commit_sha,
+      commit_subject = excluded.commit_subject,
+      committed_at = excluded.committed_at,
+      pull_request_number = excluded.pull_request_number,
+      pull_request_head_sha = excluded.pull_request_head_sha,
+      source_path = excluded.source_path,
+      blob_sha = excluded.blob_sha,
+      byte_length = excluded.byte_length,
+      content = excluded.content;`;
 }

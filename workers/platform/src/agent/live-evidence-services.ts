@@ -1,38 +1,32 @@
 import {
   GitHubFetchApi,
-  GitHubPublicFetchApi,
+  PersistedSourceRepository,
   RepositoryConnector,
   RepositoryConnectorError,
 } from "../github";
 import type { EvidenceServiceOptions } from "./evidence-services";
 import type { InvestigationEvidenceServices } from "./tools";
 
-const configuredPublicProvenance = {
-  pullRequestNumber: 19,
-  pullRequestBaseSha: "cf25e5253b106b1e7514340abe94bd42fd748725",
-  pullRequestHeadSha: "9af361e5a9420323b2c86f2670e3bf812ac58620",
-  sourcePath: "workers/platform/src/api/health.ts",
-} as const;
-
 export function createLiveEvidenceServices(
   options: EvidenceServiceOptions,
 ): InvestigationEvidenceServices {
   const token = options.token?.trim();
   const normalizedToken = token === undefined || token.length === 0 ? undefined : token;
-  const api =
-    normalizedToken === undefined
-      ? new GitHubPublicFetchApi({
-          repository: options.repository,
-          maxResponseBytes: 64 * 1_024,
-          provenance: configuredPublicProvenance,
-          ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
-        })
-      : new GitHubFetchApi({
-          repository: options.repository,
-          maxResponseBytes: 64 * 1_024,
-          ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
-          token: normalizedToken,
-        });
+  if (normalizedToken === undefined) {
+    return {
+      telemetry: options.store,
+      repository: new PersistedSourceRepository({
+        store: options.store,
+        ...(options.sourceReleaseId === undefined ? {} : { releaseId: options.sourceReleaseId }),
+      }),
+    };
+  }
+  const api = new GitHubFetchApi({
+    repository: options.repository,
+    maxResponseBytes: 64 * 1_024,
+    ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
+    token: normalizedToken,
+  });
   const repository = new RepositoryConnector({
     api,
     releases: {

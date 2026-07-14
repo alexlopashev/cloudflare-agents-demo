@@ -7,6 +7,18 @@ const pullRequestHeadSha = "9af361e5a9420323b2c86f2670e3bf812ac58620";
 const pullRequestBaseSha = "cf25e5253b106b1e7514340abe94bd42fd748725";
 
 function telemetryStore() {
+  const sourceEvidence = {
+    releaseId: "regression-sequential",
+    commitSha: regressionSha,
+    commitSubject: "perf: serialize health checks to limit pressure (#19)",
+    committedAt: "2026-07-12T01:42:21.000Z",
+    pullRequestNumber: 19,
+    pullRequestHeadSha,
+    sourcePath: "workers/platform/src/api/health.ts",
+    blobSha: "58477bb417f47e0edf26725e9638e781b69f124c",
+    byteLength: 11,
+    content: "sequential\n",
+  } as const;
   return {
     compareReleases: vi.fn(async () => ({ status: "ready" })),
     findSlowTraces: vi.fn(async () => []),
@@ -15,6 +27,7 @@ function telemetryStore() {
       versionId: releaseId,
       commitSha: regressionSha,
     })),
+    getReleaseSourceEvidence: vi.fn(async () => sourceEvidence),
   };
 }
 
@@ -57,7 +70,7 @@ describe("agent evidence services", () => {
     undefined,
     "",
     "   ",
-  ])("uses unauthenticated live repository reads for a normalized absent token (%s)", async (token) => {
+  ])("uses only persisted source evidence for a normalized absent token (%s)", async (token) => {
     const store = telemetryStore();
     const fetcher = vi.fn(async (request: Request) => {
       const url = new URL(request.url);
@@ -81,13 +94,9 @@ describe("agent evidence services", () => {
     ).resolves.toMatchObject({
       commit: {
         sha: regressionSha,
-        message: null,
-        committedAt: null,
+        message: "perf: serialize health checks to limit pressure (#19)",
+        committedAt: "2026-07-12T01:42:21.000Z",
         authorLogin: null,
-        metadata: {
-          status: "partial",
-          unknowns: ["message", "committed-at", "author-login"],
-        },
       },
       pullRequest: {
         status: "found",
@@ -103,16 +112,7 @@ describe("agent evidence services", () => {
     ).resolves.toMatchObject([
       { path: "workers/platform/src/api/health.ts", content: "sequential\n" },
     ]);
-    expect(fetcher).toHaveBeenCalledTimes(5);
-    expect(fetcher.mock.calls.every(([request]) => !request.headers.has("authorization"))).toBe(
-      true,
-    );
-    expect(
-      fetcher.mock.calls.some(([request]) => new URL(request.url).hostname === "api.github.com"),
-    ).toBe(false);
-    expect(
-      fetcher.mock.calls.some(([request]) => new URL(request.url).hostname === "github.com"),
-    ).toBe(false);
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("keeps a non-empty token on the bounded REST read adapter", async () => {

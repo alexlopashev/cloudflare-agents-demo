@@ -137,6 +137,7 @@ rollback occurred.${prepared}`;
   override getTools(): ToolSet {
     const configuration = this.agentConfiguration();
     const store = createTelemetryStore(this.env.TELEMETRY_DB);
+    const incident = configuredIncidentReference(this.env);
     return createInvestigationTools(
       agentComposition.createEvidenceServices({
         repository: {
@@ -144,9 +145,10 @@ rollback occurred.${prepared}`;
           repo: configuration.github.repo,
         },
         store,
+        sourceReleaseId: incident.degradedReleaseId,
         ...(configuration.github.token === undefined ? {} : { token: configuration.github.token }),
       }),
-      { incident: configuredIncidentReference(this.env) },
+      { incident },
     );
   }
 

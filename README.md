@@ -27,7 +27,7 @@ does not select or modify the seeded incident investigated by the agent.
 - SQLite-backed Durable Object state for conversations
 - D1 for measured UX events, traces, spans, and releases
 - An auxiliary health-service Worker reached through a service binding
-- Constrained GitHub public-patch/raw and optional REST adapters for immutable repository evidence
+- An immutable D1 source receipt and optional constrained GitHub REST adapter for repository evidence
 - An approval-gated GitHub adapter for bounded, idempotent draft PR creation
 - React, TypeScript, pnpm, and a mise-managed toolchain
 
@@ -163,14 +163,15 @@ owner-only permissions. The public app requires no login and creates a durable s
 browser-local storage.
 
 No GitHub token is copied from `gh` or uploaded by the deployment task. In the credential-free public
-posture, D1 resolves the real Worker version to an immutable commit SHA. The bounded production
-adapter reads only `workers/platform/src/api/health.ts` from configured PR #19's raw head ref, its
-configured immutable base and head, and the D1-attributed regression SHA. The PR ref, expected head,
-and regression source must have exact bytes and locally computed Git blob identities; the configured
-base source must differ. Commit message/date/author, PR title/author/base/merge metadata, and diff
-counts remain explicit unknowns; head metadata is never relabeled as regression metadata. This avoids
-shared unauthenticated REST quota without adding a credential, parsing a broad patch, or fabricating
-evidence for another file. Preview freshness reads the bounded public `main` Atom feed, then
+posture, D1 resolves the real Worker version to an immutable commit SHA and stores one bounded source
+receipt for `workers/platform/src/api/health.ts`. Deployment derives that receipt from local immutable
+Git objects, validates configured PR #19's base, head, and regression relationship, requires exact
+head/regression bytes and Git blob identities, and requires the base source to differ before seeding
+the measured degraded release. Runtime release inspection and source reading use only that receipt
+and make no GitHub request. Commit subject/date are evidenced; author, PR title/author/base/merge
+metadata, and diff counts remain explicit unknowns. This avoids depending on GitHub network
+reachability without adding a credential, exposing generic source access, or fabricating evidence for
+another file. Preview freshness reads the bounded public `main` Atom feed, then
 compares the allowlisted raw file at the evidenced and current immutable SHAs; tree metadata remains
 mandatory for the separate write-enabled path. A supplied scoped token may use bounded REST reads;
 external writes additionally require `GITHUB_WRITE_ENABLED=true`, explicit Project Think approval,
@@ -287,9 +288,9 @@ diagnostics instead of silently fabricating causality.
 Live Worker composition now imports only Workers AI and production GitHub adapters. Vite and Worker
 tests explicitly substitute a deterministic demo adapter; the production build dry-runs and scans
 the live bundle to reject test-provider, fixture, and mock-model markers. Missing, empty, and
-whitespace-only GitHub tokens normalize once as absent, permitting bounded unauthenticated evidence
-reads through immutable public patch/raw endpoints and a write-disabled preview whose branch
-freshness uses the bounded public Atom feed, but never satisfying write enablement. Runtime version,
+whitespace-only GitHub tokens normalize once as absent, selecting the persisted D1 release/source
+receipt and a write-disabled preview whose branch freshness uses the bounded public Atom feed, but
+never satisfying write enablement. Runtime version,
 Git SHA, and deployment timestamp are validated before health telemetry or runtime identity can be
 emitted. The deterministic and live paths both prepare the same complete-file bounded-concurrency edit.
 

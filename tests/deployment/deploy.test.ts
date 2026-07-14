@@ -7,6 +7,8 @@ import {
   buildDeploymentInteractionId,
   buildPlatformDeploymentConfig,
   buildEvidenceResetSql,
+  buildConfiguredSourceEvidence,
+  buildReleaseSourceEvidenceSql,
   deploymentSmokeRetryPolicy,
   deploymentVersionPropagationPolicy,
   deploymentSmokeFailureMessage,
@@ -70,6 +72,9 @@ describe("Cloudflare deployment contract", () => {
     ).toHaveLength(2);
     expect(deployScript).toContain("runtimeAttributionRetryPolicy.maxAttempts");
     expect(deployScript).toContain("runtimeAttributionRetryPolicy.delayMs");
+    expect(deployScript.match(/prepareRemoteSourceEvidence\(/g)).toHaveLength(3);
+    expect(deployScript).toContain('"migrations",\n    "apply"');
+    expect(deployScript).toContain('"--file",\n      sourceEvidencePath');
     expect(
       runtimeAttributionRetryPolicy.maxAttempts * runtimeAttributionRetryPolicy.delayMs,
     ).toBeGreaterThanOrEqual(60_000);
@@ -362,10 +367,72 @@ describe("Cloudflare deployment contract", () => {
     expect(sql).toContain("DELETE FROM ux_events");
     expect(sql).toContain("DELETE FROM spans");
     expect(sql).toContain("DELETE FROM traces");
+    expect(sql).toContain("DELETE FROM release_source_evidence");
     expect(sql).toContain("DELETE FROM releases");
     expect(() => buildEvidenceResetSql("'; DROP TABLE releases; --", degradedVersionId)).toThrow(
       /version identifier/i,
     );
+  });
+
+  it("validates immutable local Git source proof and builds one escaped idempotent seed", () => {
+    const evidence = buildConfiguredSourceEvidence({
+      releaseId: degradedVersionId,
+      regression: {
+        sha: "d591869a8ef995f1835ef80152f4de085b10255b",
+        subject: "perf: serialize health checks to limit pressure (#19)",
+        committedAt: "2026-07-12T01:42:21.000Z",
+        content: "sequential\n",
+        blobSha: "58477bb417f47e0edf26725e9638e781b69f124c",
+      },
+      head: {
+        sha: "9af361e5a9420323b2c86f2670e3bf812ac58620",
+        content: "sequential\n",
+        blobSha: "58477bb417f47e0edf26725e9638e781b69f124c",
+      },
+      base: {
+        sha: "cf25e5253b106b1e7514340abe94bd42fd748725",
+        content: "concurrent\n",
+        blobSha: "e4d7bdcbdb49617abea9e6f4678a4ea92af3a6d3",
+      },
+    });
+
+    expect(evidence).toMatchObject({
+      releaseId: degradedVersionId,
+      pullRequestNumber: 19,
+      sourcePath: "workers/platform/src/api/health.ts",
+      byteLength: 11,
+    });
+    const sql = buildReleaseSourceEvidenceSql({
+      ...evidence,
+      commitSubject: "perf: serialize 'quoted' health checks (#19)",
+    });
+    expect(sql).toContain("INSERT INTO release_source_evidence");
+    expect(sql).toContain("serialize ''quoted'' health checks");
+    expect(sql).toContain("ON CONFLICT (release_id) DO UPDATE SET");
+    expect(sql).not.toContain("DROP TABLE");
+
+    expect(() =>
+      buildConfiguredSourceEvidence({
+        releaseId: degradedVersionId,
+        regression: {
+          sha: evidence.commitSha,
+          subject: evidence.commitSubject,
+          committedAt: evidence.committedAt,
+          content: evidence.content,
+          blobSha: evidence.blobSha,
+        },
+        head: {
+          sha: evidence.pullRequestHeadSha,
+          content: "different\n",
+          blobSha: "8baef1b4abc478178b004d62031cf7fe6db6f903",
+        },
+        base: {
+          sha: "cf25e5253b106b1e7514340abe94bd42fd748725",
+          content: "concurrent\n",
+          blobSha: "e4d7bdcbdb49617abea9e6f4678a4ea92af3a6d3",
+        },
+      }),
+    ).toThrow(/source proof/i);
   });
 
   it("rejects missing or synthetic remote identifiers", () => {
