@@ -104,4 +104,51 @@ describe("health API", () => {
       }),
     );
   });
+
+  it("rejects stale deployment traffic before dependency or trace effects", async () => {
+    const fetcher = vi.fn(async () => new Response());
+    const recordTrace = vi.fn(async () => undefined);
+    const response = await handleHealthApiRequest(
+      new Request("https://example.test/api/health", {
+        method: "POST",
+        headers: {
+          "content-type": "application/vnd.regression-surgeon.deployment-health+json",
+          "x-deployment-expected-release": "release-new",
+        },
+        body: JSON.stringify({ interactionId: "deployment-sample" }),
+      }),
+      {
+        fetcher,
+        releaseId: "release-old",
+        createTraceId: () => "trace-must-not-exist",
+        recordTrace,
+      },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "release-not-ready" } });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(recordTrace).not.toHaveBeenCalled();
+
+    const matchingFetcher = vi.fn(async (request: Request) =>
+      Response.json({ serviceId: request.headers.get("x-service-id"), status: "healthy" }),
+    );
+    const matching = await handleHealthApiRequest(
+      new Request("https://example.test/api/health", {
+        method: "POST",
+        headers: {
+          "content-type": "application/vnd.regression-surgeon.deployment-health+json",
+          "x-deployment-expected-release": "release-new",
+        },
+        body: JSON.stringify({ interactionId: "deployment-sample" }),
+      }),
+      {
+        fetcher: matchingFetcher,
+        releaseId: "release-new",
+        createTraceId: () => "trace-new",
+      },
+    );
+    expect(matching.status).toBe(200);
+    expect(matchingFetcher).toHaveBeenCalledTimes(3);
+  });
 });

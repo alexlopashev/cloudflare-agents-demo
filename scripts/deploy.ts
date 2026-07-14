@@ -12,6 +12,7 @@ import {
   buildPlatformDeploymentConfig,
   buildEvidenceResetSql,
   deploymentSmokeRetryPolicy,
+  deploymentVersionPropagationPolicy,
   parseD1DatabaseId,
   parseDeploymentResult,
   parseGitHubWriteSecretInventory,
@@ -146,7 +147,7 @@ async function assertDeployedVersion(url: string, expectedVersion: string) {
     expectedVersion,
     async () =>
       new Promise<void>((resolveDelay) =>
-        setTimeout(resolveDelay, runtimeAttributionRetryPolicy.delayMs),
+        setTimeout(resolveDelay, deploymentVersionPropagationPolicy.delayMs),
       ),
   );
 }
@@ -198,7 +199,10 @@ async function seedMeasuredTraffic(
       async () =>
         fetch(`${url}/api/health`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/vnd.regression-surgeon.deployment-health+json",
+            "x-deployment-expected-release": expectedReleaseId,
+          },
           body: JSON.stringify({ interactionId }),
         }),
       `${label} health sample ${interactionId}`,
