@@ -929,6 +929,8 @@ release pair, comparison window, degraded trace window and limit, and degraded r
 server-authoritative so model-generated selectors cannot change or block the one incident. Issue #68
 applies the same consecutive exact-version readiness gate to the recorded secret-bearing investigator
 before every keyed smoke, preventing a prior no-key edge from receiving executable verification.
+Issue #75 distinguishes an invalid receipt shape from missing preparation using only whitelisted
+contract-surface names, without returning values, validation messages, secrets, or model prose.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.

@@ -25,6 +25,13 @@ export const deploymentSmokeRetryPolicy = Object.freeze({
 export function deploymentSmokeFailureMessage(status: number, body: unknown): string {
   const parsed = smokeEvidenceDiagnosticSchema.safeParse(body);
   if (!parsed.success) return `Public agent smoke returned HTTP ${status}.`;
+  if (
+    parsed.data.error.code === "invalid-evidence-receipt" &&
+    parsed.data.error.invalidFields !== undefined &&
+    parsed.data.error.invalidFields.length > 0
+  ) {
+    return `Public agent smoke returned HTTP ${status}: invalid-evidence-receipt (invalid fields: ${parsed.data.error.invalidFields.join(", ")}).`;
+  }
   const incompletePhases = parsed.data.error.phases.filter((phase) => phase.status !== "complete");
   const detail =
     incompletePhases.length > 0

@@ -198,9 +198,10 @@ After disabling writes, run `mise run github:writes:secret:delete` to revoke the
 The keyed smoke may retry the endpoint's pre-execution 404 briefly while a newly rotated smoke key
 propagates across Cloudflare. It returns every other status immediately, so a Workers AI turn or
 other endpoint work is never duplicated. Before remediation, the keyed route classifies the fixed
-five-phase receipt. An incomplete receipt returns only bounded tool names and statuses, deployment
-prints the non-complete phases plus a whitelisted reason code for errors, and the smoke stops without
-invoking preview or exposing model prose.
+five-phase receipt. An incomplete receipt returns only bounded tool names and statuses, while an
+invalid receipt shape exposes only a bounded whitelist of contract surfaces—never values or
+validation messages. Deployment prints that safe diagnostic, and the smoke stops without invoking
+preview or exposing model prose.
 
 The real WebSocket protocol contract is also exercised locally: reconnect replays the persisted
 pending approval, and a repeated approval response commits one guarded preview result without

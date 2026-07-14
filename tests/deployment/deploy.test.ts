@@ -261,6 +261,21 @@ describe("Cloudflare deployment contract", () => {
     ).toBe("Public agent smoke returned HTTP 500.");
   });
 
+  it("distinguishes whitelisted invalid receipt fields from missing preparation", () => {
+    const message = deploymentSmokeFailureMessage(422, {
+      error: {
+        code: "invalid-evidence-receipt",
+        phases: [],
+        invalidFields: ["receipt-phases"],
+      },
+    });
+
+    expect(message).toBe(
+      "Public agent smoke returned HTTP 422: invalid-evidence-receipt (invalid fields: receipt-phases).",
+    );
+    expect(message).not.toContain("private");
+  });
+
   it("attempts a side-effecting deployment endpoint exactly once", async () => {
     const successfulResponse = new Response(null, { status: 204 });
     const successfulRequest = vi.fn(async () => successfulResponse);
