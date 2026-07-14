@@ -26,15 +26,25 @@ const commitResponse = z.object({
   author: z.object({ login: z.string().min(1).max(128) }).nullable(),
   files: z.array(commitFile),
 });
+const configuredSourceFile = z.object({
+  filename: z.string().min(1).max(512).refine(isSafeRepositoryPath),
+  status: z.literal("modified"),
+  additions: z.null(),
+  deletions: z.null(),
+  metadata: z.object({
+    status: z.literal("partial"),
+    unknowns: z.tuple([z.literal("additions"), z.literal("deletions"), z.literal("patch")]),
+  }),
+});
 const configuredProvenanceCommitResponse = z.object({
-  source: z.literal("configured-pr-provenance"),
+  source: z.literal("configured-pr-source"),
   sha: immutableSha,
   html_url: z.url(),
   metadata: z.object({
     status: z.literal("partial"),
     unknowns: z.tuple([z.literal("message"), z.literal("committed-at"), z.literal("author-login")]),
   }),
-  files: z.array(commitFile),
+  files: z.array(configuredSourceFile).length(1),
 });
 const pullRequestResponse = z.object({
   number: z.number().int().positive(),
@@ -54,7 +64,7 @@ const publicPatchPullRequestResponse = z.object({
   head: z.object({ sha: immutableSha }),
 });
 const configuredProvenancePullRequestResponse = z.object({
-  source: z.literal("configured-pr-provenance"),
+  source: z.literal("configured-pr-source"),
   number: z.number().int().positive(),
   html_url: z.url(),
   head: z.object({ sha: immutableSha }),
@@ -233,7 +243,7 @@ export class RepositoryConnector {
       throw new RepositoryConnectorError("limit-exceeded", "Commit changed-file limit exceeded.");
     }
     const patchBytes = commit.files.reduce(
-      (total, file) => total + byteLength(file.patch ?? ""),
+      (total, file) => total + byteLength("patch" in file ? (file.patch ?? "") : ""),
       0,
     );
     if (patchBytes > this.#limits.maxPatchBytes) {
@@ -286,7 +296,8 @@ export class RepositoryConnector {
             status: file.status,
             additions: file.additions,
             deletions: file.deletions,
-            ...(file.patch === undefined ? {} : { patch: file.patch }),
+            ...("metadata" in file ? { metadata: file.metadata } : {}),
+            ...("patch" in file && file.patch !== undefined ? { patch: file.patch } : {}),
           })),
       },
       pullRequest,

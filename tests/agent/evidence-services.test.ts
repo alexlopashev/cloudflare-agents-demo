@@ -4,6 +4,7 @@ import { createAgentEvidenceServices } from "../../workers/platform/src/agent/ev
 
 const regressionSha = "d591869a8ef995f1835ef80152f4de085b10255b";
 const pullRequestHeadSha = "9af361e5a9420323b2c86f2670e3bf812ac58620";
+const pullRequestBaseSha = "cf25e5253b106b1e7514340abe94bd42fd748725";
 
 function telemetryStore() {
   return {
@@ -60,26 +61,11 @@ describe("agent evidence services", () => {
     const store = telemetryStore();
     const fetcher = vi.fn(async (request: Request) => {
       const url = new URL(request.url);
-      if (url.hostname === "patch-diff.githubusercontent.com") {
-        return new Response(`From ${pullRequestHeadSha} Mon Sep 17 00:00:00 2001
-From: Sasha <sasha@example.test>
-Date: Sat, 11 Jul 2026 18:42:21 -0700
-Subject: [PATCH] perf: serialize health checks (#19)
-
----
- workers/platform/src/api/health.ts | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
-
-diff --git a/workers/platform/src/api/health.ts b/workers/platform/src/api/health.ts
-index 0000000..1111111 100644
---- a/workers/platform/src/api/health.ts
-+++ b/workers/platform/src/api/health.ts
-@@ -1 +1 @@
--concurrent
-+sequential
-`);
+      if (url.hostname === "raw.githubusercontent.com") {
+        return new Response(
+          url.pathname.includes(`/${pullRequestBaseSha}/`) ? "concurrent\n" : "sequential\n",
+        );
       }
-      if (url.hostname === "raw.githubusercontent.com") return new Response("sequential\n");
       return new Response("not found", { status: 404 });
     });
     const services = createAgentEvidenceServices({
@@ -117,7 +103,7 @@ index 0000000..1111111 100644
     ).resolves.toMatchObject([
       { path: "workers/platform/src/api/health.ts", content: "sequential\n" },
     ]);
-    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher).toHaveBeenCalledTimes(5);
     expect(fetcher.mock.calls.every(([request]) => !request.headers.has("authorization"))).toBe(
       true,
     );

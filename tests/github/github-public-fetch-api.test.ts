@@ -4,50 +4,8 @@ import { GitHubPublicFetchApi } from "../../workers/platform/src/github/github-p
 
 const regressionSha = "1111111111111111111111111111111111111111";
 const pullRequestHeadSha = "2222222222222222222222222222222222222222";
+const pullRequestBaseSha = "3333333333333333333333333333333333333333";
 const sourcePath = "workers/platform/src/api/health.ts";
-
-function pullRequestPatch(
-  options: { headSha?: string; path?: string; secondCommit?: boolean } = {},
-) {
-  const headSha = options.headSha ?? pullRequestHeadSha;
-  const path = options.path ?? sourcePath;
-  const first = `From ${headSha} Mon Sep 17 00:00:00 2001
-From: Example Author <author@example.test>
-Date: Sat, 11 Jul 2026 18:42:21 -0700
-Subject: [PATCH] perf: serialize health checks
-
----
- ${path} | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
-
-diff --git a/${path} b/${path}
-index 0000000..1111111 100644
---- a/${path}
-+++ b/${path}
-@@ -1 +1 @@
--concurrent
-+sequential
-`;
-  if (options.secondCommit !== true) return first;
-  return `${first}
-From 3333333333333333333333333333333333333333 Mon Sep 17 00:00:00 2001
-From: Example Author <author@example.test>
-Date: Sat, 11 Jul 2026 18:43:21 -0700
-Subject: [PATCH 2/2] another change
-
----
- ${path} | 1 +
- 1 file changed, 1 insertion(+)
-
-diff --git a/${path} b/${path}
-index 1111111..2222222 100644
---- a/${path}
-+++ b/${path}
-@@ -1 +1,2 @@
- sequential
-+extra
-`;
-}
 
 function api(fetcher: (request: Request) => Promise<Response>, maxResponseBytes = 64_000) {
   return new GitHubPublicFetchApi({
@@ -56,30 +14,34 @@ function api(fetcher: (request: Request) => Promise<Response>, maxResponseBytes 
     maxResponseBytes,
     provenance: {
       pullRequestNumber: 19,
+      pullRequestBaseSha,
       pullRequestHeadSha,
       sourcePath,
     },
   });
 }
 
+function rawSourceFetcher(
+  content: (reference: string) => string = (reference) =>
+    reference === pullRequestBaseSha ? "concurrent\n" : "sequential\n",
+) {
+  return vi.fn(async (request: Request) => {
+    const url = new URL(request.url);
+    if (url.hostname !== "raw.githubusercontent.com") return new Response(null, { status: 404 });
+    const reference = url.pathname.includes("/refs/pull/19/head/")
+      ? "refs/pull/19/head"
+      : (url.pathname.split("/")[3] ?? "");
+    return new Response(content(reference), { headers: { "content-type": "text/plain" } });
+  });
+}
+
 describe("GitHubPublicFetchApi", () => {
-  it("proves a configured PR through exact immutable source equality without REST or credentials", async () => {
-    const fetcher = vi.fn(async (request: Request) => {
-      const url = new URL(request.url);
-      if (url.hostname === "patch-diff.githubusercontent.com") {
-        return new Response(pullRequestPatch(), {
-          headers: { "content-type": "text/plain; charset=utf-8" },
-        });
-      }
-      if (url.hostname === "raw.githubusercontent.com") {
-        return new Response("sequential\n", { headers: { "content-type": "text/plain" } });
-      }
-      return new Response(null, { status: 404 });
-    });
+  it("proves one configured PR source through bounded raw ref and immutable source equality", async () => {
+    const fetcher = rawSourceFetcher();
     const publicApi = api(fetcher);
 
-    await expect(publicApi.getCommit(regressionSha, 9)).resolves.toEqual({
-      source: "configured-pr-provenance",
+    await expect(publicApi.getCommit(regressionSha, 1)).resolves.toEqual({
+      source: "configured-pr-source",
       sha: regressionSha,
       html_url: `https://github.com/example/supervised/commit/${regressionSha}`,
       metadata: {
@@ -90,14 +52,18 @@ describe("GitHubPublicFetchApi", () => {
         {
           filename: sourcePath,
           status: "modified",
-          additions: 1,
-          deletions: 1,
+          additions: null,
+          deletions: null,
+          metadata: {
+            status: "partial",
+            unknowns: ["additions", "deletions", "patch"],
+          },
         },
       ],
     });
-    await expect(publicApi.getPullRequestsForCommit(regressionSha, 11)).resolves.toEqual([
+    await expect(publicApi.getPullRequestsForCommit(regressionSha, 1)).resolves.toEqual([
       {
-        source: "configured-pr-provenance",
+        source: "configured-pr-source",
         number: 19,
         html_url: "https://github.com/example/supervised/pull/19",
         head: { sha: pullRequestHeadSha },
@@ -112,18 +78,16 @@ describe("GitHubPublicFetchApi", () => {
       content: "sequential\n",
     });
 
-    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher).toHaveBeenCalledTimes(5);
     expect(fetcher.mock.calls.every(([request]) => !request.headers.has("authorization"))).toBe(
       true,
     );
-    expect(fetcher.mock.calls.map(([request]) => new URL(request.url).hostname)).toEqual([
-      "patch-diff.githubusercontent.com",
-      "raw.githubusercontent.com",
-      "raw.githubusercontent.com",
-      "raw.githubusercontent.com",
-    ]);
+    expect(fetcher.mock.calls.map(([request]) => new URL(request.url).hostname)).toEqual(
+      Array.from({ length: 5 }, () => "raw.githubusercontent.com"),
+    );
     expect(fetcher.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual([
-      "/raw/example/supervised/pull/19.patch",
+      `/example/supervised/refs/pull/19/head/${sourcePath}`,
+      `/example/supervised/${pullRequestBaseSha}/${sourcePath}`,
       `/example/supervised/${pullRequestHeadSha}/${sourcePath}`,
       `/example/supervised/${regressionSha}/${sourcePath}`,
       `/example/supervised/${regressionSha}/${sourcePath}`,
@@ -132,41 +96,34 @@ describe("GitHubPublicFetchApi", () => {
 
   it.each([
     {
-      name: "mismatched immutable source",
-      patch: pullRequestPatch(),
-      content: (sha: string) => (sha === regressionSha ? "different\n" : "sequential\n"),
-      code: "malformed-response",
+      name: "PR ref does not match the configured head",
+      content: (reference: string) =>
+        reference === "refs/pull/19/head"
+          ? "different\n"
+          : reference === pullRequestBaseSha
+            ? "concurrent\n"
+            : "sequential\n",
     },
     {
-      name: "wrong configured PR head",
-      patch: pullRequestPatch({ headSha: "4444444444444444444444444444444444444444" }),
+      name: "configured base and head source are unchanged",
       content: () => "sequential\n",
-      code: "malformed-response",
     },
     {
-      name: "multiple PR commits",
-      patch: pullRequestPatch({ secondCommit: true }),
-      content: () => "sequential\n",
-      code: "malformed-response",
+      name: "regression source does not match the configured head",
+      content: (reference: string) =>
+        reference === pullRequestBaseSha
+          ? "concurrent\n"
+          : reference === regressionSha
+            ? "different\n"
+            : "sequential\n",
     },
-    {
-      name: "unsafe changed path",
-      patch: pullRequestPatch({ path: "workers/platform/src/api/../secret.ts" }),
-      content: () => "sequential\n",
+  ])("fails closed when $name", async ({ content }) => {
+    await expect(api(rawSourceFetcher(content)).getCommit(regressionSha, 1)).rejects.toMatchObject({
       code: "malformed-response",
-    },
-  ])("fails closed for $name", async ({ patch, content, code }) => {
-    const fetcher = vi.fn(async (request: Request) => {
-      const url = new URL(request.url);
-      if (url.hostname === "patch-diff.githubusercontent.com") return new Response(patch);
-      const sha = url.pathname.split("/")[3] ?? "";
-      return new Response(content(sha));
     });
-
-    await expect(api(fetcher).getCommit(regressionSha, 9)).rejects.toMatchObject({ code });
   });
 
-  it("fails closed on oversized public evidence and invalid paths before unrelated I/O", async () => {
+  it("fails closed on oversized public source and invalid paths before unrelated I/O", async () => {
     const oversized = api(
       vi.fn(
         async () =>
@@ -176,7 +133,7 @@ describe("GitHubPublicFetchApi", () => {
       ),
       100,
     );
-    await expect(oversized.getCommit(regressionSha, 9)).rejects.toMatchObject({
+    await expect(oversized.getCommit(regressionSha, 1)).rejects.toMatchObject({
       code: "limit-exceeded",
     });
 

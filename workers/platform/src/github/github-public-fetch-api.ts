@@ -12,6 +12,7 @@ type GitHubPublicFetchApiOptions = {
   maxResponseBytes: number;
   provenance?: {
     pullRequestNumber: number;
+    pullRequestBaseSha: string;
     pullRequestHeadSha: string;
     sourcePath: string;
   };
@@ -30,9 +31,13 @@ type ConfiguredProvenance = {
   pullRequestHeadSha: string;
   files: {
     filename: string;
-    status: "added" | "modified" | "removed";
-    additions: number;
-    deletions: number;
+    status: "modified";
+    additions: null;
+    deletions: null;
+    metadata: {
+      status: "partial";
+      unknowns: ["additions", "deletions", "patch"];
+    };
   }[];
 };
 
@@ -48,6 +53,7 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
   readonly #provenance:
     | {
         pullRequestNumber: number;
+        pullRequestBaseSha: string;
         pullRequestHeadSha: string;
         sourcePath: string;
       }
@@ -60,6 +66,7 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
     const provenance = z
       .object({
         pullRequestNumber: z.number().int().positive(),
+        pullRequestBaseSha: immutableSha,
         pullRequestHeadSha: immutableSha,
         sourcePath: z.string().min(1).max(512).refine(isSafeRepositoryPath),
       })
@@ -82,6 +89,7 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
         ? undefined
         : {
             ...provenance.data,
+            pullRequestBaseSha: provenance.data.pullRequestBaseSha.toLowerCase(),
             pullRequestHeadSha: provenance.data.pullRequestHeadSha.toLowerCase(),
           };
     this.repository = { owner: this.#owner, repo: this.#repo };
@@ -96,10 +104,10 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
     if (parsed.files.length > pageSize) {
       throw new RepositoryConnectorError("limit-exceeded", "Commit changed-file limit exceeded.");
     }
-    const sourceFile = parsed.files.find((file) => file.filename === this.#provenance?.sourcePath);
+    const sourceFile = parsed.files[0];
     if (sourceFile === undefined) throw malformed("GitHub configured PR source");
     return {
-      source: "configured-pr-provenance",
+      source: "configured-pr-source",
       sha: parsed.sha,
       html_url: `https://github.com/${this.#owner}/${this.#repo}/commit/${parsed.sha}`,
       metadata: {
@@ -118,7 +126,7 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
     const provenance = this.#requireProvenance();
     return [
       {
-        source: "configured-pr-provenance",
+        source: "configured-pr-source",
         number: provenance.pullRequestNumber,
         html_url: `https://github.com/${this.#owner}/${this.#repo}/pull/${provenance.pullRequestNumber}`,
         head: { sha: parsed.pullRequestHeadSha },
@@ -186,84 +194,47 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
 
   async #loadConfiguredProvenance(sha: string): Promise<ConfiguredProvenance> {
     const provenance = this.#requireProvenance();
-    const url = new URL(
-      `/raw/${encodeURIComponent(this.#owner)}/${encodeURIComponent(this.#repo)}/pull/${provenance.pullRequestNumber}.patch`,
-      "https://patch-diff.githubusercontent.com",
-    );
-    const bytes = await this.#requestBytes(url);
-    let text: string;
-    try {
-      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes).replaceAll("\r\n", "\n");
-    } catch {
-      throw malformed("GitHub public patch");
-    }
-    const commitHeaders = Array.from(
-      text.matchAll(/^From ([0-9a-f]{40}) Mon Sep 17 00:00:00 2001$/gim),
-    );
-    if (
-      commitHeaders.length !== 1 ||
-      commitHeaders[0]?.index !== 0 ||
-      commitHeaders[0]?.[1]?.toLowerCase() !== provenance.pullRequestHeadSha
-    ) {
-      throw malformed("GitHub configured PR patch");
-    }
-
-    const allDiffLines = text.match(/^diff --git .+$/gm) ?? [];
-    const matches = Array.from(text.matchAll(/^diff --git a\/([^\s]+) b\/([^\s]+)$/gm));
-    if (matches.length === 0 || matches.length !== allDiffLines.length) {
-      throw malformed("GitHub configured PR patch");
-    }
-    const files = matches.map((match, index) => {
-      const left = match[1];
-      const right = match[2];
-      if (
-        left === undefined ||
-        right === undefined ||
-        left !== right ||
-        !isSafeRepositoryPath(left)
-      ) {
-        throw malformed("GitHub configured PR patch path");
-      }
-      const start = match.index + match[0].length;
-      const end = matches[index + 1]?.index ?? text.length;
-      const diff = text.slice(start, end);
-      const additions = (diff.match(/^\+(?!\+\+).*/gm) ?? []).length;
-      const deletions = (diff.match(/^-(?!--).*/gm) ?? []).length;
-      return {
-        filename: left,
-        status: diff.includes("\nnew file mode ")
-          ? ("added" as const)
-          : diff.includes("\ndeleted file mode ")
-            ? ("removed" as const)
-            : ("modified" as const),
-        additions,
-        deletions,
-      };
-    });
-    if (!files.some((file) => file.filename === provenance.sourcePath)) {
-      throw malformed("GitHub configured PR source");
-    }
-    const [headBytes, regressionBytes] = await Promise.all([
+    const [pullRequestBytes, baseBytes, headBytes, regressionBytes] = await Promise.all([
+      this.#readPullRequestFile(provenance.pullRequestNumber, provenance.sourcePath),
+      this.#readRawFile(provenance.pullRequestBaseSha, provenance.sourcePath),
       this.#readRawFile(provenance.pullRequestHeadSha, provenance.sourcePath),
       this.#readRawFile(sha, provenance.sourcePath),
     ]);
     if (
-      headBytes.byteLength !== regressionBytes.byteLength ||
-      headBytes.some((byte, index) => byte !== regressionBytes[index])
+      !this.#sameBytes(pullRequestBytes, headBytes) ||
+      !this.#sameBytes(headBytes, regressionBytes) ||
+      this.#sameBytes(baseBytes, headBytes)
     ) {
       throw malformed("GitHub configured PR source equality");
     }
-    const [headBlobSha, regressionBlobSha] = await Promise.all([
+    const [pullRequestBlobSha, baseBlobSha, headBlobSha, regressionBlobSha] = await Promise.all([
+      this.#gitBlobSha(pullRequestBytes),
+      this.#gitBlobSha(baseBytes),
       this.#gitBlobSha(headBytes),
       this.#gitBlobSha(regressionBytes),
     ]);
-    if (headBlobSha !== regressionBlobSha) {
+    if (
+      pullRequestBlobSha !== headBlobSha ||
+      headBlobSha !== regressionBlobSha ||
+      baseBlobSha === headBlobSha
+    ) {
       throw malformed("GitHub configured PR source identity");
     }
     return {
       sha,
       pullRequestHeadSha: provenance.pullRequestHeadSha,
-      files,
+      files: [
+        {
+          filename: provenance.sourcePath,
+          status: "modified",
+          additions: null,
+          deletions: null,
+          metadata: {
+            status: "partial",
+            unknowns: ["additions", "deletions", "patch"],
+          },
+        },
+      ],
     };
   }
 
@@ -284,6 +255,21 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
       "https://raw.githubusercontent.com",
     );
     return this.#requestBytes(url);
+  }
+
+  async #readPullRequestFile(pullRequestNumber: number, path: string): Promise<Uint8Array> {
+    const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+    const url = new URL(
+      `/${encodeURIComponent(this.#owner)}/${encodeURIComponent(this.#repo)}/refs/pull/${pullRequestNumber}/head/${encodedPath}`,
+      "https://raw.githubusercontent.com",
+    );
+    return this.#requestBytes(url);
+  }
+
+  #sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+    return (
+      left.byteLength === right.byteLength && left.every((byte, index) => byte === right[index])
+    );
   }
 
   #requireSha(value: string): string {
