@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   evidenceInvestigationRequested,
   messagesForCurrentInvestigation,
+  remediationPreviewRequested,
 } from "../../workers/platform/src/agent/evidence-step-policy";
 
 describe("Project Think investigation intent", () => {
@@ -28,5 +29,26 @@ describe("Project Think investigation intent", () => {
     ];
 
     expect(messagesForCurrentInvestigation(messages)).toEqual(messages.slice(2));
+  });
+
+  it("recognizes only the explicit guarded-preview request", () => {
+    expect(
+      remediationPreviewRequested([
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Investigate the seeded latency regression and prepare the guarded remediation preview.",
+            },
+          ],
+        },
+      ]),
+    ).toBe(true);
+    expect(
+      remediationPreviewRequested([
+        { role: "user", content: [{ type: "text", text: "Investigate the latency regression" }] },
+      ]),
+    ).toBe(false);
   });
 });

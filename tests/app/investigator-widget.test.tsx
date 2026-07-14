@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   canSubmitInvestigatorRequest,
+  configuredInvestigationPrompt,
+  InvestigationStarter,
   InvestigatorWidgetChrome,
 } from "../../apps/web/src/investigator/InvestigatorWidget";
 
@@ -29,6 +31,24 @@ describe("investigator support widget", () => {
     expect(markup).toContain('id="investigator-dialog"');
     expect(markup).toContain("hidden");
     expect(markup).toContain("Persisted conversation");
+  });
+
+  it("shows no synthetic unread badge and offers one configured investigation action", () => {
+    const chrome = renderToStaticMarkup(
+      <InvestigatorWidgetChrome isOpen={false} onToggle={vi.fn()} status="ready" unreadCount={0}>
+        <p>No messages yet</p>
+      </InvestigatorWidgetChrome>,
+    );
+    const starter = renderToStaticMarkup(
+      <InvestigationStarter disabled={false} onInvestigate={vi.fn()} />,
+    );
+
+    expect(chrome).not.toContain("notification-badge");
+    expect(starter).toContain("Investigate the seeded latency regression");
+    expect(starter).toContain('type="button"');
+    expect(configuredInvestigationPrompt).toMatch(
+      /investigate the seeded latency regression[\s\S]+prepare the guarded remediation preview/i,
+    );
   });
 
   it("opens a named dialog with status and a collapse action", () => {

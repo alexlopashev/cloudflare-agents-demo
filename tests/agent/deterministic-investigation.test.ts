@@ -148,6 +148,7 @@ Prepare the guarded remediation preview.`,
     );
     expect(text).toMatch(/validated preview/i);
     expect(text).toMatch(/no GitHub write/i);
+    expect(text).toMatch(/Evidence[\s\S]+Inference[\s\S]+Confidence[\s\S]+Unknowns/i);
     expect(text).not.toMatch(/created draft PR/i);
   });
 });

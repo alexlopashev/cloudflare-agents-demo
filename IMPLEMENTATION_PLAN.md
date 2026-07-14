@@ -1060,7 +1060,7 @@ Work packages:
 - Make targeted tests, watch mode, aggregate checks, reconnection, and remote smoke prove the same
   structured contract (#42).
 - Make the first-run UX direct, honest, accessible, and explicit about preview versus live writes
-  (#43).
+  (#43, implemented and browser-verified at desktop and 390px widths).
 - Remove test-only runtime composition and normalize external configuration once (#44).
 - Complete clean-room release verification and project-system alignment (#45).
 

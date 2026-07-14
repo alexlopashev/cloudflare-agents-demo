@@ -54,8 +54,12 @@ optional ingestion demonstration. Samples run sequentially and count only after 
 stored; refresh and generation cannot overlap. They do not replace or select the configured
 baseline/degraded evidence pair.
 The investigator remains mounted as a collapsible support-style dialog with a floating launcher,
-attention and availability badges, safe GitHub-flavored Markdown, and literal user requests. The
-desktop panel is bounded, while the mobile panel fills the viewport with a full-width 44px send
+availability status, safe GitHub-flavored Markdown, and literal user requests. A first-time reviewer
+can start the one configured incident with a single action, and no unread badge appears before an
+assistant result exists. Evidence progress comes from the persisted five-phase receipt. Before
+approval, the panel shows the current evidenced source, exact replacement, rationale, one-file and
+changed-line counts, immutable evidence references, proposal fingerprint, and current write posture.
+The desktop panel is bounded, while the mobile panel fills the viewport with a full-width 44px send
 action. `/investigator` opens the same Deployboard experience with the widget expanded.
 
 ### Bootstrap

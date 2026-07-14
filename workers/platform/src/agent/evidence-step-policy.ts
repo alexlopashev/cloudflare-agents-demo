@@ -23,6 +23,14 @@ export function evidenceInvestigationRequested(messages: readonly unknown[]): bo
   return lastUserMessage !== undefined && messageRequestsInvestigation(lastUserMessage);
 }
 
+export function remediationPreviewRequested(messages: readonly unknown[]): boolean {
+  const lastUserMessage = messages.findLast((message) => property(message, "role") === "user");
+  return (
+    lastUserMessage !== undefined &&
+    /\bprepare the guarded remediation preview\b/i.test(textContent(lastUserMessage))
+  );
+}
+
 export function messagesForCurrentInvestigation(messages: readonly unknown[]): readonly unknown[] {
   const start = messages.findLastIndex(
     (message) => property(message, "role") === "user" && messageRequestsInvestigation(message),
