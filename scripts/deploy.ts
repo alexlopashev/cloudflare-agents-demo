@@ -19,6 +19,7 @@ import {
   requestDeploymentSmokeWithRetry,
   runtimeAttributionRetryPolicy,
   runWithFailClosedRollback,
+  waitForDeploymentVersion,
 } from "./deploy-lib.ts";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -129,6 +130,26 @@ const healthResponseSchema = z.object({
   releaseId: z.string().uuid(),
   outcome: z.enum(["healthy", "partial", "failed"]),
 });
+const deploymentReadinessSchema = z.object({
+  versionId: z.string().uuid(),
+  gitSha: z.string().regex(/^[0-9a-f]{40}$/),
+});
+
+async function assertDeployedVersion(url: string, expectedVersion: string) {
+  await waitForDeploymentVersion(
+    async () => {
+      const response = await fetch(`${url}/api/deployment-readiness`);
+      if (!response.ok) return undefined;
+      const readiness = deploymentReadinessSchema.safeParse(await response.json());
+      return readiness.success ? readiness.data.versionId : undefined;
+    },
+    expectedVersion,
+    async () =>
+      new Promise<void>((resolveDelay) =>
+        setTimeout(resolveDelay, runtimeAttributionRetryPolicy.delayMs),
+      ),
+  );
+}
 
 async function assertRuntimeAttribution(state: z.infer<typeof stateSchema>) {
   const runtimeSchema = z.object({
@@ -299,6 +320,7 @@ async function deploy() {
       stage: { kind: "baseline", gitSha: baselineGitSha },
     }),
   );
+  await assertDeployedVersion(baseline.url, baseline.versionId);
   await seedMeasuredTraffic(baseline.url, baseline.versionId, "baseline");
 
   const degraded = deployPlatform(
@@ -308,6 +330,7 @@ async function deploy() {
       stage: { kind: "regression", gitSha: regressionGitSha },
     }),
   );
+  await assertDeployedVersion(degraded.url, degraded.versionId);
   const degradedWindow = await seedMeasuredTraffic(degraded.url, degraded.versionId, "degraded");
 
   const deployedGitSha = run("git", ["rev-parse", "HEAD"]).trim();
