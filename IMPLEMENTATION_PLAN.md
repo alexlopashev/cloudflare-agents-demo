@@ -956,6 +956,9 @@ single-shot.
 Issue #89 classifies the remaining post-evidence smoke boundary: preview failure exposes only one
 whitelisted remediation code, while final cross-reference failure exposes only a fixed invalid
 verification code. Exception text, source, model prose, identifiers, and credentials remain private.
+Issue #91 keeps that final verification structural: evidence cross-references come from the validated
+persisted receipt, while live model prose must supply the four report sections without repeating
+machine identifiers verbatim.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1142,6 +1145,8 @@ Work packages:
   implementation complete pending the public smoke).
 - Bound post-evidence preview and final-verification smoke failures without exposing private values
   (#89, implementation complete pending the public smoke).
+- Validate public smoke cross-references from the structured receipt instead of incidental live prose
+  (#91, implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:

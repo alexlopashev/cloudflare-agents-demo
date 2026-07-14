@@ -283,13 +283,6 @@ export function createSmokeVerificationReceipt(input: unknown): SmokeVerificatio
     investigation.report.matchAll(/^#{1,6}\s+(Evidence|Inference|Confidence|Unknowns)\s*$/gim),
     (match) => match[1],
   );
-  const reportReferences = [
-    receipt.investigationId,
-    investigation.incident.incidentId,
-    evidence.selectedTraceId,
-    evidence.commitSha.slice(0, 7),
-    `PR #${evidence.pullRequest.number}`,
-  ];
   const remediationReferences = [
     investigation.incident.incidentId,
     evidence.selectedTraceId,
@@ -316,7 +309,6 @@ export function createSmokeVerificationReceipt(input: unknown): SmokeVerificatio
     preparedRemediation.diff.path === evidence.sourcePath &&
     reportSections.join("|") === "Evidence|Inference|Confidence|Unknowns" &&
     remediationSections.join("|") === "Evidence|Risk|Validation" &&
-    reportReferences.every((reference) => includesReference(investigation.report, reference)) &&
     remediationReferences.every((reference) => includesReference(remediation.body, reference));
   if (!valid) throw new TypeError("Smoke verification cross-reference contract failed.");
 
