@@ -904,13 +904,16 @@ with one shared structured receipt that validates all five phases, cross-referen
 remediation fingerprint and change counts, and a zero-write result in local and deployed smoke.
 Issue #59 makes every measured health and telemetry POST one-shot: transport or response failure
 stops deployment with sample evidence instead of replaying an endpoint that may already have taken
-effect. Side-effect-free runtime identity polling remains isolated from those request paths.
+effect. Each measured interaction identifier includes the immutable Worker version so later
+deployments cannot collide with historical sample ordinals. Side-effect-free runtime identity
+polling remains isolated from those request paths.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
 - Deploy the regression and generate incident traffic.
 - Keep GitHub writes off by default; select live reads only when a scoped token is supplied.
 - Attempt each measured health and telemetry POST exactly once and fail visibly on any error.
+- Scope each deployment interaction identifier to its immutable Worker version and sample ordinal.
 - Deploy the public investigator.
 - Perform the complete reviewer walkthrough.
 

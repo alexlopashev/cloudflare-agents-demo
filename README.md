@@ -145,6 +145,8 @@ and change counts, a validated zero-write preview, and the expected GitHub write
 Every measured health and telemetry POST is attempted exactly once. A transport failure or any
 non-success response stops the deployment with the failing stage and sample identifier; deployment
 automation never replays an endpoint that may already have recorded telemetry or another effect.
+Each interaction identifier includes its immutable Worker version, so a later deployment cannot
+collide with or rewrite historical evidence for the same sample ordinal.
 
 `mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
 `mise run deploy:smoke` repeats the deployed verification. `mise run deploy:reset` deletes only the
