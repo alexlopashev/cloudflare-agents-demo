@@ -14,6 +14,11 @@ export {
   type PersistedSourceStore,
 } from "./persisted-source-repository";
 export {
+  PersistedPreviewApi,
+  type PersistedPreviewApiOptions,
+  type PersistedPreviewStore,
+} from "./persisted-preview-api";
+export {
   RepositoryConnector,
   RepositoryConnectorError,
   type GitHubRepositoryApi,

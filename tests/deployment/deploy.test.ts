@@ -8,7 +8,9 @@ import {
   buildPlatformDeploymentConfig,
   buildEvidenceResetSql,
   buildConfiguredSourceEvidence,
+  buildConfiguredPreviewEvidence,
   buildReleaseSourceEvidenceSql,
+  buildReleasePreviewEvidenceSql,
   deploymentSmokeRetryPolicy,
   deploymentVersionPropagationPolicy,
   deploymentSmokeFailureMessage,
@@ -368,6 +370,7 @@ describe("Cloudflare deployment contract", () => {
     expect(sql).toContain("DELETE FROM spans");
     expect(sql).toContain("DELETE FROM traces");
     expect(sql).toContain("DELETE FROM release_source_evidence");
+    expect(sql).toContain("DELETE FROM release_preview_evidence");
     expect(sql).toContain("DELETE FROM releases");
     expect(() => buildEvidenceResetSql("'; DROP TABLE releases; --", degradedVersionId)).toThrow(
       /version identifier/i,
@@ -433,6 +436,47 @@ describe("Cloudflare deployment contract", () => {
         },
       }),
     ).toThrow(/source proof/i);
+  });
+
+  it("validates one immutable deployed-main preview source and builds its bounded seed", () => {
+    const preview = buildConfiguredPreviewEvidence({
+      releaseId: degradedVersionId,
+      source: {
+        sha: "a".repeat(40),
+        content: "sequential\n",
+        blobSha: "58477bb417f47e0edf26725e9638e781b69f124c",
+      },
+      evidenced: {
+        content: "sequential\n",
+        blobSha: "58477bb417f47e0edf26725e9638e781b69f124c",
+      },
+    });
+    expect(preview).toMatchObject({
+      releaseId: degradedVersionId,
+      baseSha: "a".repeat(40),
+      sourcePath: "workers/platform/src/api/health.ts",
+      byteLength: 11,
+    });
+    const sql = buildReleasePreviewEvidenceSql(preview);
+    expect(sql).toContain("INSERT INTO release_preview_evidence");
+    expect(sql).toContain("ON CONFLICT (release_id, base_sha) DO UPDATE SET");
+    expect(sql).toContain("DELETE FROM release_preview_evidence");
+    expect(sql).toContain(`base_sha <> '${"a".repeat(40)}'`);
+
+    expect(() =>
+      buildConfiguredPreviewEvidence({
+        releaseId: degradedVersionId,
+        source: {
+          sha: "a".repeat(40),
+          content: "changed\n",
+          blobSha: "21fb1eca31e64cd3914025058b21992ab76edcf9",
+        },
+        evidenced: {
+          content: "sequential\n",
+          blobSha: "58477bb417f47e0edf26725e9638e781b69f124c",
+        },
+      }),
+    ).toThrow(/preview proof/i);
   });
 
   it("rejects missing or synthetic remote identifiers", () => {

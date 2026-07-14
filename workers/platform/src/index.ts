@@ -159,12 +159,16 @@ rollback occurred.${prepared}`;
 
   createRemediationAction(writeEnabled: boolean) {
     const configuration = this.agentConfiguration();
+    const incident = configuredIncidentReference(this.env);
     const service = agentComposition.createRemediationService({
       repository: {
         owner: configuration.github.owner,
         repo: configuration.github.repo,
       },
       writeEnabled,
+      sourceReleaseId: incident.degradedReleaseId,
+      previewBaseSha: this.env.GIT_SHA,
+      store: createTelemetryStore(this.env.TELEMETRY_DB),
       ...(configuration.github.token === undefined ? {} : { token: configuration.github.token }),
     });
     return createRemediationAction(service, {

@@ -5,7 +5,9 @@ import {
   type TraceSpan,
 } from "../../../../packages/telemetry/src/traces";
 import {
+  parseReleasePreviewEvidence,
   parseReleaseSourceEvidence,
+  type ReleasePreviewEvidence,
   type ReleaseSourceEvidence,
 } from "../../../../packages/contracts/src/source-evidence";
 
@@ -360,6 +362,83 @@ export function createTelemetryStore(database: D1Database, options: TelemetrySto
             committedAt: evidence.committed_at,
             pullRequestNumber: evidence.pull_request_number,
             pullRequestHeadSha: evidence.pull_request_head_sha,
+            sourcePath: evidence.source_path,
+            blobSha: evidence.blob_sha,
+            byteLength: evidence.byte_length,
+            content: evidence.content,
+          });
+    },
+
+    async recordReleasePreviewEvidence(input: ReleasePreviewEvidence) {
+      const evidence = parseReleasePreviewEvidence(input);
+      const source = await database
+        .prepare(
+          `SELECT source_path, blob_sha, byte_length, content FROM release_source_evidence
+           WHERE release_id = ?1 LIMIT 1`,
+        )
+        .bind(evidence.releaseId)
+        .first<{
+          source_path: string;
+          blob_sha: string;
+          byte_length: number;
+          content: string;
+        }>();
+      if (
+        source === null ||
+        source.source_path !== evidence.sourcePath ||
+        source.blob_sha !== evidence.blobSha ||
+        source.byte_length !== evidence.byteLength ||
+        source.content !== evidence.content
+      ) {
+        throw new TypeError("Release preview evidence does not match its source receipt.");
+      }
+      await database
+        .prepare(
+          `INSERT INTO release_preview_evidence
+            (release_id, base_sha, source_path, blob_sha, byte_length, content)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+           ON CONFLICT (release_id, base_sha) DO UPDATE SET
+             source_path = excluded.source_path,
+             blob_sha = excluded.blob_sha,
+             byte_length = excluded.byte_length,
+             content = excluded.content`,
+        )
+        .bind(
+          evidence.releaseId,
+          evidence.baseSha,
+          evidence.sourcePath,
+          evidence.blobSha,
+          evidence.byteLength,
+          evidence.content,
+        )
+        .run();
+    },
+
+    async getReleasePreviewEvidence(
+      releaseId: string,
+      baseSha: string,
+    ): Promise<ReleasePreviewEvidence | null> {
+      requireId(releaseId, "Release identifier");
+      if (!/^[0-9a-f]{40}$/.test(baseSha)) throw new TypeError("Preview base SHA is invalid.");
+      const evidence = await database
+        .prepare(
+          `SELECT release_id, base_sha, source_path, blob_sha, byte_length, content
+           FROM release_preview_evidence WHERE release_id = ?1 AND base_sha = ?2 LIMIT 1`,
+        )
+        .bind(releaseId, baseSha)
+        .first<{
+          release_id: string;
+          base_sha: string;
+          source_path: string;
+          blob_sha: string;
+          byte_length: number;
+          content: string;
+        }>();
+      return evidence === null
+        ? null
+        : parseReleasePreviewEvidence({
+            releaseId: evidence.release_id,
+            baseSha: evidence.base_sha,
             sourcePath: evidence.source_path,
             blobSha: evidence.blob_sha,
             byteLength: evidence.byte_length,

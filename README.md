@@ -27,7 +27,7 @@ does not select or modify the seeded incident investigated by the agent.
 - SQLite-backed Durable Object state for conversations
 - D1 for measured UX events, traces, spans, and releases
 - An auxiliary health-service Worker reached through a service binding
-- An immutable D1 source receipt and optional constrained GitHub REST adapter for repository evidence
+- Immutable D1 source/preview receipts and an optional constrained GitHub REST adapter
 - An approval-gated GitHub adapter for bounded, idempotent draft PR creation
 - React, TypeScript, pnpm, and a mise-managed toolchain
 
@@ -171,9 +171,10 @@ the measured degraded release. Runtime release inspection and source reading use
 and make no GitHub request. Commit subject/date are evidenced; author, PR title/author/base/merge
 metadata, and diff counts remain explicit unknowns. This avoids depending on GitHub network
 reachability without adding a credential, exposing generic source access, or fabricating evidence for
-another file. Preview freshness reads the bounded public `main` Atom feed, then
-compares the allowlisted raw file at the evidenced and current immutable SHAs; tree metadata remains
-mandatory for the separate write-enabled path. A supplied scoped token may use bounded REST reads;
+another file. Deployment also validates the exact deployed-main source from local Git and stores a
+companion preview receipt only when its bytes/blob equal the evidenced regression source. The
+write-disabled preview reads those two immutable D1 refs and performs no GitHub request; tree metadata
+remains mandatory for the separate write-enabled path. A supplied scoped token may use bounded REST reads;
 external writes additionally require `GITHUB_WRITE_ENABLED=true`, explicit Project Think approval,
 and all repository/path/SHA/blob/size gates. The published demo deliberately keeps that flag false, so
 approval yields a preview and cannot create or merge a pull request.
@@ -288,9 +289,8 @@ diagnostics instead of silently fabricating causality.
 Live Worker composition now imports only Workers AI and production GitHub adapters. Vite and Worker
 tests explicitly substitute a deterministic demo adapter; the production build dry-runs and scans
 the live bundle to reject test-provider, fixture, and mock-model markers. Missing, empty, and
-whitespace-only GitHub tokens normalize once as absent, selecting the persisted D1 release/source
-receipt and a write-disabled preview whose branch freshness uses the bounded public Atom feed, but
-never satisfying write enablement. Runtime version,
+whitespace-only GitHub tokens normalize once as absent, selecting the persisted D1 release/source and
+preview receipts without satisfying write enablement or making a GitHub request. Runtime version,
 Git SHA, and deployment timestamp are validated before health telemetry or runtime identity can be
 emitted. The deterministic and live paths both prepare the same complete-file bounded-concurrency edit.
 

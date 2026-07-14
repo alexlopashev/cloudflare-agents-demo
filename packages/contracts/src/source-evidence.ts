@@ -45,8 +45,36 @@ export const releaseSourceEvidenceSchema = z
 
 export type ReleaseSourceEvidence = z.infer<typeof releaseSourceEvidenceSchema>;
 
+export const releasePreviewEvidenceSchema = z
+  .object({
+    releaseId: evidenceId,
+    baseSha: immutableSha,
+    sourcePath: z.literal(configuredSourceEvidencePolicy.sourcePath),
+    blobSha: immutableSha,
+    byteLength: z.number().int().positive().max(configuredSourceEvidencePolicy.maxSourceBytes),
+    content: z.string().min(1),
+  })
+  .strict()
+  .superRefine((evidence, context) => {
+    if (new TextEncoder().encode(evidence.content).byteLength !== evidence.byteLength) {
+      context.addIssue({
+        code: "custom",
+        message: "Configured preview byte length does not match its content.",
+        path: ["byteLength"],
+      });
+    }
+  });
+
+export type ReleasePreviewEvidence = z.infer<typeof releasePreviewEvidenceSchema>;
+
 export function parseReleaseSourceEvidence(value: unknown): ReleaseSourceEvidence {
   const parsed = releaseSourceEvidenceSchema.safeParse(value);
   if (!parsed.success) throw new TypeError("Configured release source evidence is invalid.");
+  return parsed.data;
+}
+
+export function parseReleasePreviewEvidence(value: unknown): ReleasePreviewEvidence {
+  const parsed = releasePreviewEvidenceSchema.safeParse(value);
+  if (!parsed.success) throw new TypeError("Configured release preview evidence is invalid.");
   return parsed.data;
 }
