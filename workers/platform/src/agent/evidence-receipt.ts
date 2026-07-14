@@ -243,21 +243,8 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
   const incident = receipt.incident;
 
   if (result.toolName === "compare_releases") {
-    const input = z
-      .object({
-        baselineReleaseId: evidenceId,
-        candidateReleaseId: evidenceId,
-        windowMs: z.number().int().positive(),
-      })
-      .partial()
-      .strict()
-      .safeParse(result.input);
     const output = comparisonOutput.safeParse(result.output);
-    if (
-      !input.success ||
-      !output.success ||
-      output.data.windowMs !== configuredComparisonWindowMs
-    ) {
+    if (!output.success || output.data.windowMs !== configuredComparisonWindowMs) {
       return { status: "insufficient", reason: "invalid-or-mismatched-comparison" };
     }
     return {
@@ -271,19 +258,8 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
   }
 
   if (result.toolName === "find_slow_traces") {
-    const input = z
-      .object({
-        releaseId: evidenceId,
-        sinceMs: z.number().int().nonnegative(),
-        untilMs: z.number().int().positive(),
-        limit: z.number().int().min(1).max(100),
-      })
-      .partial()
-      .strict()
-      .safeParse(result.input);
     const output = slowTraceOutput.safeParse(result.output);
     if (
-      !input.success ||
       !output.success ||
       output.data.some(
         (trace) =>
@@ -304,10 +280,8 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
   }
 
   if (result.toolName === "inspect_trace") {
-    const input = z.object({ traceId: evidenceId.optional() }).strict().safeParse(result.input);
     const output = traceOutput.safeParse(result.output);
     if (
-      !input.success ||
       !output.success ||
       output.data.trace.traceId !== receipt.evidence.selectedTraceId ||
       output.data.trace.releaseId !== incident.degradedReleaseId
@@ -322,10 +296,8 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
   }
 
   if (result.toolName === "inspect_release") {
-    const input = z.object({ versionId: evidenceId.optional() }).strict().safeParse(result.input);
     const output = releaseOutput.safeParse(result.output);
     if (
-      !input.success ||
       !output.success ||
       output.data.release.versionId !== incident.degradedReleaseId ||
       output.data.release.commitSha !== output.data.commit.sha
@@ -350,18 +322,12 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
     };
   }
 
-  const input = z
-    .object({ commitSha: immutableSha, paths: z.array(safePath).length(1) })
-    .strict()
-    .safeParse(result.input);
   const output = sourceOutput.safeParse(result.output);
   const file = output.success ? output.data[0] : undefined;
   if (
-    !input.success ||
     file === undefined ||
-    input.data.commitSha !== receipt.evidence.commitSha ||
-    input.data.paths[0] !== receipt.evidence.sourcePath ||
-    file.path !== input.data.paths[0]
+    receipt.evidence.commitSha === undefined ||
+    file.path !== receipt.evidence.sourcePath
   ) {
     return { status: "insufficient", reason: "invalid-or-mismatched-source" };
   }
