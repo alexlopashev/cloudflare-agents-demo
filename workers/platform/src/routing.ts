@@ -8,6 +8,7 @@ import { composeExternalConfiguration } from "./config";
 import { generateRegressionScenario } from "./scenario/generator";
 import { handleScenarioRequest } from "./scenario/handler";
 import { createTelemetryStore } from "./telemetry/store";
+import { createSmokeVerificationReceipt } from "./verification/smoke-contract";
 import { handleUxTelemetryRequest } from "./telemetry/ux-handler";
 
 export interface FetchBinding {
@@ -170,16 +171,13 @@ export async function handlePlatformRequest(
       return Response.json({ error: { code: "invalid-request" } }, { status: 400 });
     }
     const agent = bindings.REGRESSION_SURGEON_AGENT.getByName(session) as unknown as {
-      runLocalInvestigation(): Promise<{
-        incident: IncidentReference;
-        toolTypes: string[];
-        report: string;
-      }>;
+      runLocalInvestigation(): Promise<unknown>;
       runLocalRemediationPreview(): Promise<unknown>;
     };
     const investigation = await agent.runLocalInvestigation();
     const remediation = await agent.runLocalRemediationPreview();
-    return Response.json({ investigation, remediation });
+    const verification = createSmokeVerificationReceipt({ investigation, remediation });
+    return Response.json({ verification });
   }
 
   if (url.pathname === "/app" || url.pathname === "/investigator") {

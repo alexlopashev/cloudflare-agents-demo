@@ -335,9 +335,9 @@ which Node can type-strip without a loader; `tsc --noEmit` remains the separate 
 | `mise run format:check` | Verify formatting without modifying files |
 | `mise run lint` | Run code, configuration, and shell linting with zero warnings |
 | `mise run typecheck` | Run strict TypeScript checks |
-| `mise run check` | Run the current formatting, linting, type-checking, and test aggregate; v1.2 expands it to every non-deployment CI gate |
+| `mise run check` | Run every non-deployment CI gate once: doctor, container contract, formatting, linting, type-checking, tests, E2E, and build |
 | `mise run test` | Run the full foundation, unit, integration, and Worker test suites |
-| `mise run test:watch` | Run the current ordinary Vitest watch pool; v1.2 adds Worker-target selection |
+| `mise run test:watch` | Run named ordinary and Worker Vitest projects in one selectable watch workspace |
 | `mise run db:migrate` | Apply local D1 migrations |
 | `mise run dev` | Run the complete native stack with a fake local model |
 | `mise run dev:live` | Run locally with remote Workers AI |
@@ -899,8 +899,9 @@ remote migrations, measures 20 concurrent and 20 sequential interactions under d
 version IDs, and deploys the public GLM 4.7 Flash Project Think investigator. The final configuration
 injects the exact evidence IDs and bounded degraded trace window. A keyed smoke invokes the real
 Durable Object and Workers AI model, checks evidence events and a structured report, validates a
-remediation preview, and proves GitHub writes remain disabled. Issue #42 replaces the current
-name/count checks with exact validation of all five receipt phases and their cross-references.
+remediation preview, and proves GitHub writes remain disabled. Issue #42 replaces name/count checks
+with one shared structured receipt that validates all five phases, cross-references, report sections,
+remediation fingerprint and change counts, and a zero-write result in local and deployed smoke.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1059,7 +1060,7 @@ Work packages:
 - Reject conflicting telemetry retries and cross-release attribution atomically (#40, implemented).
 - Implement truthful, parent-aware trace-path semantics (#41, implemented).
 - Make targeted tests, watch mode, aggregate checks, reconnection, and remote smoke prove the same
-  structured contract (#42).
+  structured contract (#42, implemented).
 - Make the first-run UX direct, honest, accessible, and explicit about preview versus live writes
   (#43, implemented and browser-verified at desktop and 390px widths).
 - Remove test-only runtime composition and normalize external configuration once (#44, implemented).

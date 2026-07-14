@@ -86,6 +86,8 @@ Colima is never started by bootstrap.
 mise run doctor
 mise run build
 mise run check
+mise run test
+mise run test:watch
 mise run db:migrate
 mise run scenario:reset
 mise run scenario:reseed
@@ -121,6 +123,12 @@ five-operation Project Think investigation that cites the measured trace, immuta
 It also validates an evidence-rich draft-PR preview against base/blob freshness, path, byte, line, and
 changed-line limits while proving that local mode performs no GitHub writes.
 
+`mise run test -- <target>` dispatches a foundation, ordinary Vitest, or Worker target only to its
+compatible test layer. `mise run test:watch` loads named ordinary and Worker Vitest projects so
+either behavior can be selected during TDD. `mise run check` is the single non-deployment CI gate:
+doctor, container contract, formatting, linting, type checking, all test layers, deterministic E2E,
+and the production build/bundle assertion run once in a fixed order.
+
 ### Public Cloudflare deployment
 
 The current no-login demo is
@@ -130,8 +138,9 @@ creates only the named D1 database, builds both Workers and the web app, applies
 deploys a concurrent baseline and measures 20 interactions, deploys the sequential regression and
 measures 20 interactions, then deploys the public GLM 4.7 Flash investigator with those exact
 Cloudflare version IDs and trace timestamps. It finishes with a keyed smoke that verifies the two
-public routes, runtime metadata, the five-operation Workers AI evidence chain, a validated remediation
-preview, and the expected GitHub write posture.
+public routes, runtime metadata, five exact incident-scoped evidence phases, their trace, release,
+commit, PR, source, and blob cross-references, all four report sections, the remediation fingerprint
+and change counts, a validated zero-write preview, and the expected GitHub write posture.
 
 `mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
 `mise run deploy:smoke` repeats the deployed verification. `mise run deploy:reset` deletes only the
@@ -141,9 +150,9 @@ owner-only permissions. The public app requires no login and creates a durable s
 browser-local storage.
 
 No GitHub token is copied from `gh` or uploaded by the deployment task. In the credential-free public
-posture, D1 resolves the real Worker version to an immutable commit SHA and the repository boundary
-serves the committed, SHA-gated fixture for commit/PR/source evidence. A supplied scoped token selects
-the live read connector; external writes additionally require `GITHUB_WRITE_ENABLED=true`, explicit
+posture, D1 resolves the real Worker version to an immutable commit SHA and the bounded production
+GitHub adapter performs unauthenticated commit, PR, source, base, and blob reads. A supplied scoped
+token may authenticate those reads; external writes additionally require `GITHUB_WRITE_ENABLED=true`, explicit
 Project Think approval, and all repository/path/SHA/blob/size gates. The published demo deliberately
 keeps that flag false, so approval yields a preview and cannot create or merge a pull request.
 
@@ -168,6 +177,10 @@ After disabling writes, run `mise run github:writes:secret:delete` to revoke the
 The keyed smoke may retry the endpoint's pre-execution 404 briefly while a newly rotated smoke key
 propagates across Cloudflare. It returns every other status immediately, so a Workers AI turn or
 other endpoint work is never duplicated.
+
+The real WebSocket protocol contract is also exercised locally: reconnect replays the persisted
+pending approval, and a repeated approval response commits one guarded preview result without
+duplicating the user turn, action effect, branch, PR, or external write.
 
 ### Optional Colima parity
 

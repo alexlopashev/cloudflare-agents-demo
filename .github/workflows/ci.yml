@@ -30,8 +30,4 @@ jobs:
       - run: mise exec node -- corepack prepare pnpm@10.34.5 --activate
       - run: mise exec node -- corepack enable pnpm
       - run: mise exec node -- pnpm install --frozen-lockfile
-      - run: mise run doctor
-      - run: mise run container:check
       - run: mise run check
-      - run: mise run e2e
-      - run: mise run build
