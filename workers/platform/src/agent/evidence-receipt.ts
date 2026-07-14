@@ -304,13 +304,12 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
   }
 
   if (result.toolName === "inspect_trace") {
-    const input = z.object({ traceId: evidenceId }).strict().safeParse(result.input);
+    const input = z.object({ traceId: evidenceId.optional() }).strict().safeParse(result.input);
     const output = traceOutput.safeParse(result.output);
     if (
       !input.success ||
       !output.success ||
-      input.data.traceId !== receipt.evidence.selectedTraceId ||
-      output.data.trace.traceId !== input.data.traceId ||
+      output.data.trace.traceId !== receipt.evidence.selectedTraceId ||
       output.data.trace.releaseId !== incident.degradedReleaseId
     ) {
       return { status: "insufficient", reason: "invalid-or-mismatched-trace-detail" };

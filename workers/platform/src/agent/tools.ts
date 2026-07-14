@@ -120,7 +120,11 @@ async function executeBounded(
 
 export function createInvestigationTools(
   services: InvestigationEvidenceServices,
-  options: { incident?: IncidentReference; maxResultBytes?: number } = {},
+  options: {
+    incident?: IncidentReference;
+    maxResultBytes?: number;
+    selectedTraceId?: () => string | undefined;
+  } = {},
 ): ToolSet {
   const maxResultBytes = options.maxResultBytes ?? 16_384;
   if (!Number.isSafeInteger(maxResultBytes) || maxResultBytes < 256 || maxResultBytes > 32_768) {
@@ -130,6 +134,7 @@ export function createInvestigationTools(
     options.incident === undefined ? undefined : parseIncidentReference(options.incident);
   const configuredCompareReleasesSchema = compareReleasesSchema.partial();
   const configuredFindSlowTracesSchema = findSlowTracesSchema.partial();
+  const configuredInspectTraceSchema = inspectTraceSchema.partial();
   const configuredInspectReleaseSchema = inspectReleaseSchema.partial();
 
   return {
@@ -180,13 +185,20 @@ export function createInvestigationTools(
     inspect_trace: tool({
       description:
         "Inspect one selected trace and its bounded parent-aware critical path with explicit parentage diagnostics.",
-      inputSchema: inspectTraceSchema,
+      inputSchema: incident === undefined ? inspectTraceSchema : configuredInspectTraceSchema,
       execute: async (rawInput) => {
-        const input = inspectTraceSchema.parse(rawInput);
-        return executeBounded(
-          () => services.telemetry.getTraceDetail(input.traceId),
-          maxResultBytes,
-        );
+        if (incident === undefined) {
+          const input = inspectTraceSchema.parse(rawInput);
+          return executeBounded(
+            () => services.telemetry.getTraceDetail(input.traceId),
+            maxResultBytes,
+          );
+        }
+        configuredInspectTraceSchema.parse(rawInput);
+        return executeBounded(async () => {
+          const selectedTraceId = evidenceId.parse(options.selectedTraceId?.());
+          return services.telemetry.getTraceDetail(selectedTraceId);
+        }, maxResultBytes);
       },
     }),
     inspect_release: tool({

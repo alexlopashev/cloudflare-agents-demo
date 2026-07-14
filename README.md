@@ -212,7 +212,8 @@ other endpoint work is never duplicated. Before remediation, the keyed route cla
 five-phase receipt. An incomplete receipt returns only bounded tool names and statuses, while an
 invalid receipt shape exposes only a bounded whitelist of contract surfaces—never values or
 validation messages. Deployment prints that safe diagnostic, and the smoke stops without invoking
-preview or exposing model prose.
+preview or exposing model prose. Trace inspection reads only the representative trace already
+selected by that receipt; model-generated trace identifiers cannot redirect the investigation.
 
 The real WebSocket protocol contract is also exercised locally: reconnect replays the persisted
 pending approval, and a repeated approval response commits one guarded preview result without

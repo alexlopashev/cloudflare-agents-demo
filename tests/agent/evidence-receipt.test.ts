@@ -193,6 +193,9 @@ describe("incident-scoped evidence receipt", () => {
           },
         };
       }
+      if (evidence.toolName === "inspect_trace") {
+        return { ...evidence, input: { traceId: "model-generated-trace" } };
+      }
       if (evidence.toolName === "inspect_release") {
         return { ...evidence, input: { versionId: "generated-release" } };
       }

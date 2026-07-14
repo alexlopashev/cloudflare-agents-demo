@@ -148,7 +148,13 @@ rollback occurred.${prepared}`;
         sourceReleaseId: incident.degradedReleaseId,
         ...(configuration.github.token === undefined ? {} : { token: configuration.github.token }),
       }),
-      { incident },
+      {
+        incident,
+        selectedTraceId: () =>
+          this.state.status === "investigating"
+            ? this.state.receipt.evidence.selectedTraceId
+            : undefined,
+      },
     );
   }
 

@@ -149,6 +149,25 @@ describe("investigation tools", () => {
     );
   });
 
+  it("inspects the receipt-selected trace instead of a model-generated trace identifier", async () => {
+    const evidence = services();
+    const tools = createInvestigationTools(evidence, {
+      incident: {
+        incidentId: "configured-latency-regression",
+        baselineReleaseId: "baseline-concurrent",
+        degradedReleaseId: "regression-sequential",
+        traceWindow: { sinceMs: 1_000, untilMs: 2_000 },
+      },
+      selectedTraceId: () => "readiness-proven-trace",
+    });
+
+    await execute(tools.inspect_trace, { traceId: "model-generated-trace" });
+
+    expect(evidence.telemetry.getTraceDetail).toHaveBeenCalledExactlyOnceWith(
+      "readiness-proven-trace",
+    );
+  });
+
   it("truncates oversized tool results deterministically before model context", async () => {
     const evidence = services();
     evidence.repository.readFiles.mockResolvedValue([

@@ -959,6 +959,9 @@ verification code. Exception text, source, model prose, identifiers, and credent
 Issue #91 keeps that final verification structural: evidence cross-references come from the validated
 persisted receipt, while live model prose must supply the four report sections without repeating
 machine identifiers verbatim.
+Issue #93 binds trace inspection to the representative trace already selected and persisted by the
+receipt. Model-generated trace identifiers are ignored, and the returned detail must still match the
+receipt selection and configured degraded release.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1147,6 +1150,8 @@ Work packages:
   (#89, implementation complete pending the public smoke).
 - Validate public smoke cross-references from the structured receipt instead of incidental live prose
   (#91, implementation complete pending the public smoke).
+- Keep public trace inspection on the receipt-selected, readiness-proven evidence path (#93,
+  implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:
