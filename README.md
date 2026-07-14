@@ -158,6 +158,9 @@ It then polls a smoke-key-protected, GET-only evidence-readiness route until the
 comparison, representative trace, source receipt, and exact deployed-main preview receipt are
 readable. Only 404/503 from that side-effect-free route may retry; it cannot call Workers AI,
 remediation, GitHub, health, or telemetry writes. The executable agent smoke remains single-shot.
+If a complete evidence receipt fails afterward, deployment reports only whether the bounded preview
+failed (with one whitelisted policy code) or final smoke verification was invalid. Exception text,
+source, model prose, identifiers, and credentials are never returned.
 
 `mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
 `mise run deploy:smoke` repeats the deployed verification. `mise run deploy:reset` deletes only the

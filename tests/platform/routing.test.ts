@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { handlePlatformRequest, type PlatformBindings } from "../../workers/platform/src/routing";
+import { RemediationError } from "../../workers/platform/src/remediation/service";
 
 function createBindings() {
   const healthFetch = vi.fn(async (request: Request) => {
@@ -285,6 +286,44 @@ Run gates.`,
     expect(getByName).toHaveBeenCalledExactlyOnceWith("deployment-smoke-1234567890");
     expect(runLocalInvestigation).toHaveBeenCalledOnce();
     expect(runLocalRemediationPreview).toHaveBeenCalledOnce();
+
+    runLocalRemediationPreview.mockRejectedValueOnce(
+      new RemediationError("stale-base", "private source detail must not escape"),
+    );
+    const previewFailure = await handlePlatformRequest(
+      new Request("https://example.test/api/deployment-smoke", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-deploy-smoke-key": "deployment-smoke-key-123456",
+        },
+        body: JSON.stringify({ session: "deployment-smoke-preview-failure-123456" }),
+      }),
+      bindings,
+      async () => null,
+    );
+    expect(previewFailure.status).toBe(502);
+    expect(await previewFailure.json()).toEqual({
+      error: { code: "remediation-preview-failed", reason: "stale-base" },
+    });
+
+    runLocalRemediationPreview.mockResolvedValueOnce({ private: "model prose" } as never);
+    const verificationFailure = await handlePlatformRequest(
+      new Request("https://example.test/api/deployment-smoke", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-deploy-smoke-key": "deployment-smoke-key-123456",
+        },
+        body: JSON.stringify({ session: "deployment-smoke-verification-failure-123456" }),
+      }),
+      bindings,
+      async () => null,
+    );
+    expect(verificationFailure.status).toBe(422);
+    const boundedFailure = await verificationFailure.json();
+    expect(boundedFailure).toEqual({ error: { code: "invalid-smoke-verification" } });
+    expect(JSON.stringify(boundedFailure)).not.toContain("model prose");
   });
 
   it("stops an incomplete evidence smoke before remediation with bounded phase evidence", async () => {

@@ -305,6 +305,19 @@ describe("Cloudflare deployment contract", () => {
     expect(message).not.toContain("private");
   });
 
+  it("surfaces only bounded post-evidence preview and verification diagnostics", () => {
+    expect(
+      deploymentSmokeFailureMessage(502, {
+        error: { code: "remediation-preview-failed", reason: "stale-base" },
+      }),
+    ).toBe("Public agent smoke returned HTTP 502: remediation-preview-failed (stale-base).");
+    expect(
+      deploymentSmokeFailureMessage(422, {
+        error: { code: "invalid-smoke-verification" },
+      }),
+    ).toBe("Public agent smoke returned HTTP 422: invalid-smoke-verification.");
+  });
+
   it("attempts a side-effecting deployment endpoint exactly once", async () => {
     const successfulResponse = new Response(null, { status: 204 });
     const successfulRequest = vi.fn(async () => successfulResponse);

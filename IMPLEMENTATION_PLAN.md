@@ -953,6 +953,9 @@ Issue #87 adds a smoke-key-protected, GET-only evidence-readiness gate after rem
 deployment. It polls only configured D1 comparison/trace/source/preview reads on 404/503 and cannot
 call Workers AI, remediation, GitHub, health, or telemetry writes; the executable smoke stays
 single-shot.
+Issue #89 classifies the remaining post-evidence smoke boundary: preview failure exposes only one
+whitelisted remediation code, while final cross-reference failure exposes only a fixed invalid
+verification code. Exception text, source, model prose, identifiers, and credentials remain private.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1137,6 +1140,8 @@ Work packages:
   implementation complete pending the public smoke).
 - Gate the one executable public smoke on side-effect-free configured D1 evidence readiness (#87,
   implementation complete pending the public smoke).
+- Bound post-evidence preview and final-verification smoke failures without exposing private values
+  (#89, implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:
