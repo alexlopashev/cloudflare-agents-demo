@@ -352,18 +352,21 @@ async function smoke(state: z.infer<typeof stateSchema>) {
     if (!body.includes("Regression Surgeon")) throw new Error(`${route} did not serve the app.`);
   }
   const runtime = await assertRuntimeAttribution(state);
+  const smokeSession = `deployment-smoke-${crypto.randomUUID()}`;
   await waitForDeploymentEvidenceReady(
     async () =>
-      fetch(`${state.publicUrl}/api/deployment-evidence-readiness`, {
-        method: "GET",
-        headers: { "x-deploy-smoke-key": state.smokeKey },
-      }),
+      fetch(
+        `${state.publicUrl}/api/deployment-evidence-readiness?session=${encodeURIComponent(smokeSession)}`,
+        {
+          method: "GET",
+          headers: { "x-deploy-smoke-key": state.smokeKey },
+        },
+      ),
     async () =>
       new Promise<void>((resolveDelay) =>
         setTimeout(resolveDelay, deploymentEvidenceReadinessPolicy.delayMs),
       ),
   );
-  const smokeSession = `deployment-smoke-${crypto.randomUUID()}`;
   await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 10_000));
   const smokeResponse = await requestDeploymentSmokeWithRetry(
     async () =>

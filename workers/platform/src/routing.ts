@@ -3,13 +3,8 @@ import {
   type IncidentEnvironment,
   type IncidentReference,
 } from "../../../packages/contracts/src/incident";
-import type {
-  ReleasePreviewEvidence,
-  ReleaseSourceEvidence,
-} from "../../../packages/contracts/src/source-evidence";
 import { handleHealthApiRequest } from "./api/health-handler";
 import { composeExternalConfiguration } from "./config";
-import { configuredComparisonWindowMs, configuredSlowTraceLimit } from "./agent/evidence-policy";
 import { generateRegressionScenario } from "./scenario/generator";
 import { RemediationError } from "./remediation/service";
 import { handleScenarioRequest } from "./scenario/handler";
@@ -49,28 +44,6 @@ export type AgentRequestRouter = (
   bindings: PlatformBindings,
 ) => Promise<Response | null>;
 
-type EvidenceReadinessStore = {
-  compareReleases(input: {
-    baselineReleaseId: string;
-    candidateReleaseId: string;
-    windowMs: number;
-  }): Promise<{ status: string }>;
-  findSlowTraces(input: {
-    releaseId: string;
-    sinceMs: number;
-    untilMs: number;
-    limit: number;
-  }): Promise<readonly { traceId: string; releaseId: string }[]>;
-  getTraceDetail(traceId: string): Promise<{
-    trace: { traceId: string; releaseId: string };
-  } | null>;
-  getReleaseSourceEvidence(releaseId: string): Promise<ReleaseSourceEvidence | null>;
-  getReleasePreviewEvidence(
-    releaseId: string,
-    baseSha: string,
-  ): Promise<ReleasePreviewEvidence | null>;
-};
-
 export async function handlePlatformRequest(
   request: Request,
   bindings: PlatformBindings,
@@ -83,7 +56,6 @@ export async function handlePlatformRequest(
     "recordTrace" | "recordUxEvent"
   > = createTelemetryStore,
   scenarioRequestHandler: typeof handleScenarioRequest = handleScenarioRequest,
-  evidenceStoreFactory: (database: D1Database) => EvidenceReadinessStore = createTelemetryStore,
 ): Promise<Response> {
   const url = new URL(request.url);
   let externalConfiguration: ReturnType<typeof composeExternalConfiguration>;
@@ -215,49 +187,15 @@ export async function handlePlatformRequest(
         { status: 405, headers: { allow: "GET", "cache-control": "no-store" } },
       );
     }
+    const session = url.searchParams.get("session");
+    if (session === null || !/^deployment-smoke-[A-Za-z0-9-]{10,100}$/.test(session)) {
+      return Response.json({ error: { code: "invalid-request" } }, { status: 400 });
+    }
+    const agent = bindings.REGRESSION_SURGEON_AGENT.getByName(session) as unknown as {
+      runLocalEvidenceReadiness(): Promise<void>;
+    };
     try {
-      const incident = configuredIncidentReference(bindings);
-      const store = evidenceStoreFactory(bindings.TELEMETRY_DB);
-      const [comparison, traces, source, preview] = await Promise.all([
-        store.compareReleases({
-          baselineReleaseId: incident.baselineReleaseId,
-          candidateReleaseId: incident.degradedReleaseId,
-          windowMs: configuredComparisonWindowMs,
-        }),
-        store.findSlowTraces({
-          releaseId: incident.degradedReleaseId,
-          sinceMs: incident.traceWindow.sinceMs,
-          untilMs: incident.traceWindow.untilMs,
-          limit: configuredSlowTraceLimit,
-        }),
-        store.getReleaseSourceEvidence(incident.degradedReleaseId),
-        store.getReleasePreviewEvidence(incident.degradedReleaseId, bindings.GIT_SHA),
-      ]);
-      const selectedTrace = traces[0];
-      if (
-        comparison.status !== "ready" ||
-        selectedTrace === undefined ||
-        selectedTrace.releaseId !== incident.degradedReleaseId ||
-        source === null ||
-        preview === null ||
-        source.releaseId !== incident.degradedReleaseId ||
-        preview.releaseId !== incident.degradedReleaseId ||
-        preview.baseSha !== bindings.GIT_SHA ||
-        source.sourcePath !== preview.sourcePath ||
-        source.blobSha !== preview.blobSha ||
-        source.byteLength !== preview.byteLength ||
-        source.content !== preview.content
-      ) {
-        throw new TypeError("Configured deployment evidence is incomplete.");
-      }
-      const detail = await store.getTraceDetail(selectedTrace.traceId);
-      if (
-        detail === null ||
-        detail.trace.traceId !== selectedTrace.traceId ||
-        detail.trace.releaseId !== incident.degradedReleaseId
-      ) {
-        throw new TypeError("Configured deployment trace evidence is incomplete.");
-      }
+      await agent.runLocalEvidenceReadiness();
       return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
     } catch {
       return Response.json(

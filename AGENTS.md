@@ -117,9 +117,10 @@ Do not assert exact natural-language output from a live model. Assert structured
 - Final smoke verification failures expose only the fixed code and bounded whitelisted contract
   surfaces; values, identifiers, source, model prose, exception text, and credentials stay private.
 - Deployment verification may retry the pre-execution smoke 404 while a rotated key propagates and
-  may poll the keyed GET-only D1 evidence-readiness route on 404/503. That route cannot call Workers
-  AI, remediation, GitHub, health, or telemetry writes. It must never retry a response that could
-  follow Workers AI or another endpoint side effect.
+  may poll the keyed GET-only D1 evidence-readiness route on 404/503. Readiness must execute through
+  the exact named Durable Object session used by the following smoke so it proves D1 availability at
+  the agent boundary. That route cannot call Workers AI, remediation, GitHub, health, or telemetry
+  writes. It must never retry a response that could follow Workers AI or another endpoint side effect.
 - Reset operations may delete only the two measured release IDs recorded in validated deployment state.
 - A deployed gate is not complete until public routes, runtime metadata, Workers AI evidence tools,
   structured report, no-write remediation preview, and write posture all pass.
