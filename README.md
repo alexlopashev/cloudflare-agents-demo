@@ -167,8 +167,10 @@ posture, D1 resolves the real Worker version to an immutable commit SHA. The bou
 adapter reads that commit's public patch plus only requested allowlisted raw source at the same SHA,
 computes the Git blob identity locally, and marks PR author/base/merge metadata unknown when the
 patch cannot prove it; the commit subject is not relabeled as a PR title. This avoids shared
-unauthenticated REST quota without adding a credential or
-fabricating evidence. Preview freshness reads the bounded public `main` Atom feed, then compares the
+unauthenticated REST quota without adding a credential or fabricating evidence. For the configured
+incident, the source receipt binds to `workers/platform/src/api/health.ts` even when other allowlisted
+files occur earlier in the regression commit; it does not infer a remediation target from change
+order. Preview freshness reads the bounded public `main` Atom feed, then compares the
 allowlisted raw file at the evidenced and current immutable SHAs; tree metadata remains mandatory for
 the separate write-enabled path. A supplied scoped token may use bounded REST reads; external writes
 additionally require `GITHUB_WRITE_ENABLED=true`, explicit Project Think approval, and all

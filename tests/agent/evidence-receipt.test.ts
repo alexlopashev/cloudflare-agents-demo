@@ -127,6 +127,48 @@ describe("incident-scoped evidence receipt", () => {
     });
   });
 
+  it("binds a multi-file release to the configured remediation source and requires that change", () => {
+    const readyForRelease = completeResults
+      .slice(0, 3)
+      .reduce(
+        (receipt, evidence) => recordEvidenceResult(receipt, evidence),
+        createEvidenceReceipt("investigation-1", incident),
+      );
+    const precedingAllowedPath = "workers/platform/src/api/health-handler.ts";
+    const selected = recordEvidenceResult(readyForRelease, {
+      ...completeResults[3],
+      toolCallId: "multi-file-release",
+      output: {
+        ...completeResults[3].output,
+        commit: {
+          ...completeResults[3].output.commit,
+          changes: [
+            { path: precedingAllowedPath, status: "modified" },
+            { path: sourcePath, status: "modified" },
+          ],
+        },
+      },
+    });
+    expect(selected.phases[3]?.status).toBe("complete");
+    expect(selected.evidence.sourcePath).toBe(sourcePath);
+
+    const missing = recordEvidenceResult(readyForRelease, {
+      ...completeResults[3],
+      toolCallId: "missing-configured-source",
+      output: {
+        ...completeResults[3].output,
+        commit: {
+          ...completeResults[3].output.commit,
+          changes: [{ path: precedingAllowedPath, status: "modified" }],
+        },
+      },
+    });
+    expect(missing.phases[3]).toMatchObject({
+      status: "insufficient",
+      attempts: [{ reason: "missing-configured-source-change" }],
+    });
+  });
+
   it("does not let prose, wrong order, mismatched IDs, or duplicate current-step results complete phases", () => {
     expect(
       evidenceResultsFromModelMessages([

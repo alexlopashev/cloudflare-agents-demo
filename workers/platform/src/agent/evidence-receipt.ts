@@ -57,6 +57,7 @@ export type EvidenceReceipt = {
 
 const evidenceId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/);
 const immutableSha = z.string().regex(/^[0-9a-f]{40}$/);
+const configuredRemediationSourcePath = "workers/platform/src/api/health.ts";
 const safePath = z
   .string()
   .min(1)
@@ -335,9 +336,12 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
     ) {
       return { status: "insufficient", reason: "invalid-or-mismatched-release" };
     }
-    const firstChange = output.data.commit.changes[0];
-    if (firstChange === undefined)
-      return { status: "insufficient", reason: "missing-source-change" };
+    const configuredChange = output.data.commit.changes.find(
+      (change) => change.path === configuredRemediationSourcePath,
+    );
+    if (configuredChange === undefined) {
+      return { status: "insufficient", reason: "missing-configured-source-change" };
+    }
     return {
       status: "complete",
       reason: "validated",
@@ -345,7 +349,7 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
         releaseId: output.data.release.versionId,
         commitSha: output.data.commit.sha,
         pullRequest: output.data.pullRequest,
-        sourcePath: firstChange.path,
+        sourcePath: configuredChange.path,
       },
     };
   }
