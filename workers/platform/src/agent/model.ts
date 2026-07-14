@@ -1,15 +1,16 @@
 import type { LanguageModel } from "ai";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
-import { createWorkersAI } from "workers-ai-provider";
 
 import { remediationFixture } from "../../../../packages/test-fixtures/src/remediation";
 import { regressionSource } from "../../../../packages/test-fixtures/src/scenario";
+import {
+  createWorkersAiModel,
+  WORKERS_AI_MODEL,
+  WORKERS_AI_MODEL_SETTINGS,
+} from "./workers-ai-model";
 
-export const WORKERS_AI_MODEL = "@cf/zai-org/glm-4.7-flash";
-export const WORKERS_AI_MODEL_SETTINGS = {
-  parallel_tool_calls: false,
-} as const;
+export { WORKERS_AI_MODEL, WORKERS_AI_MODEL_SETTINGS } from "./workers-ai-model";
 
 export interface ModelEnvironment<TBinding = Ai> {
   AI?: TBinding;
@@ -358,6 +359,6 @@ has been performed.`,
 export function createAgentModel(environment: ModelEnvironment): LanguageModel {
   return selectAgentModel(environment, {
     fake: createDeterministicModel,
-    workersAI: (binding, modelId, settings) => createWorkersAI({ binding })(modelId, settings),
+    workersAI: createWorkersAiModel,
   });
 }

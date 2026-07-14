@@ -4,6 +4,7 @@ import {
   type IncidentReference,
 } from "../../../packages/contracts/src/incident";
 import { handleHealthApiRequest } from "./api/health-handler";
+import { composeExternalConfiguration } from "./config";
 import { generateRegressionScenario } from "./scenario/generator";
 import { handleScenarioRequest } from "./scenario/handler";
 import { createTelemetryStore } from "./telemetry/store";
@@ -50,6 +51,20 @@ export async function handlePlatformRequest(
   scenarioRequestHandler: typeof handleScenarioRequest = handleScenarioRequest,
 ): Promise<Response> {
   const url = new URL(request.url);
+  let externalConfiguration: ReturnType<typeof composeExternalConfiguration>;
+  try {
+    externalConfiguration = composeExternalConfiguration({
+      versionMetadata: bindings.CF_VERSION_METADATA,
+      gitSha: bindings.GIT_SHA,
+      githubOwner: bindings.GITHUB_OWNER,
+      githubRepo: bindings.GITHUB_REPO,
+      ...(bindings.GITHUB_TOKEN === undefined ? {} : { githubToken: bindings.GITHUB_TOKEN }),
+      githubWriteEnabled: bindings.GITHUB_WRITE_ENABLED,
+      modelMode: bindings.MODEL_MODE,
+    });
+  } catch {
+    return Response.json({ error: { code: "invalid-runtime-configuration" } }, { status: 503 });
+  }
 
   if (url.pathname.startsWith("/agents/")) {
     const response = await routeAgent(request, bindings);
@@ -100,14 +115,13 @@ export async function handlePlatformRequest(
 
   if (url.pathname === "/api/health") {
     const store = telemetryStoreFactory(bindings.TELEMETRY_DB);
-    const deployedAtMs = Date.parse(bindings.CF_VERSION_METADATA.timestamp ?? "");
     return handleHealthApiRequest(request, {
       fetcher: (healthRequest) => bindings.HEALTH_SERVICE.fetch(healthRequest),
-      releaseId: bindings.CF_VERSION_METADATA.id,
+      releaseId: externalConfiguration.runtime.versionId,
       createTraceId,
-      gitSha: bindings.GIT_SHA,
+      gitSha: externalConfiguration.runtime.gitSha,
       loadingMode: bindings.HEALTH_LOADING_MODE,
-      deployedAtMs: Number.isFinite(deployedAtMs) ? deployedAtMs : 0,
+      deployedAtMs: externalConfiguration.runtime.deployedAtMs,
       recordTrace: store.recordTrace,
     });
   }
@@ -128,11 +142,11 @@ export async function handlePlatformRequest(
       return Response.json({ error: { code: "invalid-incident-configuration" } }, { status: 503 });
     }
     return Response.json({
-      mode: bindings.MODEL_MODE,
-      versionId: bindings.CF_VERSION_METADATA.id,
-      gitSha: bindings.GIT_SHA,
+      mode: externalConfiguration.modelMode,
+      versionId: externalConfiguration.runtime.versionId,
+      gitSha: externalConfiguration.runtime.gitSha,
       incident,
-      githubWriteEnabled: bindings.GITHUB_WRITE_ENABLED === "true",
+      githubWriteEnabled: externalConfiguration.github.writeEnabled,
     });
   }
 

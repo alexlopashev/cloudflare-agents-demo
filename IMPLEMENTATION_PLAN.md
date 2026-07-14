@@ -849,8 +849,9 @@ permission, and preview/write-scoped incident idempotency. The
 server-side service validates configured repository and path, matching regression/base SHA, current
 blob SHA, replacement byte and line bounds, changed-line count, draft-only output, evidence-rich body,
 and deterministic branch state. Fake mode always returns a validated preview without network access.
-The live GitHub REST adapter requires a token and remains write-disabled until the explicit flag is
-set. Existing PRs are reused, and uncertain branch or PR responses return deterministic recoverable
+The live GitHub REST adapters allow bounded unauthenticated reads and preview validation, require a
+normalized scoped token before writes can be enabled, and remain write-disabled until the explicit
+flag is set. Existing PRs are reused, and uncertain branch or PR responses return deterministic recoverable
 state without creating another branch. Recovery accepts only a branch exactly one commit ahead of
 the evidenced base with exactly the approved file changed. No merge endpoint or tool exists. The
 action is unavailable until the same incident's receipt is complete. The receipt then prepares and
@@ -985,8 +986,8 @@ direct-link contracts.
 
 Acceptance criteria:
 
-- Empty and whitespace-only GitHub tokens select the deterministic no-write preview only when writes
-  are disabled.
+- Empty and whitespace-only GitHub tokens are normalized as absent; live evidence and preview use
+  bounded unauthenticated reads while deterministic local verification stays behind its demo adapter.
 - Write-enabled mode rejects missing, empty, and whitespace-only tokens.
 - A failed turn permits a new explicit submission while submitted and streaming turns remain locked.
 - System and programmatic investigation prompts explicitly require release comparison, slow-trace
@@ -1061,7 +1062,7 @@ Work packages:
   structured contract (#42).
 - Make the first-run UX direct, honest, accessible, and explicit about preview versus live writes
   (#43, implemented and browser-verified at desktop and 390px widths).
-- Remove test-only runtime composition and normalize external configuration once (#44).
+- Remove test-only runtime composition and normalize external configuration once (#44, implemented).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:

@@ -242,10 +242,18 @@ flattened into one path; sequential spans, nesting, gaps, and fork/join ties fol
 contract. Missing or cyclic parentage is excluded from the selected path and returned as bounded
 diagnostics instead of silently fabricating causality.
 
+Live Worker composition now imports only Workers AI and production GitHub adapters. Vite and Worker
+tests explicitly substitute a deterministic demo adapter; the production build dry-runs and scans
+the live bundle to reject test-provider, fixture, and mock-model markers. Missing, empty, and
+whitespace-only GitHub tokens normalize once as absent, permitting bounded unauthenticated evidence
+reads and a write-disabled preview but never satisfying write enablement. Runtime version, Git SHA,
+and deployment timestamp are validated before health telemetry or runtime identity can be emitted.
+The deterministic and live paths both prepare the same complete-file bounded-concurrency edit.
+
 The active [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
 hardens that slice rather than expanding it. Work now makes evidence incident-scoped, binds
 remediation mechanically to the same receipt, repairs telemetry semantics, strengthens smoke and
-developer commands, removes test scaffolding from live composition, and makes the first reviewer
+developer commands, keeps test scaffolding out of live composition, and makes the first reviewer
 interaction truthful. Until [issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48)
 closes, treat the public deployment as a working implementation under review hardening.
 

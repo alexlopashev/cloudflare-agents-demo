@@ -2,11 +2,12 @@ import {
   regressionHealthSource,
   remediationFixture,
 } from "../../../../packages/test-fixtures/src/remediation";
-import { GitHubDraftPrApi } from "../github";
 import { createRemediationService, type DraftPullRequestApi } from "../remediation/service";
+import { createLiveRemediationService } from "./live-remediation-service";
 
-type RemediationServiceOptions = {
-  mode: string;
+export { createLiveRemediationService } from "./live-remediation-service";
+
+export type RemediationServiceOptions = {
   repository: { owner: string; repo: string };
   writeEnabled: boolean;
   fetcher?: (request: Request) => Promise<Response>;
@@ -51,41 +52,21 @@ function createDeterministicApi(repository: { owner: string; repo: string }): Dr
   };
 }
 
-export function createAgentRemediationService(options: RemediationServiceOptions) {
-  const token =
-    options.token === undefined || options.token.trim().length === 0 ? undefined : options.token;
-  if (
-    options.mode === "fake" ||
-    (options.mode === "workers-ai" && token === undefined && !options.writeEnabled)
-  ) {
-    return createRemediationService({
-      api: createDeterministicApi(options.repository),
-      repository: options.repository,
-      baseBranch: "main",
-      allowedPaths,
-      limits,
-      writeEnabled: false,
-    });
-  }
-  if (options.mode !== "workers-ai") {
-    throw new TypeError(`Unsupported remediation mode: ${options.mode}`);
-  }
-  if (options.writeEnabled && token === undefined) {
-    throw new TypeError("GitHub writes require an explicit non-empty scoped token.");
-  }
-  const api = new GitHubDraftPrApi({
-    repository: options.repository,
-    allowedPaths,
-    maxResponseBytes: 64 * 1_024,
-    ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
-    ...(token === undefined ? {} : { token }),
-  });
+export function createDeterministicRemediationService(options: RemediationServiceOptions) {
   return createRemediationService({
-    api,
+    api: createDeterministicApi(options.repository),
     repository: options.repository,
     baseBranch: "main",
     allowedPaths,
     limits,
-    writeEnabled: options.writeEnabled,
+    writeEnabled: false,
   });
+}
+
+export function createAgentRemediationService(
+  options: RemediationServiceOptions & { mode: string },
+) {
+  if (options.mode === "fake") return createDeterministicRemediationService(options);
+  if (options.mode === "workers-ai") return createLiveRemediationService(options);
+  throw new TypeError(`Unsupported remediation mode: ${options.mode}`);
 }

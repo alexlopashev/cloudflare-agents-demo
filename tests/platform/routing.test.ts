@@ -220,6 +220,28 @@ describe("platform routing", () => {
     });
   });
 
+  it.each([
+    ["Git SHA", (bindings: PlatformBindings) => (bindings.GIT_SHA = "")],
+    [
+      "deployment timestamp",
+      (bindings: PlatformBindings) => (bindings.CF_VERSION_METADATA.timestamp = "not-a-date"),
+    ],
+  ])("fails runtime verification closed for an invalid %s", async (_label, invalidate) => {
+    const { bindings } = createBindings();
+    invalidate(bindings);
+
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/api/runtime"),
+      bindings,
+      async () => null,
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: { code: "invalid-runtime-configuration" },
+    });
+  });
+
   it("records current-release telemetry without changing the configured incident", async () => {
     const { bindings, telemetryStoreFactory } = createBindings();
     const before = await handlePlatformRequest(
