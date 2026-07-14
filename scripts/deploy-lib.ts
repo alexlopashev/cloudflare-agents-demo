@@ -15,6 +15,20 @@ export const deploymentSmokeRetryPolicy = Object.freeze({
   delayMs: 750,
 });
 
+export async function requestDeploymentEndpointOnce(
+  request: () => Promise<Response>,
+  label: string,
+): Promise<Response> {
+  let response: Response;
+  try {
+    response = await request();
+  } catch (cause) {
+    throw new Error(`${label} failed before a response.`, { cause });
+  }
+  if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}.`);
+  return response;
+}
+
 export async function requestDeploymentSmokeWithRetry(
   request: () => Promise<Response>,
   wait: () => Promise<void>,

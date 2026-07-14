@@ -10,6 +10,7 @@ import {
   parseD1DatabaseId,
   parseDeploymentResult,
   parseGitHubWriteSecretInventory,
+  requestDeploymentEndpointOnce,
   requestDeploymentSmokeWithRetry,
   runtimeAttributionRetryPolicy,
   runWithFailClosedRollback,
@@ -46,6 +47,8 @@ describe("Cloudflare deployment contract", () => {
     expect(deployScript).toContain('"--secrets-file"');
     expect(deployScript).not.toContain('"secret", "put"');
     expect(deployScript).not.toContain("gh auth token");
+    expect(deployScript).not.toContain("requestWithRetry");
+    expect(deployScript.match(/await requestDeploymentEndpointOnce/g)).toHaveLength(3);
     expect(
       deployScript.match(/if \(githubWriteEnabled\) assertGitHubWriteSecret\(\);/g),
     ).toHaveLength(2);
@@ -194,6 +197,30 @@ describe("Cloudflare deployment contract", () => {
     expect(response.status).toBe(500);
     expect(request).toHaveBeenCalledOnce();
     expect(wait).not.toHaveBeenCalled();
+  });
+
+  it("attempts a side-effecting deployment endpoint exactly once", async () => {
+    const successfulResponse = new Response(null, { status: 204 });
+    const successfulRequest = vi.fn(async () => successfulResponse);
+    await expect(
+      requestDeploymentEndpointOnce(successfulRequest, "telemetry persistence"),
+    ).resolves.toBe(successfulResponse);
+    expect(successfulRequest).toHaveBeenCalledOnce();
+
+    const responseFailure = vi.fn(async () => new Response(null, { status: 500 }));
+    await expect(requestDeploymentEndpointOnce(responseFailure, "baseline health")).rejects.toThrow(
+      /baseline health returned HTTP 500/i,
+    );
+    expect(responseFailure).toHaveBeenCalledOnce();
+
+    const transportFailure = new Error("edge connection reset");
+    const rejectedRequest = vi.fn(async () => {
+      throw transportFailure;
+    });
+    await expect(
+      requestDeploymentEndpointOnce(rejectedRequest, "telemetry persistence"),
+    ).rejects.toThrow(/telemetry persistence failed before a response/i);
+    expect(rejectedRequest).toHaveBeenCalledOnce();
   });
 
   it("bounds repeated propagation-only smoke responses", async () => {
