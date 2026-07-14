@@ -59,6 +59,9 @@ describe("Cloudflare deployment contract", () => {
     expect(deployScript).toContain("await assertDeployedVersion(baseline.url, baseline.versionId)");
     expect(deployScript).toContain("await assertDeployedVersion(degraded.url, degraded.versionId)");
     expect(deployScript).toContain(
+      "await assertDeployedVersion(state.publicUrl, state.investigatorReleaseId)",
+    );
+    expect(deployScript).toContain(
       '"content-type": "application/vnd.regression-surgeon.deployment-health+json"',
     );
     expect(deployScript).toContain('"x-deployment-expected-release": expectedReleaseId');

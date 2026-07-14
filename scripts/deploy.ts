@@ -244,6 +244,7 @@ async function seedMeasuredTraffic(
 }
 
 async function smoke(state: z.infer<typeof stateSchema>) {
+  await assertDeployedVersion(state.publicUrl, state.investigatorReleaseId);
   for (const route of ["/app", "/investigator"]) {
     const response = await requestDeploymentEndpointOnce(
       async () => fetch(`${state.publicUrl}${route}`),
