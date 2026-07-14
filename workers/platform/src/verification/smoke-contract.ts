@@ -25,6 +25,15 @@ const completePhasesSchema = z.tuple([
 const evidencePhaseStatusSchema = z.enum(["pending", "complete", "insufficient", "error"]);
 const evidenceErrorCodeSchema = z.enum(evidenceErrorCodes);
 const invalidEvidenceFieldSchema = z.enum(["investigation", "receipt", "receipt-phases"]);
+const smokeVerificationInvalidFieldSchema = z.enum([
+  "input-shape",
+  "incident-binding",
+  "evidence-cross-references",
+  "report-sections",
+  "remediation-sections",
+  "remediation-references",
+  "remediation-diff",
+]);
 const diagnosticPhase = <T extends (typeof evidenceToolNames)[number]>(toolName: T) =>
   z
     .object({
@@ -211,7 +220,12 @@ export const smokePostEvidenceDiagnosticSchema = z.union([
     .strict(),
   z
     .object({
-      error: z.object({ code: z.literal("invalid-smoke-verification") }).strict(),
+      error: z
+        .object({
+          code: z.literal("invalid-smoke-verification"),
+          invalidFields: z.array(smokeVerificationInvalidFieldSchema).min(1).max(7),
+        })
+        .strict(),
     })
     .strict(),
 ]);
@@ -272,9 +286,33 @@ function includesReference(value: string, reference: string): boolean {
   return value.includes(reference);
 }
 
+type SmokeVerificationInvalidField = z.infer<typeof smokeVerificationInvalidFieldSchema>;
+
+class SmokeVerificationContractError extends TypeError {
+  readonly invalidFields: readonly SmokeVerificationInvalidField[];
+
+  constructor(invalidFields: readonly SmokeVerificationInvalidField[]) {
+    super("Smoke verification cross-reference contract failed.");
+    this.name = "SmokeVerificationContractError";
+    this.invalidFields = invalidFields;
+  }
+}
+
+export function smokeVerificationFailureDiagnostic(error: unknown) {
+  return {
+    error: {
+      code: "invalid-smoke-verification" as const,
+      invalidFields:
+        error instanceof SmokeVerificationContractError
+          ? [...error.invalidFields]
+          : (["input-shape"] satisfies SmokeVerificationInvalidField[]),
+    },
+  };
+}
+
 export function createSmokeVerificationReceipt(input: unknown): SmokeVerificationReceipt {
   const parsed = inputSchema.safeParse(input);
-  if (!parsed.success) throw new TypeError("Smoke verification input is incomplete.");
+  if (!parsed.success) throw new SmokeVerificationContractError(["input-shape"]);
   const { investigation, remediation } = parsed.data;
   const { receipt, preparedRemediation } = investigation;
   const evidence = receipt.evidence;
@@ -293,24 +331,38 @@ export function createSmokeVerificationReceipt(input: unknown): SmokeVerificatio
     remediation.body.matchAll(/^#{1,6}\s+(Evidence|Risk|Validation)\s*$/gim),
     (match) => match[1],
   );
-  const valid =
+  const incidentBinding =
     sameIncident(investigation.incident, receipt.incident) &&
     sameIncident(investigation.incident, proposal.incident) &&
     evidence.baselineReleaseId === investigation.incident.baselineReleaseId &&
     evidence.degradedReleaseId === investigation.incident.degradedReleaseId &&
-    evidence.releaseId === investigation.incident.degradedReleaseId &&
+    evidence.releaseId === investigation.incident.degradedReleaseId;
+  const evidenceCrossReferences =
     evidence.selectedTraceId === evidence.inspectedTraceId &&
     proposal.incident.traceId === evidence.inspectedTraceId &&
     proposal.incident.regressionCommitSha === evidence.commitSha &&
     proposal.incident.sourcePullRequestNumber === evidence.pullRequest.number &&
     proposal.expectedBaseSha === evidence.commitSha &&
-    proposal.expectedBlobSha === evidence.blobSha &&
-    proposal.path === evidence.sourcePath &&
-    preparedRemediation.diff.path === evidence.sourcePath &&
-    reportSections.join("|") === "Evidence|Inference|Confidence|Unknowns" &&
-    remediationSections.join("|") === "Evidence|Risk|Validation" &&
-    remediationReferences.every((reference) => includesReference(remediation.body, reference));
-  if (!valid) throw new TypeError("Smoke verification cross-reference contract failed.");
+    proposal.expectedBlobSha === evidence.blobSha;
+  const invalidFields: SmokeVerificationInvalidField[] = [];
+  if (!incidentBinding) invalidFields.push("incident-binding");
+  if (!evidenceCrossReferences) invalidFields.push("evidence-cross-references");
+  if (reportSections.join("|") !== "Evidence|Inference|Confidence|Unknowns") {
+    invalidFields.push("report-sections");
+  }
+  if (remediationSections.join("|") !== "Evidence|Risk|Validation") {
+    invalidFields.push("remediation-sections");
+  }
+  if (!remediationReferences.every((reference) => includesReference(remediation.body, reference))) {
+    invalidFields.push("remediation-references");
+  }
+  if (
+    proposal.path !== evidence.sourcePath ||
+    preparedRemediation.diff.path !== evidence.sourcePath
+  ) {
+    invalidFields.push("remediation-diff");
+  }
+  if (invalidFields.length > 0) throw new SmokeVerificationContractError(invalidFields);
 
   return smokeVerificationReceiptSchema.parse({
     incident: investigation.incident,

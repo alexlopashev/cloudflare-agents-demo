@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createSmokeEvidenceDiagnostic,
   createSmokeVerificationReceipt,
+  smokeVerificationFailureDiagnostic,
 } from "../../workers/platform/src/verification/smoke-contract";
 
 const incident = {
@@ -170,6 +171,23 @@ describe("deployment smoke verification receipt", () => {
       sourcePath: "workers/platform/src/api/health.ts",
       blobSha,
     });
+  });
+
+  it("classifies final verification failures with only whitelisted surface names", () => {
+    const input = validInput();
+    input.investigation.report = "private model prose without structured sections";
+    let failure: unknown;
+    try {
+      createSmokeVerificationReceipt(input);
+    } catch (error) {
+      failure = error;
+    }
+
+    const diagnostic = smokeVerificationFailureDiagnostic(failure);
+    expect(diagnostic).toEqual({
+      error: { code: "invalid-smoke-verification", invalidFields: ["report-sections"] },
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain("private");
   });
 
   it.each([
