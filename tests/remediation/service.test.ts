@@ -109,6 +109,20 @@ describe("guarded remediation service", () => {
     expect(api.createDraftPullRequest).not.toHaveBeenCalled();
   });
 
+  it("accepts a base SHA without a tree only for write-disabled preview validation", async () => {
+    const { api } = apiFixture();
+    vi.mocked(api.getBase).mockResolvedValue({ sha: regressionSha });
+
+    await expect(service(api, false).execute(proposal())).resolves.toMatchObject({
+      status: "preview",
+      writesPerformed: false,
+    });
+    await expect(service(api, true).execute(proposal())).rejects.toMatchObject({
+      code: "malformed-response",
+    });
+    expect(api.createBlob).not.toHaveBeenCalled();
+  });
+
   it("builds on an advanced current base only when the evidenced source is unchanged", async () => {
     const { api } = apiFixture();
     vi.mocked(api.getBase).mockResolvedValue({ sha: currentBaseSha, treeSha: "5".repeat(40) });

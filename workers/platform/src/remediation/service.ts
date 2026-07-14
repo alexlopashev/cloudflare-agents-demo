@@ -84,7 +84,7 @@ export class RemediationError extends Error {
   }
 }
 
-const baseResponse = z.object({ sha, treeSha: sha }).strict();
+const baseResponse = z.object({ sha, treeSha: sha.optional() }).strict();
 const fileResponse = z.object({ blobSha: sha, content: z.string() }).strict();
 const objectResponse = z.object({ sha }).strict();
 const branchResponse = z.object({ sha }).strict().nullable();
@@ -217,6 +217,12 @@ export function createRemediationService(options: RemediationServiceOptions) {
       throw asUnavailable();
     }
     const base = parseExternal(baseResponse, rawBase, "Base branch");
+    if (options.writeEnabled && base.treeSha === undefined) {
+      throw new RemediationError(
+        "malformed-response",
+        "Base branch write metadata did not match its contract.",
+      );
+    }
     const evidenceFile = parseExternal(fileResponse, rawEvidenceFile, "Evidence file");
     if (evidenceFile.blobSha !== proposal.expectedBlobSha) {
       throw new RemediationError("stale-blob", "The proposed source blob is stale.");
@@ -321,6 +327,13 @@ export function createRemediationService(options: RemediationServiceOptions) {
         },
       };
       if (!options.writeEnabled) return preview;
+      const baseTreeSha = prepared.base.treeSha;
+      if (baseTreeSha === undefined) {
+        throw new RemediationError(
+          "malformed-response",
+          "Base branch write metadata did not match its contract.",
+        );
+      }
 
       let rawBranch: unknown;
       let commitSha: string;
@@ -396,7 +409,7 @@ export function createRemediationService(options: RemediationServiceOptions) {
         const tree = parseExternal(
           objectResponse,
           await options.api.createTree({
-            baseTreeSha: prepared.base.treeSha,
+            baseTreeSha,
             path: proposal.path,
             blobSha: blob.sha,
           }),

@@ -161,6 +161,35 @@ describe("RepositoryConnector", () => {
     });
   });
 
+  it("keeps unavailable public patch PR metadata explicitly partial", async () => {
+    const connector = createConnector({
+      api: {
+        getPullRequestsForCommit: vi.fn(async () => [
+          {
+            source: "public-patch",
+            number: 42,
+            commitSubject: "Introduce the regression fixture",
+            html_url: "https://github.com/example/supervised/pull/42",
+            head: { sha: commitSha },
+          },
+        ]),
+      },
+    }).connector;
+
+    await expect(connector.inspectRelease("release-bad")).resolves.toMatchObject({
+      pullRequest: {
+        status: "found",
+        number: 42,
+        title: null,
+        headSha: commitSha,
+        metadata: {
+          status: "partial",
+          unknowns: ["title", "author-login", "base-sha", "merged-at"],
+        },
+      },
+    });
+  });
+
   it("rejects mutable refs, traversal, encoded traversal, and disallowed paths before I/O", async () => {
     const { api, connector } = createConnector();
 
