@@ -174,6 +174,23 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     expect(input).toMatch(/before (?:the )?final report/i);
   });
 
+  it("removes evidence tools from the final report step after the receipt completes", async () => {
+    await seedRegressionEvidence();
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("complete-receipt-final-report");
+    const finalPolicy = await runInDurableObject<
+      RegressionSurgeonAgent,
+      Awaited<ReturnType<RegressionSurgeonAgent["beforeStep"]>>
+    >(stub, async (instance) => {
+      const beforeStep = vi.spyOn(instance, "beforeStep");
+      await instance.runLocalInvestigation();
+      const policies = await Promise.all(beforeStep.mock.results.map((result) => result.value));
+      return policies.at(-1);
+    });
+
+    expect(finalPolicy).toMatchObject({ activeTools: [] });
+    expect(finalPolicy?.system).toMatch(/final report/i);
+  });
+
   it("forces the next missing evidence capability before Project Think can finalize", async () => {
     const stub = env.REGRESSION_SURGEON_AGENT.getByName("evidence-step-policy");
     const policy = await runInDurableObject<

@@ -143,7 +143,8 @@ commit, PR, source, and blob cross-references, all four report sections, the rem
 and change counts, a validated zero-write preview, and the expected GitHub write posture.
 Machine cross-references come from the validated persisted receipt; live report prose proves the
 four exact ordered section boundary through bounded line-level Markdown, bold, or colon-label
-headings without needing to repeat identifiers in incidental wording.
+headings without needing to repeat identifiers in incidental wording. Once that receipt completes,
+the same Project Think turn removes all tools from its final step and produces the report.
 
 Every measured health and telemetry POST is attempted exactly once. A transport failure or any
 non-success response stops the deployment with the failing stage and sample identifier; deployment
