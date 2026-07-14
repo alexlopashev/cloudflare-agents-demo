@@ -14,6 +14,7 @@ import {
   parseD1DatabaseId,
   parseDeploymentResult,
   parseGitHubWriteSecretInventory,
+  requestDeploymentEndpointOnce,
   requestDeploymentSmokeWithRetry,
   runtimeAttributionRetryPolicy,
   runWithFailClosedRollback,
@@ -128,21 +129,6 @@ const healthResponseSchema = z.object({
   outcome: z.enum(["healthy", "partial", "failed"]),
 });
 
-async function requestWithRetry(url: string, init?: RequestInit): Promise<Response> {
-  let lastStatus = 0;
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    try {
-      const response = await fetch(url, init);
-      if (response.ok) return response;
-      lastStatus = response.status;
-    } catch {
-      // A new Workers deployment can take a moment to reach every edge.
-    }
-    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 750));
-  }
-  throw new Error(`Public deployment did not become ready (last HTTP status ${lastStatus}).`);
-}
-
 async function assertRuntimeAttribution(state: z.infer<typeof stateSchema>) {
   const runtimeSchema = z.object({
     mode: z.literal("workers-ai"),
@@ -160,9 +146,15 @@ async function assertRuntimeAttribution(state: z.infer<typeof stateSchema>) {
     }),
   });
   for (let attempt = 0; attempt < runtimeAttributionRetryPolicy.maxAttempts; attempt += 1) {
-    const response = await requestWithRetry(`${state.publicUrl}/api/runtime`);
-    const parsed = runtimeSchema.safeParse(await response.json());
-    if (parsed.success) return parsed.data;
+    try {
+      const response = await fetch(`${state.publicUrl}/api/runtime`);
+      if (response.ok) {
+        const parsed = runtimeSchema.safeParse(await response.json());
+        if (parsed.success) return parsed.data;
+      }
+    } catch {
+      // Runtime identity is a side-effect-free lookup while a new version reaches every edge.
+    }
     await new Promise<void>((resolveDelay) =>
       setTimeout(resolveDelay, runtimeAttributionRetryPolicy.delayMs),
     );
@@ -176,33 +168,41 @@ async function seedMeasuredTraffic(url: string, expectedReleaseId: string, label
   for (let sample = 0; sample < 20; sample += 1) {
     const interactionId = `${label}-${String(sample + 1).padStart(2, "0")}`;
     const startedAt = performance.now();
-    const response = await requestWithRetry(`${url}/api/health`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ interactionId }),
-    });
+    const response = await requestDeploymentEndpointOnce(
+      async () =>
+        fetch(`${url}/api/health`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ interactionId }),
+        }),
+      `${label} health sample ${interactionId}`,
+    );
     const durationMs = performance.now() - startedAt;
     const health = healthResponseSchema.parse(await response.json());
     if (health.releaseId !== expectedReleaseId) {
       throw new Error(`Expected release ${expectedReleaseId}, received ${health.releaseId}.`);
     }
-    const telemetry = await requestWithRetry(`${url}/api/telemetry/ux`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        interactionId,
-        traceId: health.traceId,
-        releaseId: health.releaseId,
-        metricName: "service_grid_ready_ms",
-        durationMs,
-        outcome:
-          health.outcome === "healthy"
-            ? "success"
-            : health.outcome === "partial"
-              ? "partial"
-              : "error",
-      }),
-    });
+    const telemetry = await requestDeploymentEndpointOnce(
+      async () =>
+        fetch(`${url}/api/telemetry/ux`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            interactionId,
+            traceId: health.traceId,
+            releaseId: health.releaseId,
+            metricName: "service_grid_ready_ms",
+            durationMs,
+            outcome:
+              health.outcome === "healthy"
+                ? "success"
+                : health.outcome === "partial"
+                  ? "partial"
+                  : "error",
+          }),
+        }),
+      `${label} telemetry sample ${interactionId}`,
+    );
     if (telemetry.status !== 204) throw new Error("UX evidence was not accepted.");
     durations.push(durationMs);
   }
@@ -214,7 +214,10 @@ async function seedMeasuredTraffic(url: string, expectedReleaseId: string, label
 
 async function smoke(state: z.infer<typeof stateSchema>) {
   for (const route of ["/app", "/investigator"]) {
-    const response = await requestWithRetry(`${state.publicUrl}${route}`);
+    const response = await requestDeploymentEndpointOnce(
+      async () => fetch(`${state.publicUrl}${route}`),
+      `Public route ${route}`,
+    );
     const body = await response.text();
     if (!body.includes("Regression Surgeon")) throw new Error(`${route} did not serve the app.`);
   }

@@ -902,11 +902,15 @@ Durable Object and Workers AI model, checks evidence events and a structured rep
 remediation preview, and proves GitHub writes remain disabled. Issue #42 replaces name/count checks
 with one shared structured receipt that validates all five phases, cross-references, report sections,
 remediation fingerprint and change counts, and a zero-write result in local and deployed smoke.
+Issue #59 makes every measured health and telemetry POST one-shot: transport or response failure
+stops deployment with sample evidence instead of replaying an endpoint that may already have taken
+effect. Side-effect-free runtime identity polling remains isolated from those request paths.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
 - Deploy the regression and generate incident traffic.
 - Keep GitHub writes off by default; select live reads only when a scoped token is supplied.
+- Attempt each measured health and telemetry POST exactly once and fail visibly on any error.
 - Deploy the public investigator.
 - Perform the complete reviewer walkthrough.
 
@@ -1036,6 +1040,7 @@ Acceptance criteria:
 - Keyed smoke retries only the pre-execution 404 that can occur while the rotated smoke secret
   propagates; any response that may follow endpoint execution is returned immediately and never
   duplicated.
+- Measured health and telemetry requests never retry after a transport failure or HTTP response.
 - Keyed smoke remains a zero-write preview in both postures.
 - Advanced repository state is accepted only when the allowlisted evidenced blob is unchanged at the
   current base.

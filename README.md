@@ -142,6 +142,10 @@ public routes, runtime metadata, five exact incident-scoped evidence phases, the
 commit, PR, source, and blob cross-references, all four report sections, the remediation fingerprint
 and change counts, a validated zero-write preview, and the expected GitHub write posture.
 
+Every measured health and telemetry POST is attempted exactly once. A transport failure or any
+non-success response stops the deployment with the failing stage and sample identifier; deployment
+automation never replays an endpoint that may already have recorded telemetry or another effect.
+
 `mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
 `mise run deploy:smoke` repeats the deployed verification. `mise run deploy:reset` deletes only the
 two release IDs recorded by the last deployment from remote D1; run `mise run deploy` afterward to
