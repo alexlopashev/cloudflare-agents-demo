@@ -241,14 +241,14 @@ describe("Cloudflare deployment contract", () => {
           { toolName: "compare_releases", status: "complete" },
           { toolName: "find_slow_traces", status: "complete" },
           { toolName: "inspect_trace", status: "complete" },
-          { toolName: "inspect_release", status: "complete" },
-          { toolName: "read_repo_files", status: "insufficient" },
+          { toolName: "inspect_release", status: "error", reason: "rate-limited" },
+          { toolName: "read_repo_files", status: "pending" },
         ],
       },
     });
 
     expect(message).toBe(
-      "Public agent smoke returned HTTP 422: incomplete-evidence-receipt (read_repo_files=insufficient).",
+      "Public agent smoke returned HTTP 422: incomplete-evidence-receipt (inspect_release=error:rate-limited, read_repo_files=pending).",
     );
     expect(
       deploymentSmokeFailureMessage(500, {

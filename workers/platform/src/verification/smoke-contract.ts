@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { evidenceToolNames } from "../../../../packages/contracts/src/evidence.ts";
+import {
+  evidenceErrorCodes,
+  evidenceToolNames,
+} from "../../../../packages/contracts/src/evidence.ts";
 import { incidentReferenceSchema } from "../../../../packages/contracts/src/incident.ts";
 
 const evidenceId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/);
@@ -20,11 +23,22 @@ const completePhasesSchema = z.tuple([
   completePhase("read_repo_files"),
 ]);
 const evidencePhaseStatusSchema = z.enum(["pending", "complete", "insufficient", "error"]);
+const evidenceErrorCodeSchema = z.enum(evidenceErrorCodes);
 const diagnosticPhase = <T extends (typeof evidenceToolNames)[number]>(toolName: T) =>
   z
     .object({
       toolName: z.literal(toolName),
       status: evidencePhaseStatusSchema,
+      attempts: z
+        .array(
+          z
+            .object({
+              reason: z.string(),
+            })
+            .passthrough(),
+        )
+        .max(2)
+        .optional(),
     })
     .passthrough();
 const diagnosticPhasesSchema = z.tuple([
@@ -162,6 +176,7 @@ export const smokeEvidenceDiagnosticSchema = z
               .object({
                 toolName: z.enum(evidenceToolNames),
                 status: evidencePhaseStatusSchema,
+                reason: evidenceErrorCodeSchema.optional(),
               })
               .strict(),
           )
@@ -190,7 +205,14 @@ export function createSmokeEvidenceDiagnostic(
   return {
     error: {
       code: "incomplete-evidence-receipt",
-      phases: parsed.data.receipt.phases.map(({ toolName, status }) => ({ toolName, status })),
+      phases: parsed.data.receipt.phases.map(({ toolName, status, attempts }) => {
+        const reason = evidenceErrorCodeSchema.safeParse(attempts?.at(-1)?.reason);
+        return {
+          toolName,
+          status,
+          ...(status === "error" && reason.success ? { reason: reason.data } : {}),
+        };
+      }),
     },
   };
 }

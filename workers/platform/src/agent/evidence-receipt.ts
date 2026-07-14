@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  evidenceErrorCodes,
   evidenceToolNames,
   type EvidenceToolName,
 } from "../../../../packages/contracts/src/evidence";
@@ -10,6 +11,7 @@ import {
 } from "../../../../packages/contracts/src/incident";
 
 export {
+  evidenceErrorCodes,
   evidenceToolNames,
   type EvidenceToolName,
 } from "../../../../packages/contracts/src/evidence";
@@ -210,8 +212,11 @@ export function createEvidenceReceipt(
   };
 }
 
-function resultClassification(output: unknown): EvidenceResultStatus | undefined {
-  if (property(output, "status") === "error") return "error";
+function resultClassification(output: unknown): Validation | undefined {
+  if (property(output, "status") === "error") {
+    const code = z.enum(evidenceErrorCodes).safeParse(property(output, "code"));
+    return { status: "error", reason: code.success ? code.data : "unavailable" };
+  }
   if (
     output === null ||
     output === undefined ||
@@ -219,7 +224,7 @@ function resultClassification(output: unknown): EvidenceResultStatus | undefined
     property(output, "status") === "insufficient-data" ||
     (Array.isArray(output) && output.length === 0)
   ) {
-    return "insufficient";
+    return { status: "insufficient", reason: "insufficient" };
   }
   return undefined;
 }
@@ -232,7 +237,7 @@ type Validation = {
 
 function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolResult): Validation {
   const classified = resultClassification(result.output);
-  if (classified !== undefined) return { status: classified, reason: classified };
+  if (classified !== undefined) return classified;
   const incident = receipt.incident;
 
   if (result.toolName === "compare_releases") {

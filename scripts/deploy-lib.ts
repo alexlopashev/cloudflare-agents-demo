@@ -28,7 +28,12 @@ export function deploymentSmokeFailureMessage(status: number, body: unknown): st
   const incompletePhases = parsed.data.error.phases.filter((phase) => phase.status !== "complete");
   const detail =
     incompletePhases.length > 0
-      ? incompletePhases.map((phase) => `${phase.toolName}=${phase.status}`).join(", ")
+      ? incompletePhases
+          .map(
+            (phase) =>
+              `${phase.toolName}=${phase.status}${phase.reason === undefined ? "" : `:${phase.reason}`}`,
+          )
+          .join(", ")
       : "prepared_remediation=missing";
   return `Public agent smoke returned HTTP ${status}: ${parsed.data.error.code} (${detail}).`;
 }
