@@ -78,7 +78,7 @@ describe("investigation tools", () => {
     expect(evidence.telemetry.findSlowTraces).not.toHaveBeenCalled();
   });
 
-  it("rejects evidence queries outside the active incident reference", async () => {
+  it("uses only server-authoritative selectors for the active incident", async () => {
     const evidence = services();
     const tools = createInvestigationTools(evidence, {
       incident: {
@@ -89,31 +89,64 @@ describe("investigation tools", () => {
       },
     });
 
-    await expect(
-      execute(tools.compare_releases, {
-        baselineReleaseId: "generated-current-release",
-        candidateReleaseId: "regression-sequential",
-        windowMs: 60_000,
-      }),
-    ).resolves.toEqual({
-      status: "error",
-      code: "incident-mismatch",
-      message: "Evidence request does not match the configured incident.",
+    await execute(tools.compare_releases, {
+      baselineReleaseId: "generated-current-release",
+      candidateReleaseId: "generated-candidate-release",
+      windowMs: 60_000,
     });
-    await expect(
-      execute(tools.find_slow_traces, {
-        releaseId: "regression-sequential",
-        sinceMs: 1_001,
-        untilMs: 2_000,
-        limit: 5,
-      }),
-    ).resolves.toMatchObject({ status: "error", code: "incident-mismatch" });
-    await expect(
-      execute(tools.inspect_release, { versionId: "generated-current-release" }),
-    ).resolves.toMatchObject({ status: "error", code: "incident-mismatch" });
-    expect(evidence.telemetry.compareReleases).not.toHaveBeenCalled();
-    expect(evidence.telemetry.findSlowTraces).not.toHaveBeenCalled();
-    expect(evidence.repository.inspectRelease).not.toHaveBeenCalled();
+    await execute(tools.find_slow_traces, {
+      releaseId: "generated-current-release",
+      sinceMs: 1_001,
+      untilMs: 2_001,
+      limit: 4,
+    });
+    await execute(tools.inspect_release, { versionId: "generated-current-release" });
+
+    expect(evidence.telemetry.compareReleases).toHaveBeenCalledExactlyOnceWith({
+      baselineReleaseId: "baseline-concurrent",
+      candidateReleaseId: "regression-sequential",
+      windowMs: 30 * 24 * 60 * 60 * 1_000,
+    });
+    expect(evidence.telemetry.findSlowTraces).toHaveBeenCalledExactlyOnceWith({
+      releaseId: "regression-sequential",
+      sinceMs: 1_000,
+      untilMs: 2_000,
+      limit: 5,
+    });
+    expect(evidence.repository.inspectRelease).toHaveBeenCalledExactlyOnceWith(
+      "regression-sequential",
+    );
+  });
+
+  it("does not require the model to repeat configured selectors", async () => {
+    const evidence = services();
+    const tools = createInvestigationTools(evidence, {
+      incident: {
+        incidentId: "configured-latency-regression",
+        baselineReleaseId: "baseline-concurrent",
+        degradedReleaseId: "regression-sequential",
+        traceWindow: { sinceMs: 1_000, untilMs: 2_000 },
+      },
+    });
+
+    await execute(tools.compare_releases, {});
+    await execute(tools.find_slow_traces, {});
+    await execute(tools.inspect_release, {});
+
+    expect(evidence.telemetry.compareReleases).toHaveBeenCalledExactlyOnceWith({
+      baselineReleaseId: "baseline-concurrent",
+      candidateReleaseId: "regression-sequential",
+      windowMs: 30 * 24 * 60 * 60 * 1_000,
+    });
+    expect(evidence.telemetry.findSlowTraces).toHaveBeenCalledExactlyOnceWith({
+      releaseId: "regression-sequential",
+      sinceMs: 1_000,
+      untilMs: 2_000,
+      limit: 5,
+    });
+    expect(evidence.repository.inspectRelease).toHaveBeenCalledExactlyOnceWith(
+      "regression-sequential",
+    );
   });
 
   it("truncates oversized tool results deterministically before model context", async () => {

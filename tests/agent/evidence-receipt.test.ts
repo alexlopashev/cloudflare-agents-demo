@@ -34,11 +34,11 @@ const completeResults = [
     {
       baselineReleaseId: incident.baselineReleaseId,
       candidateReleaseId: incident.degradedReleaseId,
-      windowMs: 60_000,
+      windowMs: 30 * 24 * 60 * 60 * 1_000,
     },
     {
       status: "ready",
-      windowMs: 60_000,
+      windowMs: 30 * 24 * 60 * 60 * 1_000,
       baseline: { count: 20, p50Ms: 125, p75Ms: 130, p95Ms: 130, errorRate: 0 },
       candidate: { count: 20, p50Ms: 381, p75Ms: 381, p95Ms: 381, errorRate: 0 },
       delta: { p75Ms: 251 },
@@ -166,6 +166,49 @@ describe("incident-scoped evidence receipt", () => {
     expect(missing.phases[3]).toMatchObject({
       status: "insufficient",
       attempts: [{ reason: "missing-configured-source-change" }],
+    });
+  });
+
+  it("validates configured evidence outputs without treating model selectors as incident identity", () => {
+    const driftedSelectors = completeResults.map((evidence) => {
+      if (evidence.toolName === "compare_releases") {
+        return {
+          ...evidence,
+          input: {
+            ...evidence.input,
+            baselineReleaseId: "generated-baseline",
+            candidateReleaseId: "generated-candidate",
+            windowMs: 60_000,
+          },
+        };
+      }
+      if (evidence.toolName === "find_slow_traces") {
+        return {
+          ...evidence,
+          input: {
+            ...evidence.input,
+            releaseId: "generated-release",
+            sinceMs: incident.traceWindow.sinceMs + 1,
+            untilMs: incident.traceWindow.untilMs + 1,
+          },
+        };
+      }
+      if (evidence.toolName === "inspect_release") {
+        return { ...evidence, input: { versionId: "generated-release" } };
+      }
+      return evidence;
+    });
+    const receipt = driftedSelectors.reduce(
+      (current, evidence) => recordEvidenceResult(current, evidence),
+      createEvidenceReceipt("investigation-1", incident),
+    );
+
+    expect(evidenceReceiptComplete(receipt)).toBe(true);
+    expect(receipt.evidence).toMatchObject({
+      baselineReleaseId: incident.baselineReleaseId,
+      degradedReleaseId: incident.degradedReleaseId,
+      releaseId: incident.degradedReleaseId,
+      selectedTraceId: "regression-sequential-trace-20",
     });
   });
 

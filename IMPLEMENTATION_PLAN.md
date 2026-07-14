@@ -924,9 +924,11 @@ patch and allowlisted raw source instead of shared unauthenticated REST quota; i
 remains explicit rather than fabricated. Its write-disabled remediation preview resolves `main` from
 the bounded public Atom feed and validates the allowlisted file at immutable SHAs. Issue #71 binds
 the one configured incident to its exact `workers/platform/src/api/health.ts` remediation source
-rather than treating the first allowlisted commit change as the target. Issue #68 applies the same
-consecutive exact-version readiness gate to the recorded secret-bearing investigator before every
-keyed smoke, preventing a prior no-key edge from receiving executable verification.
+rather than treating the first allowlisted commit change as the target. Issue #73 makes the configured
+release pair, comparison window, degraded trace window and limit, and degraded release lookup
+server-authoritative so model-generated selectors cannot change or block the one incident. Issue #68
+applies the same consecutive exact-version readiness gate to the recorded secret-bearing investigator
+before every keyed smoke, preventing a prior no-key edge from receiving executable verification.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.

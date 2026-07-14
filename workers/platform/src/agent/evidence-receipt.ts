@@ -9,6 +9,7 @@ import {
   parseIncidentReference,
   type IncidentReference,
 } from "../../../../packages/contracts/src/incident";
+import { configuredComparisonWindowMs } from "./evidence-policy";
 
 export {
   evidenceErrorCodes,
@@ -248,15 +249,14 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
         candidateReleaseId: evidenceId,
         windowMs: z.number().int().positive(),
       })
+      .partial()
       .strict()
       .safeParse(result.input);
     const output = comparisonOutput.safeParse(result.output);
     if (
       !input.success ||
       !output.success ||
-      input.data.baselineReleaseId !== incident.baselineReleaseId ||
-      input.data.candidateReleaseId !== incident.degradedReleaseId ||
-      input.data.windowMs !== output.data.windowMs
+      output.data.windowMs !== configuredComparisonWindowMs
     ) {
       return { status: "insufficient", reason: "invalid-or-mismatched-comparison" };
     }
@@ -264,8 +264,8 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
       status: "complete",
       reason: "validated",
       evidence: {
-        baselineReleaseId: input.data.baselineReleaseId,
-        degradedReleaseId: input.data.candidateReleaseId,
+        baselineReleaseId: incident.baselineReleaseId,
+        degradedReleaseId: incident.degradedReleaseId,
       },
     };
   }
@@ -278,15 +278,13 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
         untilMs: z.number().int().positive(),
         limit: z.number().int().min(1).max(100),
       })
+      .partial()
       .strict()
       .safeParse(result.input);
     const output = slowTraceOutput.safeParse(result.output);
     if (
       !input.success ||
       !output.success ||
-      input.data.releaseId !== incident.degradedReleaseId ||
-      input.data.sinceMs !== incident.traceWindow.sinceMs ||
-      input.data.untilMs !== incident.traceWindow.untilMs ||
       output.data.some(
         (trace) =>
           trace.releaseId !== incident.degradedReleaseId ||
@@ -325,13 +323,12 @@ function validateExpectedResult(receipt: EvidenceReceipt, result: EvidenceToolRe
   }
 
   if (result.toolName === "inspect_release") {
-    const input = z.object({ versionId: evidenceId }).strict().safeParse(result.input);
+    const input = z.object({ versionId: evidenceId.optional() }).strict().safeParse(result.input);
     const output = releaseOutput.safeParse(result.output);
     if (
       !input.success ||
       !output.success ||
-      input.data.versionId !== incident.degradedReleaseId ||
-      output.data.release.versionId !== input.data.versionId ||
+      output.data.release.versionId !== incident.degradedReleaseId ||
       output.data.release.commitSha !== output.data.commit.sha
     ) {
       return { status: "insufficient", reason: "invalid-or-mismatched-release" };
