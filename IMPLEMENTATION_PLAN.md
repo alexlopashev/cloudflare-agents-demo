@@ -850,11 +850,12 @@ permission, and preview/write-scoped incident idempotency. The
 server-side service validates configured repository and path, matching regression/base SHA, current
 blob SHA, replacement byte and line bounds, changed-line count, draft-only output, evidence-rich body,
 and deterministic branch state. Fake mode always returns a validated preview without network access.
-Credential-free live release inspection reads only configured PR #19's bounded patch and
-`workers/platform/src/api/health.ts` at its immutable expected head and the D1-attributed regression
-SHA. Exact bytes and locally computed Git blob identities must match before that PR becomes source
-provenance. Unavailable regression commit and PR metadata remains explicitly partial rather than
-borrowing the PR head's metadata. Write-disabled
+Credential-free live release inspection reads only `workers/platform/src/api/health.ts` from
+configured PR #19's raw head ref, configured immutable base/head SHAs, and the D1-attributed
+regression SHA. The PR ref, expected head, and regression source must match exactly by bytes and
+locally computed Git blob identity, while the configured base source must differ. Unavailable
+regression commit, PR, and diff-count metadata remains explicitly partial rather than borrowing the
+PR head's metadata. Write-disabled
 preview validation resolves the current `main` SHA from its bounded public Atom feed and compares only
 the allowlisted source at the evidenced and current immutable SHAs. Tree metadata remains mandatory
 for writes. A normalized scoped token selects the bounded REST adapter, is required before writes can
@@ -921,10 +922,11 @@ also carries the expected release through a narrow media type so an older or sta
 request before dependencies or persistence. Issue #64 makes the keyed smoke classify the fixed
 five-phase receipt before remediation: incomplete evidence returns only bounded phase/status
 diagnostics plus a whitelisted reason code for errors, deployment surfaces the non-complete phases,
-and preview is never invoked. Credential-free live evidence uses configured PR #19's bounded public
-patch and proves the exact remediation source matches at the immutable PR head and D1-attributed
-regression SHA instead of using shared unauthenticated REST quota; incomplete commit and PR metadata
-remains explicit rather than fabricated. Its write-disabled remediation preview resolves `main` from
+and preview is never invoked. Credential-free live evidence uses configured PR #19's narrow raw head
+ref and proves the exact remediation source matches at its immutable expected head and the
+D1-attributed regression SHA, while differing from the configured immutable base. It avoids shared
+unauthenticated REST quota and a broad patch; incomplete commit, PR, and diff-count metadata remains
+explicit rather than fabricated. Its write-disabled remediation preview resolves `main` from
 the bounded public Atom feed and validates the allowlisted file at immutable SHAs. Issue #71 binds
 the one configured incident to its exact `workers/platform/src/api/health.ts` remediation source
 rather than treating the first allowlisted commit change as the target. Issue #73 makes the configured
@@ -940,6 +942,8 @@ repository paths, or release selection.
 Issue #79 caps each failed evidence phase at two persisted attempts and removes all evidence tools
 after that retry is exhausted, so a model can report bounded uncertainty but cannot produce a third
 attempt or prepare remediation.
+Issue #81 replaces the Cloudflare-unavailable PR patch transport with a raw-only proof over the
+configured PR ref, immutable base/head, regression SHA, and exact `health.ts` bytes/blob identities.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1115,6 +1119,8 @@ Work packages:
   diagnostics, and prove configured PR provenance by exact immutable source equality (#71, #73, #75,
   and #77; implementation complete pending the public smoke).
 - Enforce the one-retry evidence limit in both receipt persistence and step tool availability (#79,
+  implementation complete pending the public smoke).
+- Replace the unavailable PR patch transport with the configured raw PR source proof (#81,
   implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 

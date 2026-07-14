@@ -9,6 +9,7 @@ import type { InvestigationEvidenceServices } from "./tools";
 
 const configuredPublicProvenance = {
   pullRequestNumber: 19,
+  pullRequestBaseSha: "cf25e5253b106b1e7514340abe94bd42fd748725",
   pullRequestHeadSha: "9af361e5a9420323b2c86f2670e3bf812ac58620",
   sourcePath: "workers/platform/src/api/health.ts",
 } as const;

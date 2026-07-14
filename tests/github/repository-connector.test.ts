@@ -194,18 +194,29 @@ describe("RepositoryConnector", () => {
     const connector = createConnector({
       api: {
         getCommit: vi.fn(async () => ({
-          source: "configured-pr-provenance",
+          source: "configured-pr-source",
           sha: commitSha,
           html_url: `https://github.com/example/supervised/commit/${commitSha}`,
           metadata: {
             status: "partial",
             unknowns: ["message", "committed-at", "author-login"],
           },
-          files: commitPayload().files,
+          files: [
+            {
+              filename: "apps/web/src/services.ts",
+              status: "modified",
+              additions: null,
+              deletions: null,
+              metadata: {
+                status: "partial",
+                unknowns: ["additions", "deletions", "patch"],
+              },
+            },
+          ],
         })),
         getPullRequestsForCommit: vi.fn(async () => [
           {
-            source: "configured-pr-provenance",
+            source: "configured-pr-source",
             number: 42,
             html_url: "https://github.com/example/supervised/pull/42",
             head: { sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
@@ -224,6 +235,18 @@ describe("RepositoryConnector", () => {
           status: "partial",
           unknowns: ["message", "committed-at", "author-login"],
         },
+        changes: [
+          {
+            path: "apps/web/src/services.ts",
+            status: "modified",
+            additions: null,
+            deletions: null,
+            metadata: {
+              status: "partial",
+              unknowns: ["additions", "deletions", "patch"],
+            },
+          },
+        ],
       },
       pullRequest: {
         status: "found",
