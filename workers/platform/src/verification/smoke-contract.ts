@@ -19,6 +19,31 @@ const completePhasesSchema = z.tuple([
   completePhase("inspect_release"),
   completePhase("read_repo_files"),
 ]);
+const evidencePhaseStatusSchema = z.enum(["pending", "complete", "insufficient", "error"]);
+const diagnosticPhase = <T extends (typeof evidenceToolNames)[number]>(toolName: T) =>
+  z
+    .object({
+      toolName: z.literal(toolName),
+      status: evidencePhaseStatusSchema,
+    })
+    .passthrough();
+const diagnosticPhasesSchema = z.tuple([
+  diagnosticPhase("compare_releases"),
+  diagnosticPhase("find_slow_traces"),
+  diagnosticPhase("inspect_trace"),
+  diagnosticPhase("inspect_release"),
+  diagnosticPhase("read_repo_files"),
+]);
+const diagnosticInputSchema = z
+  .object({
+    receipt: z
+      .object({
+        phases: diagnosticPhasesSchema,
+      })
+      .passthrough(),
+    preparedRemediation: z.unknown().optional(),
+  })
+  .passthrough();
 const inputSchema = z
   .object({
     investigation: z
@@ -126,7 +151,49 @@ export const smokeVerificationReceiptSchema = z
   })
   .strict();
 
+export const smokeEvidenceDiagnosticSchema = z
+  .object({
+    error: z
+      .object({
+        code: z.enum(["incomplete-evidence-receipt", "invalid-evidence-receipt"]),
+        phases: z
+          .array(
+            z
+              .object({
+                toolName: z.enum(evidenceToolNames),
+                status: evidencePhaseStatusSchema,
+              })
+              .strict(),
+          )
+          .max(5),
+      })
+      .strict(),
+  })
+  .strict();
+
 export type SmokeVerificationReceipt = z.infer<typeof smokeVerificationReceiptSchema>;
+export type SmokeEvidenceDiagnostic = z.infer<typeof smokeEvidenceDiagnosticSchema>;
+
+export function createSmokeEvidenceDiagnostic(
+  investigation: unknown,
+): SmokeEvidenceDiagnostic | undefined {
+  const parsed = diagnosticInputSchema.safeParse(investigation);
+  if (!parsed.success) {
+    return { error: { code: "invalid-evidence-receipt", phases: [] } };
+  }
+  if (
+    parsed.data.preparedRemediation !== undefined &&
+    parsed.data.receipt.phases.every((phase) => phase.status === "complete")
+  ) {
+    return undefined;
+  }
+  return {
+    error: {
+      code: "incomplete-evidence-receipt",
+      phases: parsed.data.receipt.phases.map(({ toolName, status }) => ({ toolName, status })),
+    },
+  };
+}
 
 function sameIncident(
   left: z.infer<typeof incidentReferenceSchema>,

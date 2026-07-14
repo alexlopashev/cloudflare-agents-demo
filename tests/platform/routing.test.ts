@@ -179,6 +179,79 @@ Run gates.`,
     expect(runLocalRemediationPreview).toHaveBeenCalledOnce();
   });
 
+  it("stops an incomplete evidence smoke before remediation with bounded phase evidence", async () => {
+    const { bindings } = createBindings();
+    const incident = {
+      incidentId: "configured-latency-regression",
+      baselineReleaseId: "baseline-version",
+      degradedReleaseId: "degraded-version",
+      traceWindow: { sinceMs: 1_000, untilMs: 2_000 },
+    };
+    const runLocalInvestigation = vi.fn(async () => ({
+      incident,
+      receipt: {
+        investigationId: "investigation-incomplete",
+        incident,
+        phases: [
+          { toolName: "compare_releases", status: "complete", attempts: [] },
+          { toolName: "find_slow_traces", status: "complete", attempts: [] },
+          { toolName: "inspect_trace", status: "complete", attempts: [] },
+          { toolName: "inspect_release", status: "complete", attempts: [] },
+          {
+            toolName: "read_repo_files",
+            status: "insufficient",
+            attempts: [
+              {
+                toolCallId: "tool-call-source",
+                status: "insufficient",
+                reason: "invalid-or-mismatched-source",
+              },
+            ],
+          },
+        ],
+        processedToolCallIds: ["tool-call-source"],
+        evidence: {},
+      },
+      report: "Model prose must not enter the diagnostic.",
+    }));
+    const runLocalRemediationPreview = vi.fn(async () => {
+      throw new Error("remediation must not run");
+    });
+    bindings.DEPLOY_SMOKE_KEY = "deployment-smoke-key-123456";
+    bindings.REGRESSION_SURGEON_AGENT = {
+      getByName: vi.fn(() => ({ runLocalInvestigation, runLocalRemediationPreview })),
+    } as unknown as DurableObjectNamespace;
+
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/api/deployment-smoke", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-deploy-smoke-key": "deployment-smoke-key-123456",
+        },
+        body: JSON.stringify({ session: "deployment-smoke-incomplete-123456" }),
+      }),
+      bindings,
+      async () => null,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "incomplete-evidence-receipt",
+        phases: [
+          { toolName: "compare_releases", status: "complete" },
+          { toolName: "find_slow_traces", status: "complete" },
+          { toolName: "inspect_trace", status: "complete" },
+          { toolName: "inspect_release", status: "complete" },
+          { toolName: "read_repo_files", status: "insufficient" },
+        ],
+      },
+    });
+    expect(runLocalInvestigation).toHaveBeenCalledOnce();
+    expect(runLocalRemediationPreview).not.toHaveBeenCalled();
+  });
+
   it("delegates health requests to the auxiliary Worker binding", async () => {
     const { bindings, healthFetch, recordTrace, telemetryStoreFactory } = createBindings();
     const response = await handlePlatformRequest(
