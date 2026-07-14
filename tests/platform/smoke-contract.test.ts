@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { createSmokeVerificationReceipt } from "../../workers/platform/src/verification/smoke-contract";
+import {
+  createSmokeEvidenceDiagnostic,
+  createSmokeVerificationReceipt,
+} from "../../workers/platform/src/verification/smoke-contract";
 
 const incident = {
   incidentId: "configured-latency-regression",
@@ -69,6 +72,36 @@ function validInput() {
 }
 
 describe("deployment smoke verification receipt", () => {
+  it("classifies invalid investigation shapes with only bounded whitelisted surfaces", () => {
+    const investigation = validInput().investigation;
+    investigation.receipt.phases[0] = {
+      ...investigation.receipt.phases[0],
+      attempts: [
+        { reason: "secret-first-detail" },
+        { reason: "secret-second-detail" },
+        { reason: "secret-third-detail" },
+      ],
+    } as (typeof investigation.receipt.phases)[number];
+
+    const diagnostic = createSmokeEvidenceDiagnostic(investigation);
+
+    expect(diagnostic).toEqual({
+      error: {
+        code: "invalid-evidence-receipt",
+        phases: [],
+        invalidFields: ["receipt-phases"],
+      },
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain("secret");
+    expect(createSmokeEvidenceDiagnostic(null)).toEqual({
+      error: {
+        code: "invalid-evidence-receipt",
+        phases: [],
+        invalidFields: ["investigation"],
+      },
+    });
+  });
+
   it("returns the five exact phases, cross-references, report sections, and zero-write remediation", () => {
     expect(createSmokeVerificationReceipt(validInput())).toEqual({
       incident,

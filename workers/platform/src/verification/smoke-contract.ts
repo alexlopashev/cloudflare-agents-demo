@@ -24,6 +24,7 @@ const completePhasesSchema = z.tuple([
 ]);
 const evidencePhaseStatusSchema = z.enum(["pending", "complete", "insufficient", "error"]);
 const evidenceErrorCodeSchema = z.enum(evidenceErrorCodes);
+const invalidEvidenceFieldSchema = z.enum(["investigation", "receipt", "receipt-phases"]);
 const diagnosticPhase = <T extends (typeof evidenceToolNames)[number]>(toolName: T) =>
   z
     .object({
@@ -181,6 +182,7 @@ export const smokeEvidenceDiagnosticSchema = z
               .strict(),
           )
           .max(5),
+        invalidFields: z.array(invalidEvidenceFieldSchema).max(5).optional(),
       })
       .strict(),
   })
@@ -194,7 +196,15 @@ export function createSmokeEvidenceDiagnostic(
 ): SmokeEvidenceDiagnostic | undefined {
   const parsed = diagnosticInputSchema.safeParse(investigation);
   if (!parsed.success) {
-    return { error: { code: "invalid-evidence-receipt", phases: [] } };
+    const invalidFields = Array.from(
+      new Set(
+        parsed.error.issues.map((issue) => {
+          if (issue.path[0] !== "receipt") return "investigation" as const;
+          return issue.path[1] === "phases" ? ("receipt-phases" as const) : ("receipt" as const);
+        }),
+      ),
+    ).slice(0, 5);
+    return { error: { code: "invalid-evidence-receipt", phases: [], invalidFields } };
   }
   if (
     parsed.data.preparedRemediation !== undefined &&
