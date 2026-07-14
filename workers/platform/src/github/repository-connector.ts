@@ -26,6 +26,16 @@ const commitResponse = z.object({
   author: z.object({ login: z.string().min(1).max(128) }).nullable(),
   files: z.array(commitFile),
 });
+const configuredProvenanceCommitResponse = z.object({
+  source: z.literal("configured-pr-provenance"),
+  sha: immutableSha,
+  html_url: z.url(),
+  metadata: z.object({
+    status: z.literal("partial"),
+    unknowns: z.tuple([z.literal("message"), z.literal("committed-at"), z.literal("author-login")]),
+  }),
+  files: z.array(commitFile),
+});
 const pullRequestResponse = z.object({
   number: z.number().int().positive(),
   title: z.string().min(1).max(1_024),
@@ -43,9 +53,16 @@ const publicPatchPullRequestResponse = z.object({
   html_url: z.url(),
   head: z.object({ sha: immutableSha }),
 });
+const configuredProvenancePullRequestResponse = z.object({
+  source: z.literal("configured-pr-provenance"),
+  number: z.number().int().positive(),
+  html_url: z.url(),
+  head: z.object({ sha: immutableSha }),
+});
 const associatedPullRequestResponse = z.union([
   pullRequestResponse,
   publicPatchPullRequestResponse,
+  configuredProvenancePullRequestResponse,
 ]);
 
 export interface GitHubRepositoryApi {
@@ -201,7 +218,11 @@ export class RepositoryConnector {
         this.#api.getPullRequestsForCommit(release.commitSha, 11),
       ),
     ]);
-    const commit = parseExternal(commitResponse, rawCommit, "GitHub commit response");
+    const commit = parseExternal(
+      z.union([commitResponse, configuredProvenanceCommitResponse]),
+      rawCommit,
+      "GitHub commit response",
+    );
     if (commit.sha.toLowerCase() !== release.commitSha.toLowerCase()) {
       throw malformed("GitHub commit response");
     }
@@ -253,10 +274,11 @@ export class RepositoryConnector {
       release,
       commit: {
         sha: commit.sha,
-        message: commit.commit.message,
-        committedAt: commit.commit.committer.date,
-        authorLogin: commit.author?.login ?? null,
+        message: "commit" in commit ? commit.commit.message : null,
+        committedAt: "commit" in commit ? commit.commit.committer.date : null,
+        authorLogin: "commit" in commit ? (commit.author?.login ?? null) : null,
         url: commit.html_url,
+        ...("metadata" in commit ? { metadata: commit.metadata } : {}),
         changes: commit.files
           .filter((file) => this.#isAllowedPath(file.filename))
           .map((file) => ({

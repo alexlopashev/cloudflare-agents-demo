@@ -190,6 +190,54 @@ describe("RepositoryConnector", () => {
     });
   });
 
+  it("keeps configured provenance commit metadata explicitly partial", async () => {
+    const connector = createConnector({
+      api: {
+        getCommit: vi.fn(async () => ({
+          source: "configured-pr-provenance",
+          sha: commitSha,
+          html_url: `https://github.com/example/supervised/commit/${commitSha}`,
+          metadata: {
+            status: "partial",
+            unknowns: ["message", "committed-at", "author-login"],
+          },
+          files: commitPayload().files,
+        })),
+        getPullRequestsForCommit: vi.fn(async () => [
+          {
+            source: "configured-pr-provenance",
+            number: 42,
+            html_url: "https://github.com/example/supervised/pull/42",
+            head: { sha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" },
+          },
+        ]),
+      },
+    }).connector;
+
+    await expect(connector.inspectRelease("release-bad")).resolves.toMatchObject({
+      commit: {
+        sha: commitSha,
+        message: null,
+        committedAt: null,
+        authorLogin: null,
+        metadata: {
+          status: "partial",
+          unknowns: ["message", "committed-at", "author-login"],
+        },
+      },
+      pullRequest: {
+        status: "found",
+        number: 42,
+        title: null,
+        headSha: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        metadata: {
+          status: "partial",
+          unknowns: ["title", "author-login", "base-sha", "merged-at"],
+        },
+      },
+    });
+  });
+
   it("rejects mutable refs, traversal, encoded traversal, and disallowed paths before I/O", async () => {
     const { api, connector } = createConnector();
 
