@@ -10,7 +10,10 @@ import {
   type ReleasePreviewEvidence,
   type ReleaseSourceEvidence,
 } from "../packages/contracts/src/source-evidence.ts";
-import { smokeEvidenceDiagnosticSchema } from "../workers/platform/src/verification/smoke-contract.ts";
+import {
+  smokeEvidenceDiagnosticSchema,
+  smokePostEvidenceDiagnosticSchema,
+} from "../workers/platform/src/verification/smoke-contract.ts";
 
 const shaSchema = z.string().regex(/^[0-9a-f]{40}$/);
 const uuidSchema = z.string().uuid();
@@ -38,7 +41,13 @@ export const deploymentEvidenceReadinessPolicy = Object.freeze({
 
 export function deploymentSmokeFailureMessage(status: number, body: unknown): string {
   const parsed = smokeEvidenceDiagnosticSchema.safeParse(body);
-  if (!parsed.success) return `Public agent smoke returned HTTP ${status}.`;
+  if (!parsed.success) {
+    const postEvidence = smokePostEvidenceDiagnosticSchema.safeParse(body);
+    if (!postEvidence.success) return `Public agent smoke returned HTTP ${status}.`;
+    return postEvidence.data.error.code === "remediation-preview-failed"
+      ? `Public agent smoke returned HTTP ${status}: remediation-preview-failed (${postEvidence.data.error.reason}).`
+      : `Public agent smoke returned HTTP ${status}: invalid-smoke-verification.`;
+  }
   if (
     parsed.data.error.code === "invalid-evidence-receipt" &&
     parsed.data.error.invalidFields !== undefined &&

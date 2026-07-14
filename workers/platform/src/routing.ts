@@ -11,10 +11,12 @@ import { handleHealthApiRequest } from "./api/health-handler";
 import { composeExternalConfiguration } from "./config";
 import { configuredComparisonWindowMs, configuredSlowTraceLimit } from "./agent/evidence-policy";
 import { generateRegressionScenario } from "./scenario/generator";
+import { RemediationError } from "./remediation/service";
 import { handleScenarioRequest } from "./scenario/handler";
 import { createTelemetryStore } from "./telemetry/store";
 import {
   createSmokeEvidenceDiagnostic,
+  smokeRemediationFailureReasonSchema,
   createSmokeVerificationReceipt,
 } from "./verification/smoke-contract";
 import { handleUxTelemetryRequest } from "./telemetry/ux-handler";
@@ -290,8 +292,29 @@ export async function handlePlatformRequest(
     const investigation = await agent.runLocalInvestigation();
     const diagnostic = createSmokeEvidenceDiagnostic(investigation);
     if (diagnostic !== undefined) return Response.json(diagnostic, { status: 422 });
-    const remediation = await agent.runLocalRemediationPreview();
-    const verification = createSmokeVerificationReceipt({ investigation, remediation });
+    let remediation: unknown;
+    try {
+      remediation = await agent.runLocalRemediationPreview();
+    } catch (error) {
+      const parsedReason = smokeRemediationFailureReasonSchema.safeParse(
+        error instanceof RemediationError ? error.code : "unavailable",
+      );
+      return Response.json(
+        {
+          error: {
+            code: "remediation-preview-failed",
+            reason: parsedReason.success ? parsedReason.data : "unavailable",
+          },
+        },
+        { status: 502 },
+      );
+    }
+    let verification: ReturnType<typeof createSmokeVerificationReceipt>;
+    try {
+      verification = createSmokeVerificationReceipt({ investigation, remediation });
+    } catch {
+      return Response.json({ error: { code: "invalid-smoke-verification" } }, { status: 422 });
+    }
     return Response.json({ verification });
   }
 

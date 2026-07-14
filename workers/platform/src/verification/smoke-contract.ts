@@ -188,6 +188,34 @@ export const smokeEvidenceDiagnosticSchema = z
   })
   .strict();
 
+export const smokeRemediationFailureReasonSchema = z.enum([
+  "invalid-input",
+  "not-allowed",
+  "limit-exceeded",
+  "stale-base",
+  "stale-blob",
+  "unavailable",
+  "malformed-response",
+]);
+
+export const smokePostEvidenceDiagnosticSchema = z.union([
+  z
+    .object({
+      error: z
+        .object({
+          code: z.literal("remediation-preview-failed"),
+          reason: smokeRemediationFailureReasonSchema,
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      error: z.object({ code: z.literal("invalid-smoke-verification") }).strict(),
+    })
+    .strict(),
+]);
+
 export type SmokeVerificationReceipt = z.infer<typeof smokeVerificationReceiptSchema>;
 export type SmokeEvidenceDiagnostic = z.infer<typeof smokeEvidenceDiagnosticSchema>;
 
