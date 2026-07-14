@@ -102,6 +102,29 @@ describe("deployment smoke verification receipt", () => {
     });
   });
 
+  it("keeps two failed attempts inside the bounded incomplete receipt diagnostic", () => {
+    const investigation = validInput().investigation;
+    investigation.receipt.phases[0] = {
+      ...investigation.receipt.phases[0],
+      status: "error",
+      attempts: [{ reason: "unavailable" }, { reason: "unavailable" }],
+    } as (typeof investigation.receipt.phases)[number];
+    delete (investigation as Partial<typeof investigation>).preparedRemediation;
+
+    expect(createSmokeEvidenceDiagnostic(investigation)).toMatchObject({
+      error: {
+        code: "incomplete-evidence-receipt",
+        phases: [
+          { toolName: "compare_releases", status: "error", reason: "unavailable" },
+          { toolName: "find_slow_traces", status: "complete" },
+          { toolName: "inspect_trace", status: "complete" },
+          { toolName: "inspect_release", status: "complete" },
+          { toolName: "read_repo_files", status: "complete" },
+        ],
+      },
+    });
+  });
+
   it("returns the five exact phases, cross-references, report sections, and zero-write remediation", () => {
     expect(createSmokeVerificationReceipt(validInput())).toEqual({
       incident,
