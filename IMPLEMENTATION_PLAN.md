@@ -949,6 +949,10 @@ Issue #83 supersedes that still-unreachable public transport with a deployment-s
 receipt derived from the same local Git proof; the credential-free runtime reads only that receipt.
 Issue #85 removes the final public GitHub dependency from the write-disabled preview by seeding a
 companion deployed-main source receipt that must equal the evidenced source by bytes and blob.
+Issue #87 adds a smoke-key-protected, GET-only evidence-readiness gate after remote migration and
+deployment. It polls only configured D1 comparison/trace/source/preview reads on 404/503 and cannot
+call Workers AI, remediation, GitHub, health, or telemetry writes; the executable smoke stays
+single-shot.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1130,6 +1134,8 @@ Work packages:
 - Replace the still-unreachable public source transport with a deployment-seeded immutable D1 receipt
   (#83, implementation complete pending the public smoke).
 - Remove the final public preview transport with a companion immutable deployed-main D1 receipt (#85,
+  implementation complete pending the public smoke).
+- Gate the one executable public smoke on side-effect-free configured D1 evidence readiness (#87,
   implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 

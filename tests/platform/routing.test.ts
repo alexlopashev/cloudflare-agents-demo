@@ -50,6 +50,114 @@ function createBindings() {
 }
 
 describe("platform routing", () => {
+  it("gates exact D1 evidence readiness without agent, preview, or write execution", async () => {
+    const { bindings } = createBindings();
+    const getByName = vi.fn();
+    bindings.DEPLOY_SMOKE_KEY = "deployment-smoke-key-123456";
+    bindings.REGRESSION_SURGEON_AGENT = { getByName } as unknown as DurableObjectNamespace;
+    const compareReleases = vi.fn(async () => ({ status: "ready" as const }));
+    const findSlowTraces = vi.fn(async () => [
+      {
+        traceId: "trace-1",
+        interactionId: "interaction-1",
+        releaseId: "degraded-version",
+        startedAtMs: 1_500,
+        durationMs: 400,
+        outcome: "success" as const,
+      },
+    ]);
+    const getTraceDetail = vi.fn(async () => ({
+      trace: { traceId: "trace-1", releaseId: "degraded-version" },
+    }));
+    const getReleaseSourceEvidence = vi.fn(
+      async () =>
+        ({
+          releaseId: "degraded-version",
+          commitSha: "d591869a8ef995f1835ef80152f4de085b10255b",
+          commitSubject: "perf: serialize health checks (#19)",
+          committedAt: "2026-07-12T01:42:21.000Z",
+          pullRequestNumber: 19 as const,
+          pullRequestHeadSha: "9af361e5a9420323b2c86f2670e3bf812ac58620" as const,
+          sourcePath: "workers/platform/src/api/health.ts",
+          blobSha: "a".repeat(40),
+          byteLength: 7,
+          content: "source\n",
+        }) as const,
+    );
+    const getReleasePreviewEvidence = vi.fn(
+      async () =>
+        ({
+          releaseId: "degraded-version",
+          baseSha: bindings.GIT_SHA,
+          sourcePath: "workers/platform/src/api/health.ts",
+          blobSha: "a".repeat(40),
+          byteLength: 7,
+          content: "source\n",
+        }) as const,
+    );
+    const evidenceStoreFactory = vi.fn(() => ({
+      compareReleases,
+      findSlowTraces,
+      getTraceDetail,
+      getReleaseSourceEvidence,
+      getReleasePreviewEvidence,
+    }));
+
+    const denied = await handlePlatformRequest(
+      new Request("https://example.test/api/deployment-evidence-readiness"),
+      bindings,
+      async () => null,
+      undefined,
+      undefined,
+      undefined,
+      evidenceStoreFactory,
+    );
+    expect(denied.status).toBe(404);
+    expect(evidenceStoreFactory).not.toHaveBeenCalled();
+
+    const wrongMethod = await handlePlatformRequest(
+      new Request("https://example.test/api/deployment-evidence-readiness", {
+        method: "POST",
+        headers: { "x-deploy-smoke-key": "deployment-smoke-key-123456" },
+      }),
+      bindings,
+      async () => null,
+      undefined,
+      undefined,
+      undefined,
+      evidenceStoreFactory,
+    );
+    expect(wrongMethod.status).toBe(405);
+    expect(evidenceStoreFactory).not.toHaveBeenCalled();
+
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/api/deployment-evidence-readiness", {
+        headers: { "x-deploy-smoke-key": "deployment-smoke-key-123456" },
+      }),
+      bindings,
+      async () => null,
+      undefined,
+      undefined,
+      undefined,
+      evidenceStoreFactory,
+    );
+    expect(response.status).toBe(204);
+    expect(compareReleases).toHaveBeenCalledWith({
+      baselineReleaseId: "baseline-version",
+      candidateReleaseId: "degraded-version",
+      windowMs: 30 * 24 * 60 * 60 * 1_000,
+    });
+    expect(findSlowTraces).toHaveBeenCalledWith({
+      releaseId: "degraded-version",
+      sinceMs: 1_000,
+      untilMs: 2_000,
+      limit: 5,
+    });
+    expect(getTraceDetail).toHaveBeenCalledWith("trace-1");
+    expect(getReleasePreviewEvidence).toHaveBeenCalledWith("degraded-version", bindings.GIT_SHA);
+    expect(getByName).not.toHaveBeenCalled();
+  });
+
   it("keeps the deployed-agent smoke route keyed and invokes one isolated agent", async () => {
     const { bindings } = createBindings();
     const incident = {

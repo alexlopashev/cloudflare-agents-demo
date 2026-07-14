@@ -31,6 +31,11 @@ export const deploymentSmokeRetryPolicy = Object.freeze({
   delayMs: 750,
 });
 
+export const deploymentEvidenceReadinessPolicy = Object.freeze({
+  maxAttempts: 80,
+  delayMs: 750,
+});
+
 export function deploymentSmokeFailureMessage(status: number, body: unknown): string {
   const parsed = smokeEvidenceDiagnosticSchema.safeParse(body);
   if (!parsed.success) return `Public agent smoke returned HTTP ${status}.`;
@@ -118,6 +123,28 @@ export async function requestDeploymentSmokeWithRetry(
     await wait();
   }
   throw new Error("Deployment smoke retry policy did not produce a response.");
+}
+
+export async function waitForDeploymentEvidenceReady(
+  request: () => Promise<Response>,
+  wait: () => Promise<void>,
+): Promise<void> {
+  for (let attempt = 0; attempt < deploymentEvidenceReadinessPolicy.maxAttempts; attempt += 1) {
+    let response: Response;
+    try {
+      response = await request();
+    } catch {
+      if (attempt === deploymentEvidenceReadinessPolicy.maxAttempts - 1) break;
+      await wait();
+      continue;
+    }
+    if (response.status === 204) return;
+    if (response.status !== 404 && response.status !== 503) {
+      throw new Error(`Deployment evidence readiness returned HTTP ${response.status}.`);
+    }
+    if (attempt < deploymentEvidenceReadinessPolicy.maxAttempts - 1) await wait();
+  }
+  throw new Error("Deployment evidence did not become readable at the public edge.");
 }
 
 export type DeploymentStage =
