@@ -67,6 +67,22 @@ export async function handlePlatformRequest(
     return Response.json({ error: { code: "invalid-runtime-configuration" } }, { status: 503 });
   }
 
+  if (url.pathname === "/api/deployment-readiness") {
+    if (request.method !== "GET") {
+      return Response.json(
+        { error: { code: "method-not-allowed" } },
+        { status: 405, headers: { allow: "GET", "cache-control": "no-store" } },
+      );
+    }
+    return Response.json(
+      {
+        versionId: externalConfiguration.runtime.versionId,
+        gitSha: externalConfiguration.runtime.gitSha,
+      },
+      { headers: { "cache-control": "no-store" } },
+    );
+  }
+
   if (url.pathname.startsWith("/agents/")) {
     const response = await routeAgent(request, bindings);
     if (response) return response;

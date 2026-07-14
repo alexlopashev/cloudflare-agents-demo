@@ -147,6 +147,9 @@ non-success response stops the deployment with the failing stage and sample iden
 automation never replays an endpoint that may already have recorded telemetry or another effect.
 Each interaction identifier includes its immutable Worker version, so a later deployment cannot
 collide with or rewrite historical evidence for the same sample ordinal.
+Before either measured sequence begins, deployment polls a side-effect-free readiness route until
+the public edge reports the exact Wrangler version. The route exposes only immutable version and Git
+attribution and cannot execute health, telemetry, agent, or write behavior.
 
 `mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
 `mise run deploy:smoke` repeats the deployed verification. `mise run deploy:reset` deletes only the

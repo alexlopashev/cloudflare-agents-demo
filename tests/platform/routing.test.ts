@@ -310,6 +310,33 @@ Run gates.`,
     });
   });
 
+  it("exposes side-effect-free version readiness before incident configuration", async () => {
+    const { bindings, recordTrace, recordUxEvent } = createBindings();
+    bindings.EVIDENCE_DEGRADED_RELEASE_ID = bindings.EVIDENCE_BASELINE_RELEASE_ID;
+
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/api/deployment-readiness"),
+      bindings,
+      async () => null,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({
+      gitSha: "0123456789abcdef0123456789abcdef01234567",
+      versionId: "version-good",
+    });
+    expect(recordTrace).not.toHaveBeenCalled();
+    expect(recordUxEvent).not.toHaveBeenCalled();
+
+    const rejected = await handlePlatformRequest(
+      new Request("https://example.test/api/deployment-readiness", { method: "POST" }),
+      bindings,
+      async () => null,
+    );
+    expect(rejected.status).toBe(405);
+  });
+
   it.each([
     ["Git SHA", (bindings: PlatformBindings) => (bindings.GIT_SHA = "")],
     [

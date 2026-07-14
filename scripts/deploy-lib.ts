@@ -42,6 +42,24 @@ export async function requestDeploymentEndpointOnce(
   return response;
 }
 
+export async function waitForDeploymentVersion(
+  readVersion: () => Promise<string | undefined>,
+  expectedVersion: string,
+  wait: () => Promise<void>,
+): Promise<void> {
+  const expected = uuidSchema.safeParse(expectedVersion);
+  if (!expected.success) throw new TypeError("Expected deployment version is invalid.");
+  for (let attempt = 0; attempt < runtimeAttributionRetryPolicy.maxAttempts; attempt += 1) {
+    try {
+      if ((await readVersion()) === expected.data) return;
+    } catch {
+      // The read-only version route can be unavailable while the edge changes versions.
+    }
+    if (attempt < runtimeAttributionRetryPolicy.maxAttempts - 1) await wait();
+  }
+  throw new Error(`Deployment version ${expected.data} did not reach the public edge.`);
+}
+
 export async function requestDeploymentSmokeWithRetry(
   request: () => Promise<Response>,
   wait: () => Promise<void>,

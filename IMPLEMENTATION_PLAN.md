@@ -906,7 +906,9 @@ Issue #59 makes every measured health and telemetry POST one-shot: transport or 
 stops deployment with sample evidence instead of replaying an endpoint that may already have taken
 effect. Each measured interaction identifier includes the immutable Worker version so later
 deployments cannot collide with historical sample ordinals. Side-effect-free runtime identity
-polling remains isolated from those request paths.
+polling remains isolated from those request paths. A narrow readiness route exposes only immutable
+version/Git attribution so deployment can wait for the exact baseline or degraded version at the
+public edge before starting any measured POST.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -914,6 +916,7 @@ polling remains isolated from those request paths.
 - Keep GitHub writes off by default; select live reads only when a scoped token is supplied.
 - Attempt each measured health and telemetry POST exactly once and fail visibly on any error.
 - Scope each deployment interaction identifier to its immutable Worker version and sample ordinal.
+- Poll exact public edge version/Git readiness before starting either measured sequence.
 - Deploy the public investigator.
 - Perform the complete reviewer walkthrough.
 

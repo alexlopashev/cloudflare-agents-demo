@@ -15,6 +15,7 @@ import {
   requestDeploymentSmokeWithRetry,
   runtimeAttributionRetryPolicy,
   runWithFailClosedRollback,
+  waitForDeploymentVersion,
   type DeploymentStage,
 } from "../../scripts/deploy-lib.ts";
 
@@ -53,6 +54,8 @@ describe("Cloudflare deployment contract", () => {
     expect(deployScript).toContain(
       "buildDeploymentInteractionId(label, expectedReleaseId, sample + 1)",
     );
+    expect(deployScript).toContain("await assertDeployedVersion(baseline.url, baseline.versionId)");
+    expect(deployScript).toContain("await assertDeployedVersion(degraded.url, degraded.versionId)");
     expect(
       deployScript.match(/if \(githubWriteEnabled\) assertGitHubWriteSecret\(\);/g),
     ).toHaveLength(2);
@@ -246,6 +249,26 @@ describe("Cloudflare deployment contract", () => {
       requestDeploymentEndpointOnce(rejectedRequest, "telemetry persistence"),
     ).rejects.toThrow(/telemetry persistence failed before a response/i);
     expect(rejectedRequest).toHaveBeenCalledOnce();
+  });
+
+  it("polls only immutable version identity before measured traffic", async () => {
+    const versions = [degradedVersionId, undefined, baselineVersionId];
+    const readVersion = vi.fn(async () => versions.shift());
+    const wait = vi.fn(async () => undefined);
+
+    await expect(
+      waitForDeploymentVersion(readVersion, baselineVersionId, wait),
+    ).resolves.toBeUndefined();
+    expect(readVersion).toHaveBeenCalledTimes(3);
+    expect(wait).toHaveBeenCalledTimes(2);
+
+    const staleVersion = vi.fn(async () => degradedVersionId);
+    const boundedWait = vi.fn(async () => undefined);
+    await expect(
+      waitForDeploymentVersion(staleVersion, baselineVersionId, boundedWait),
+    ).rejects.toThrow(/did not reach the public edge/i);
+    expect(staleVersion).toHaveBeenCalledTimes(runtimeAttributionRetryPolicy.maxAttempts);
+    expect(boundedWait).toHaveBeenCalledTimes(runtimeAttributionRetryPolicy.maxAttempts - 1);
   });
 
   it("bounds repeated propagation-only smoke responses", async () => {
