@@ -12,6 +12,12 @@ export type RemediationServiceOptions = {
   writeEnabled: boolean;
   fetcher?: (request: Request) => Promise<Response>;
   token?: string;
+  sourceReleaseId?: string;
+  previewBaseSha?: string;
+  store?: {
+    getReleaseSourceEvidence(releaseId: string): Promise<unknown>;
+    getReleasePreviewEvidence(releaseId: string, baseSha: string): Promise<unknown>;
+  };
 };
 
 const allowedPaths = ["workers/platform/src/api/health.ts"] as const;

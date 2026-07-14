@@ -18,6 +18,7 @@ const schema = `
   DROP TABLE IF EXISTS ux_events;
   DROP TABLE IF EXISTS spans;
   DROP TABLE IF EXISTS traces;
+  DROP TABLE IF EXISTS release_preview_evidence;
   DROP TABLE IF EXISTS release_source_evidence;
   DROP TABLE IF EXISTS releases;
   PRAGMA foreign_keys = ON;
@@ -30,6 +31,12 @@ const schema = `
     pull_request_head_sha TEXT NOT NULL, source_path TEXT NOT NULL, blob_sha TEXT NOT NULL,
     byte_length INTEGER NOT NULL, content TEXT NOT NULL,
     FOREIGN KEY (release_id) REFERENCES releases(release_id) ON DELETE CASCADE
+  );
+  CREATE TABLE release_preview_evidence (
+    release_id TEXT NOT NULL, base_sha TEXT NOT NULL, source_path TEXT NOT NULL,
+    blob_sha TEXT NOT NULL, byte_length INTEGER NOT NULL, content TEXT NOT NULL,
+    PRIMARY KEY (release_id, base_sha),
+    FOREIGN KEY (release_id) REFERENCES release_source_evidence(release_id) ON DELETE CASCADE
   );
   CREATE TABLE traces (
     trace_id TEXT PRIMARY KEY, interaction_id TEXT NOT NULL, release_id TEXT NOT NULL,
@@ -59,6 +66,11 @@ const schema = `
     OR OLD.source_path IS NOT NEW.source_path OR OLD.blob_sha IS NOT NEW.blob_sha
     OR OLD.byte_length IS NOT NEW.byte_length OR OLD.content IS NOT NEW.content
   BEGIN SELECT RAISE(ABORT, 'Release source evidence is immutable.'); END;
+  CREATE TRIGGER reject_conflicting_release_preview BEFORE UPDATE ON release_preview_evidence
+  WHEN OLD.base_sha IS NOT NEW.base_sha OR OLD.source_path IS NOT NEW.source_path
+    OR OLD.blob_sha IS NOT NEW.blob_sha OR OLD.byte_length IS NOT NEW.byte_length
+    OR OLD.content IS NOT NEW.content
+  BEGIN SELECT RAISE(ABORT, 'Release preview evidence is immutable.'); END;
   CREATE TRIGGER reject_conflicting_trace BEFORE UPDATE ON traces
   WHEN OLD.interaction_id IS NOT NEW.interaction_id OR OLD.release_id IS NOT NEW.release_id
     OR OLD.started_at_ms IS NOT NEW.started_at_ms OR OLD.duration_ms IS NOT NEW.duration_ms
@@ -420,14 +432,38 @@ describe("D1 telemetry store", () => {
     await expect(store.recordReleaseSourceEvidence(evidence)).resolves.toBeUndefined();
     await expect(store.recordReleaseSourceEvidence(evidence)).resolves.toBeUndefined();
     await expect(store.getReleaseSourceEvidence("release-a")).resolves.toEqual(evidence);
+    const previewEvidence = {
+      releaseId: "release-a",
+      baseSha: "a".repeat(40),
+      sourcePath: evidence.sourcePath,
+      blobSha: evidence.blobSha,
+      byteLength: evidence.byteLength,
+      content: evidence.content,
+    } as const;
+    await expect(store.recordReleasePreviewEvidence(previewEvidence)).resolves.toBeUndefined();
+    await expect(store.recordReleasePreviewEvidence(previewEvidence)).resolves.toBeUndefined();
+    await expect(
+      store.getReleasePreviewEvidence("release-a", previewEvidence.baseSha),
+    ).resolves.toEqual(previewEvidence);
     await expect(
       store.recordReleaseSourceEvidence({
         ...evidence,
         commitSubject: "perf: serialize altered health checks (#19)",
       }),
     ).rejects.toThrow(/source evidence is immutable/i);
+    const nextPreview = { ...previewEvidence, baseSha: "b".repeat(40) };
+    await expect(store.recordReleasePreviewEvidence(nextPreview)).resolves.toBeUndefined();
+    await expect(
+      store.getReleasePreviewEvidence("release-a", nextPreview.baseSha),
+    ).resolves.toEqual(nextPreview);
 
     await store.resetScenarioEvidence(["release-a"]);
     await expect(store.getReleaseSourceEvidence("release-a")).resolves.toBeNull();
+    await expect(
+      store.getReleasePreviewEvidence("release-a", previewEvidence.baseSha),
+    ).resolves.toBeNull();
+    await expect(
+      store.getReleasePreviewEvidence("release-a", nextPreview.baseSha),
+    ).resolves.toBeNull();
   });
 });

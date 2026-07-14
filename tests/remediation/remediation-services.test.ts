@@ -24,7 +24,7 @@ describe("agent remediation services", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("allows credential-free Workers AI previews but requires a token before enabling writes", async () => {
+  it("uses only persisted evidence for credential-free previews and requires a token for writes", async () => {
     const repository = { owner: "alexlopashev", repo: "cloudflare-agents-demo" };
     const sourceBytes = new TextEncoder().encode(regressionHealthSource);
     const prefix = new TextEncoder().encode(`blob ${sourceBytes.byteLength}\0`);
@@ -36,6 +36,29 @@ describe("agent remediation services", () => {
       (byte) => byte.toString(16).padStart(2, "0"),
     ).join("");
     const proposal = { ...remediationFixture, expectedBlobSha };
+    const sourceReleaseId = remediationFixture.incident.degradedReleaseId;
+    const store = {
+      getReleaseSourceEvidence: vi.fn(async () => ({
+        releaseId: sourceReleaseId,
+        commitSha: remediationFixture.expectedBaseSha,
+        commitSubject: "perf: serialize health checks to limit pressure (#19)",
+        committedAt: "2026-07-12T01:42:21.000Z",
+        pullRequestNumber: 19,
+        pullRequestHeadSha: "9af361e5a9420323b2c86f2670e3bf812ac58620",
+        sourcePath: remediationFixture.path,
+        blobSha: expectedBlobSha,
+        byteLength: sourceBytes.byteLength,
+        content: regressionHealthSource,
+      })),
+      getReleasePreviewEvidence: vi.fn(async () => ({
+        releaseId: sourceReleaseId,
+        baseSha: "a".repeat(40),
+        sourcePath: remediationFixture.path,
+        blobSha: expectedBlobSha,
+        byteLength: sourceBytes.byteLength,
+        content: regressionHealthSource,
+      })),
+    };
     const feed = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
   <entry><id>tag:github.com,2008:Grit::Commit/${remediationFixture.expectedBaseSha}</id></entry>
@@ -56,6 +79,9 @@ describe("agent remediation services", () => {
         mode: "workers-ai",
         repository,
         writeEnabled: false,
+        sourceReleaseId,
+        previewBaseSha: "a".repeat(40),
+        store,
         fetcher,
         ...(token === undefined ? {} : { token }),
       });
@@ -64,13 +90,7 @@ describe("agent remediation services", () => {
         writesPerformed: false,
       });
     }
-    expect(fetcher).toHaveBeenCalledTimes(6);
-    expect(fetcher.mock.calls.every(([request]) => !request.headers.has("authorization"))).toBe(
-      true,
-    );
-    expect(
-      fetcher.mock.calls.some(([request]) => new URL(request.url).hostname === "api.github.com"),
-    ).toBe(false);
+    expect(fetcher).not.toHaveBeenCalled();
     for (const token of [undefined, "", "   "]) {
       expect(() =>
         createAgentRemediationService({

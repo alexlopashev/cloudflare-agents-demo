@@ -11,8 +11,10 @@ import { configuredSourceEvidencePolicy } from "../packages/contracts/src/source
 import {
   buildDeploymentInteractionId,
   buildPlatformDeploymentConfig,
+  buildConfiguredPreviewEvidence,
   buildConfiguredSourceEvidence,
   buildEvidenceResetSql,
+  buildReleasePreviewEvidenceSql,
   buildReleaseSourceEvidenceSql,
   deploymentSmokeRetryPolicy,
   deploymentSmokeFailureMessage,
@@ -95,17 +97,21 @@ function findOrCreateDatabase(): string {
   }
 }
 
-function readConfiguredSourceEvidence(releaseId: string) {
+function readGitSource(sha: string) {
   const policy = configuredSourceEvidencePolicy;
-  const readCommit = (sha: string) => ({
+  return {
     sha,
     content: capture("git", ["show", `${sha}:${policy.sourcePath}`]),
     blobSha: capture("git", ["rev-parse", `${sha}:${policy.sourcePath}`]).trim(),
-  });
+  };
+}
+
+function readConfiguredSourceEvidence(releaseId: string) {
+  const policy = configuredSourceEvidencePolicy;
   return buildConfiguredSourceEvidence({
     releaseId,
     regression: {
-      ...readCommit(policy.regressionCommitSha),
+      ...readGitSource(policy.regressionCommitSha),
       subject: capture("git", ["show", "-s", "--format=%s", policy.regressionCommitSha]).trim(),
       committedAt: capture("git", [
         "show",
@@ -114,12 +120,16 @@ function readConfiguredSourceEvidence(releaseId: string) {
         policy.regressionCommitSha,
       ]).trim(),
     },
-    head: readCommit(policy.pullRequestHeadSha),
-    base: readCommit(policy.pullRequestBaseSha),
+    head: readGitSource(policy.pullRequestHeadSha),
+    base: readGitSource(policy.pullRequestBaseSha),
   });
 }
 
-function prepareRemoteSourceEvidence(databaseId: string, degradedReleaseId: string) {
+function prepareRemoteSourceEvidence(
+  databaseId: string,
+  degradedReleaseId: string,
+  deployedGitSha: string,
+) {
   writeConfig(
     buildPlatformDeploymentConfig({
       databaseId,
@@ -136,10 +146,16 @@ function prepareRemoteSourceEvidence(databaseId: string, degradedReleaseId: stri
     "--config",
     configPath,
   ]);
+  const sourceEvidence = readConfiguredSourceEvidence(degradedReleaseId);
+  const previewEvidence = buildConfiguredPreviewEvidence({
+    releaseId: degradedReleaseId,
+    source: readGitSource(deployedGitSha),
+    evidenced: sourceEvidence,
+  });
   const sourceEvidencePath = resolve(deploymentDirectory, "source-evidence.sql");
   writeFileSync(
     sourceEvidencePath,
-    `${buildReleaseSourceEvidenceSql(readConfiguredSourceEvidence(degradedReleaseId))}\n`,
+    `${buildReleaseSourceEvidenceSql(sourceEvidence)}\n${buildReleasePreviewEvidenceSql(previewEvidence)}\n`,
     { mode: 0o600 },
   );
   try {
@@ -424,9 +440,8 @@ async function deploy() {
   );
   await assertDeployedVersion(degraded.url, degraded.versionId);
   const degradedWindow = await seedMeasuredTraffic(degraded.url, degraded.versionId, "degraded");
-  prepareRemoteSourceEvidence(databaseId, degraded.versionId);
-
-  const deployedGitSha = run("git", ["rev-parse", "HEAD"]).trim();
+  const deployedGitSha = capture("git", ["rev-parse", "HEAD"]).trim();
+  prepareRemoteSourceEvidence(databaseId, degraded.versionId, deployedGitSha);
   const smokeKey = crypto.randomUUID();
   const investigatorConfig = buildPlatformDeploymentConfig({
     databaseId,
@@ -501,8 +516,8 @@ async function refreshInvestigator(githubWriteEnabled = false) {
   if (githubWriteEnabled) assertGitHubWriteSecret();
   run("pnpm", ["build"]);
   const previous = refreshStateSchema.parse(JSON.parse(readFileSync(statePath, "utf8")));
-  prepareRemoteSourceEvidence(previous.databaseId, previous.degradedReleaseId);
-  const deployedGitSha = run("git", ["rev-parse", "HEAD"]).trim();
+  const deployedGitSha = capture("git", ["rev-parse", "HEAD"]).trim();
+  prepareRemoteSourceEvidence(previous.databaseId, previous.degradedReleaseId, deployedGitSha);
   if (!githubWriteEnabled) {
     await smoke(deployRefreshedInvestigator(previous, deployedGitSha, false));
     return;

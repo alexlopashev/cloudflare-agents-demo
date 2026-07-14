@@ -1,4 +1,4 @@
-import { GitHubDraftPrApi, GitHubPublicPreviewApi } from "../github";
+import { GitHubDraftPrApi, PersistedPreviewApi } from "../github";
 import { createRemediationService } from "../remediation/service";
 import type { RemediationServiceOptions } from "./remediation-services";
 
@@ -11,21 +11,30 @@ export function createLiveRemediationService(options: RemediationServiceOptions)
   if (options.writeEnabled && token === undefined) {
     throw new TypeError("GitHub writes require an explicit non-empty scoped token.");
   }
-  const api =
-    token === undefined
-      ? new GitHubPublicPreviewApi({
-          repository: options.repository,
-          allowedPaths,
-          maxResponseBytes: 64 * 1_024,
-          ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
-        })
-      : new GitHubDraftPrApi({
-          repository: options.repository,
-          allowedPaths,
-          maxResponseBytes: 64 * 1_024,
-          ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
-          token,
-        });
+  const api = (() => {
+    if (token === undefined) {
+      if (
+        options.store === undefined ||
+        options.sourceReleaseId === undefined ||
+        options.previewBaseSha === undefined
+      ) {
+        throw new TypeError("Credential-free preview requires persisted source evidence.");
+      }
+      return new PersistedPreviewApi({
+        repository: options.repository,
+        releaseId: options.sourceReleaseId,
+        baseSha: options.previewBaseSha,
+        store: options.store,
+      });
+    }
+    return new GitHubDraftPrApi({
+      repository: options.repository,
+      allowedPaths,
+      maxResponseBytes: 64 * 1_024,
+      ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
+      token,
+    });
+  })();
   return createRemediationService({
     api,
     repository: options.repository,

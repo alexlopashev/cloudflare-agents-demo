@@ -5,7 +5,9 @@ import { z } from "zod";
 import { parseIncidentReference } from "../packages/contracts/src/incident.ts";
 import {
   configuredSourceEvidencePolicy,
+  parseReleasePreviewEvidence,
   parseReleaseSourceEvidence,
+  type ReleasePreviewEvidence,
   type ReleaseSourceEvidence,
 } from "../packages/contracts/src/source-evidence.ts";
 import { smokeEvidenceDiagnosticSchema } from "../workers/platform/src/verification/smoke-contract.ts";
@@ -309,6 +311,7 @@ export function buildEvidenceResetSql(
     `DELETE FROM ux_events WHERE release_id IN (${ids})`,
     `DELETE FROM spans WHERE trace_id IN (SELECT trace_id FROM traces WHERE release_id IN (${ids}))`,
     `DELETE FROM traces WHERE release_id IN (${ids})`,
+    `DELETE FROM release_preview_evidence WHERE release_id IN (${ids})`,
     `DELETE FROM release_source_evidence WHERE release_id IN (${ids})`,
     `DELETE FROM releases WHERE release_id IN (${ids})`,
   ].join("; ");
@@ -409,4 +412,54 @@ export function buildReleaseSourceEvidenceSql(input: ReleaseSourceEvidence): str
       blob_sha = excluded.blob_sha,
       byte_length = excluded.byte_length,
       content = excluded.content;`;
+}
+
+export function buildConfiguredPreviewEvidence(input: {
+  releaseId: string;
+  source: ImmutableGitSource;
+  evidenced: { content: string; blobSha: string };
+}): ReleasePreviewEvidence {
+  if (
+    !shaSchema.safeParse(input.source.sha).success ||
+    input.source.blobSha !== gitBlobSha(input.source.content) ||
+    input.source.content !== input.evidenced.content ||
+    input.source.blobSha !== input.evidenced.blobSha
+  ) {
+    throw new TypeError("Configured local Git preview proof is invalid.");
+  }
+  try {
+    return parseReleasePreviewEvidence({
+      releaseId: input.releaseId,
+      baseSha: input.source.sha,
+      sourcePath: configuredSourceEvidencePolicy.sourcePath,
+      blobSha: input.source.blobSha,
+      byteLength: Buffer.byteLength(input.source.content, "utf8"),
+      content: input.source.content,
+    });
+  } catch {
+    throw new TypeError("Configured local Git preview proof is invalid.");
+  }
+}
+
+export function buildReleasePreviewEvidenceSql(input: ReleasePreviewEvidence): string {
+  const evidence = parseReleasePreviewEvidence(input);
+  const values = [
+    sqlString(evidence.releaseId),
+    sqlString(evidence.baseSha),
+    sqlString(evidence.sourcePath),
+    sqlString(evidence.blobSha),
+    String(evidence.byteLength),
+    sqlString(evidence.content),
+  ].join(", ");
+  return `INSERT INTO release_preview_evidence
+    (release_id, base_sha, source_path, blob_sha, byte_length, content)
+    VALUES (${values})
+    ON CONFLICT (release_id, base_sha) DO UPDATE SET
+      source_path = excluded.source_path,
+      blob_sha = excluded.blob_sha,
+      byte_length = excluded.byte_length,
+      content = excluded.content;
+    DELETE FROM release_preview_evidence
+      WHERE release_id = ${sqlString(evidence.releaseId)}
+        AND base_sha <> ${sqlString(evidence.baseSha)};`;
 }
