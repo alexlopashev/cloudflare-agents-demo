@@ -141,6 +141,8 @@ Cloudflare version IDs and trace timestamps. It finishes with a keyed smoke that
 public routes, runtime metadata, five exact incident-scoped evidence phases, their trace, release,
 commit, PR, source, and blob cross-references, all four report sections, the remediation fingerprint
 and change counts, a validated zero-write preview, and the expected GitHub write posture.
+Machine cross-references come from the validated persisted receipt; live report prose proves the
+four section boundary without needing to repeat identifiers in incidental wording.
 
 Every measured health and telemetry POST is attempted exactly once. A transport failure or any
 non-success response stops the deployment with the failing stage and sample identifier; deployment

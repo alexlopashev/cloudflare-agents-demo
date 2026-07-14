@@ -157,6 +157,21 @@ describe("deployment smoke verification receipt", () => {
     });
   });
 
+  it("derives evidence cross-references from the structured receipt instead of live report prose", () => {
+    const input = validInput();
+    input.investigation.report =
+      "## Evidence\nThe persisted evidence receipt is complete.\n## Inference\nBounded cause.\n## Confidence\nHigh.\n## Unknowns\nNone material.";
+
+    expect(createSmokeVerificationReceipt(input).crossReferences).toEqual({
+      traceId: "scenario-trace-1",
+      releaseId: "regression-sequential",
+      commitSha,
+      pullRequestNumber: 19,
+      sourcePath: "workers/platform/src/api/health.ts",
+      blobSha,
+    });
+  });
+
   it.each([
     ["phase", (input: ReturnType<typeof validInput>) => input.investigation.receipt.phases.pop()],
     [
