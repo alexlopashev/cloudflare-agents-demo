@@ -1,19 +1,18 @@
 import { z } from "zod";
 
 import {
+  evidenceToolNames,
+  type EvidenceToolName,
+} from "../../../../packages/contracts/src/evidence";
+import {
   parseIncidentReference,
   type IncidentReference,
 } from "../../../../packages/contracts/src/incident";
 
-export const evidenceToolNames = [
-  "compare_releases",
-  "find_slow_traces",
-  "inspect_trace",
-  "inspect_release",
-  "read_repo_files",
-] as const;
-
-export type EvidenceToolName = (typeof evidenceToolNames)[number];
+export {
+  evidenceToolNames,
+  type EvidenceToolName,
+} from "../../../../packages/contracts/src/evidence";
 export type EvidenceResultStatus = "complete" | "insufficient" | "error";
 
 export type EvidenceToolResult = {

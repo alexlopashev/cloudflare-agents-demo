@@ -1,0 +1,219 @@
+import { z } from "zod";
+
+import { evidenceToolNames } from "../../../../packages/contracts/src/evidence.ts";
+import { incidentReferenceSchema } from "../../../../packages/contracts/src/incident.ts";
+
+const evidenceId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/);
+const sha = z.string().regex(/^[0-9a-f]{40}$/);
+const safePath = z
+  .string()
+  .min(1)
+  .max(512)
+  .refine((path) => !path.startsWith("/") && !path.split("/").includes(".."));
+const completePhase = <T extends (typeof evidenceToolNames)[number]>(toolName: T) =>
+  z.object({ toolName: z.literal(toolName), status: z.literal("complete") }).passthrough();
+const completePhasesSchema = z.tuple([
+  completePhase("compare_releases"),
+  completePhase("find_slow_traces"),
+  completePhase("inspect_trace"),
+  completePhase("inspect_release"),
+  completePhase("read_repo_files"),
+]);
+const inputSchema = z
+  .object({
+    investigation: z
+      .object({
+        incident: incidentReferenceSchema,
+        receipt: z
+          .object({
+            investigationId: evidenceId,
+            incident: incidentReferenceSchema,
+            phases: completePhasesSchema,
+            evidence: z
+              .object({
+                baselineReleaseId: evidenceId,
+                degradedReleaseId: evidenceId,
+                selectedTraceId: evidenceId,
+                inspectedTraceId: evidenceId,
+                releaseId: evidenceId,
+                commitSha: sha,
+                pullRequest: z.object({
+                  status: z.literal("found"),
+                  number: z.number().int().positive(),
+                }),
+                sourcePath: safePath,
+                blobSha: sha,
+              })
+              .passthrough(),
+          })
+          .passthrough(),
+        preparedRemediation: z
+          .object({
+            fingerprint: z.string().regex(/^proposal-v1-[0-9a-f]{16}$/),
+            proposal: z
+              .object({
+                incident: incidentReferenceSchema.safeExtend({
+                  traceId: evidenceId,
+                  regressionCommitSha: sha,
+                  sourcePullRequestNumber: z.number().int().positive(),
+                }),
+                expectedBaseSha: sha,
+                expectedBlobSha: sha,
+                path: safePath,
+              })
+              .passthrough(),
+            diff: z
+              .object({
+                additions: z.number().int().nonnegative(),
+                deletions: z.number().int().nonnegative(),
+                path: safePath,
+              })
+              .passthrough(),
+          })
+          .passthrough(),
+        report: z.string().min(1),
+      })
+      .passthrough(),
+    remediation: z
+      .object({
+        branch: z.string().regex(/^regression-surgeon\/[0-9a-f]{16}$/),
+        body: z.string().min(1),
+        status: z.literal("preview"),
+        writesPerformed: z.literal(false),
+      })
+      .passthrough(),
+  })
+  .strict();
+
+export const smokeVerificationReceiptSchema = z
+  .object({
+    incident: incidentReferenceSchema,
+    investigationId: evidenceId,
+    phases: z.tuple([
+      z.literal("compare_releases"),
+      z.literal("find_slow_traces"),
+      z.literal("inspect_trace"),
+      z.literal("inspect_release"),
+      z.literal("read_repo_files"),
+    ]),
+    crossReferences: z
+      .object({
+        traceId: evidenceId,
+        releaseId: evidenceId,
+        commitSha: sha,
+        pullRequestNumber: z.number().int().positive(),
+        sourcePath: safePath,
+        blobSha: sha,
+      })
+      .strict(),
+    reportSections: z.tuple([
+      z.literal("Evidence"),
+      z.literal("Inference"),
+      z.literal("Confidence"),
+      z.literal("Unknowns"),
+    ]),
+    remediation: z
+      .object({
+        branch: z.string().regex(/^regression-surgeon\/[0-9a-f]{16}$/),
+        fingerprint: z.string().regex(/^proposal-v1-[0-9a-f]{16}$/),
+        path: safePath,
+        additions: z.number().int().nonnegative(),
+        deletions: z.number().int().nonnegative(),
+        status: z.literal("preview"),
+        writesPerformed: z.literal(false),
+      })
+      .strict(),
+  })
+  .strict();
+
+export type SmokeVerificationReceipt = z.infer<typeof smokeVerificationReceiptSchema>;
+
+function sameIncident(
+  left: z.infer<typeof incidentReferenceSchema>,
+  right: z.infer<typeof incidentReferenceSchema>,
+): boolean {
+  return (
+    left.incidentId === right.incidentId &&
+    left.baselineReleaseId === right.baselineReleaseId &&
+    left.degradedReleaseId === right.degradedReleaseId &&
+    left.traceWindow.sinceMs === right.traceWindow.sinceMs &&
+    left.traceWindow.untilMs === right.traceWindow.untilMs
+  );
+}
+
+function includesReference(value: string, reference: string): boolean {
+  return value.includes(reference);
+}
+
+export function createSmokeVerificationReceipt(input: unknown): SmokeVerificationReceipt {
+  const parsed = inputSchema.safeParse(input);
+  if (!parsed.success) throw new TypeError("Smoke verification input is incomplete.");
+  const { investigation, remediation } = parsed.data;
+  const { receipt, preparedRemediation } = investigation;
+  const evidence = receipt.evidence;
+  const proposal = preparedRemediation.proposal;
+  const reportSections = Array.from(
+    investigation.report.matchAll(/^#{1,6}\s+(Evidence|Inference|Confidence|Unknowns)\s*$/gim),
+    (match) => match[1],
+  );
+  const reportReferences = [
+    receipt.investigationId,
+    investigation.incident.incidentId,
+    evidence.selectedTraceId,
+    evidence.commitSha.slice(0, 7),
+    `PR #${evidence.pullRequest.number}`,
+  ];
+  const remediationReferences = [
+    investigation.incident.incidentId,
+    evidence.selectedTraceId,
+    evidence.commitSha,
+    `PR #${evidence.pullRequest.number}`,
+  ];
+  const remediationSections = Array.from(
+    remediation.body.matchAll(/^#{1,6}\s+(Evidence|Risk|Validation)\s*$/gim),
+    (match) => match[1],
+  );
+  const valid =
+    sameIncident(investigation.incident, receipt.incident) &&
+    sameIncident(investigation.incident, proposal.incident) &&
+    evidence.baselineReleaseId === investigation.incident.baselineReleaseId &&
+    evidence.degradedReleaseId === investigation.incident.degradedReleaseId &&
+    evidence.releaseId === investigation.incident.degradedReleaseId &&
+    evidence.selectedTraceId === evidence.inspectedTraceId &&
+    proposal.incident.traceId === evidence.inspectedTraceId &&
+    proposal.incident.regressionCommitSha === evidence.commitSha &&
+    proposal.incident.sourcePullRequestNumber === evidence.pullRequest.number &&
+    proposal.expectedBaseSha === evidence.commitSha &&
+    proposal.expectedBlobSha === evidence.blobSha &&
+    proposal.path === evidence.sourcePath &&
+    preparedRemediation.diff.path === evidence.sourcePath &&
+    reportSections.join("|") === "Evidence|Inference|Confidence|Unknowns" &&
+    remediationSections.join("|") === "Evidence|Risk|Validation" &&
+    reportReferences.every((reference) => includesReference(investigation.report, reference)) &&
+    remediationReferences.every((reference) => includesReference(remediation.body, reference));
+  if (!valid) throw new TypeError("Smoke verification cross-reference contract failed.");
+
+  return smokeVerificationReceiptSchema.parse({
+    incident: investigation.incident,
+    investigationId: receipt.investigationId,
+    phases: evidenceToolNames,
+    crossReferences: {
+      traceId: evidence.inspectedTraceId,
+      releaseId: evidence.releaseId,
+      commitSha: evidence.commitSha,
+      pullRequestNumber: evidence.pullRequest.number,
+      sourcePath: evidence.sourcePath,
+      blobSha: evidence.blobSha,
+    },
+    reportSections,
+    remediation: {
+      branch: remediation.branch,
+      fingerprint: preparedRemediation.fingerprint,
+      path: preparedRemediation.diff.path,
+      additions: preparedRemediation.diff.additions,
+      deletions: preparedRemediation.diff.deletions,
+      status: remediation.status,
+      writesPerformed: remediation.writesPerformed,
+    },
+  });
+}

@@ -117,7 +117,7 @@ run = "pnpm run deploy:reset"
 
 [tasks."container:check"]
 description = "Validate the optional single-container Compose model"
-run = "docker-cli-plugin-docker-compose --file compose.yaml config --quiet"
+run = "pnpm container:check"
 
 [tasks."container:up"]
 description = "Start the optional named Colima and Compose stack"

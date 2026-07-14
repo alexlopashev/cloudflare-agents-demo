@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import { z } from "zod";
 
+import { smokeVerificationReceiptSchema } from "../workers/platform/src/verification/smoke-contract.ts";
+
 import {
   buildPlatformDeploymentConfig,
   buildEvidenceResetSql,
@@ -238,54 +240,19 @@ async function smoke(state: z.infer<typeof stateSchema>) {
     throw new Error(`Public agent smoke returned HTTP ${smokeResponse.status}.`);
   }
   const smokeResult = await smokeResponse.json();
-  const returned = z
-    .object({
-      investigation: z.object({
-        incident: z.object({
-          incidentId: z.literal(state.incidentId),
-          baselineReleaseId: z.literal(state.baselineReleaseId),
-          degradedReleaseId: z.literal(state.degradedReleaseId),
-          traceWindow: z.object({
-            sinceMs: z.literal(state.degradedSinceMs),
-            untilMs: z.literal(state.degradedUntilMs),
-          }),
-        }),
-        toolTypes: z.array(z.string()),
-        report: z.string(),
-      }),
-      remediation: z.object({
-        body: z.string(),
-        status: z.literal("preview"),
-        writesPerformed: z.literal(false),
-      }),
-    })
-    .parse(smokeResult);
-  const returnedInvestigation = returned.investigation;
-  const agentResult = z
-    .object({
-      toolTypes: z.array(z.string()).min(4),
-      report: z.string().min(1),
-    })
-    .parse(returnedInvestigation);
-  for (const tool of [
-    "compare_releases",
-    "find_slow_traces",
-    "inspect_trace",
-    "inspect_release",
-    "read_repo_files",
-  ]) {
-    if (!agentResult.toolTypes.some((type) => type.includes(tool))) {
-      throw new Error(`Public agent did not execute ${tool}.`);
-    }
-  }
+  const returned = z.object({ verification: smokeVerificationReceiptSchema }).parse(smokeResult);
+  const verification = returned.verification;
   if (
-    !agentResult.report.includes(state.incidentId) ||
-    !returned.remediation.body.includes(state.incidentId)
+    verification.incident.incidentId !== state.incidentId ||
+    verification.incident.baselineReleaseId !== state.baselineReleaseId ||
+    verification.incident.degradedReleaseId !== state.degradedReleaseId ||
+    verification.incident.traceWindow.sinceMs !== state.degradedSinceMs ||
+    verification.incident.traceWindow.untilMs !== state.degradedUntilMs
   ) {
     throw new Error("Public smoke did not preserve the configured incident identity.");
   }
   console.log(
-    `Public smoke passed at ${state.publicUrl}: routes, Workers AI mode, version ${runtime.versionId}, measured evidence IDs, ${agentResult.toolTypes.length} evidence tool events, preview performed zero writes, production GitHub writes ${runtime.githubWriteEnabled ? "enabled" : "disabled"}.`,
+    `Public smoke passed at ${state.publicUrl}: routes, Workers AI mode, version ${runtime.versionId}, measured evidence IDs, ${verification.phases.length} exact evidence phases, structured report and fingerprint ${verification.remediation.fingerprint}, preview performed zero writes, production GitHub writes ${runtime.githubWriteEnabled ? "enabled" : "disabled"}.`,
   );
 }
 

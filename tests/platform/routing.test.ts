@@ -52,11 +52,70 @@ function createBindings() {
 describe("platform routing", () => {
   it("keeps the deployed-agent smoke route keyed and invokes one isolated agent", async () => {
     const { bindings } = createBindings();
+    const incident = {
+      incidentId: "configured-latency-regression",
+      baselineReleaseId: "baseline-version",
+      degradedReleaseId: "degraded-version",
+      traceWindow: { sinceMs: 1_000, untilMs: 2_000 },
+    };
+    const commitSha = "a".repeat(40);
+    const blobSha = "b".repeat(40);
     const runLocalInvestigation = vi.fn(async () => ({
-      toolTypes: ["tool-compare_releases"],
-      report: "Evidence Inference Confidence Unknowns",
+      incident,
+      receipt: {
+        investigationId: "investigation-1",
+        incident,
+        phases: [
+          { toolName: "compare_releases", status: "complete" },
+          { toolName: "find_slow_traces", status: "complete" },
+          { toolName: "inspect_trace", status: "complete" },
+          { toolName: "inspect_release", status: "complete" },
+          { toolName: "read_repo_files", status: "complete" },
+        ],
+        evidence: {
+          baselineReleaseId: "baseline-version",
+          degradedReleaseId: "degraded-version",
+          selectedTraceId: "trace-1",
+          inspectedTraceId: "trace-1",
+          releaseId: "degraded-version",
+          commitSha,
+          pullRequest: { status: "found", number: 19 },
+          sourcePath: "workers/platform/src/api/health.ts",
+          blobSha,
+        },
+      },
+      preparedRemediation: {
+        fingerprint: "proposal-v1-0123456789abcdef",
+        proposal: {
+          incident: {
+            ...incident,
+            traceId: "trace-1",
+            regressionCommitSha: commitSha,
+            sourcePullRequestNumber: 19,
+          },
+          expectedBaseSha: commitSha,
+          expectedBlobSha: blobSha,
+          path: "workers/platform/src/api/health.ts",
+        },
+        diff: { additions: 4, deletions: 4, path: "workers/platform/src/api/health.ts" },
+      },
+      report: `## Evidence
+investigation-1 configured-latency-regression trace-1 aaaaaaa PR #19
+## Inference
+Cause.
+## Confidence
+High.
+## Unknowns
+None.`,
     }));
     const runLocalRemediationPreview = vi.fn(async () => ({
+      branch: "regression-surgeon/0123456789abcdef",
+      body: `## Evidence
+configured-latency-regression trace-1 ${commitSha} PR #19
+## Risk
+Bounded.
+## Validation
+Run gates.`,
       status: "preview",
       writesPerformed: false,
     }));
@@ -84,6 +143,37 @@ describe("platform routing", () => {
       async () => null,
     );
     expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      verification: {
+        incident,
+        investigationId: "investigation-1",
+        phases: [
+          "compare_releases",
+          "find_slow_traces",
+          "inspect_trace",
+          "inspect_release",
+          "read_repo_files",
+        ],
+        crossReferences: {
+          traceId: "trace-1",
+          releaseId: "degraded-version",
+          commitSha,
+          pullRequestNumber: 19,
+          sourcePath: "workers/platform/src/api/health.ts",
+          blobSha,
+        },
+        reportSections: ["Evidence", "Inference", "Confidence", "Unknowns"],
+        remediation: {
+          branch: "regression-surgeon/0123456789abcdef",
+          fingerprint: "proposal-v1-0123456789abcdef",
+          path: "workers/platform/src/api/health.ts",
+          additions: 4,
+          deletions: 4,
+          status: "preview",
+          writesPerformed: false,
+        },
+      },
+    });
     expect(getByName).toHaveBeenCalledExactlyOnceWith("deployment-smoke-1234567890");
     expect(runLocalInvestigation).toHaveBeenCalledOnce();
     expect(runLocalRemediationPreview).toHaveBeenCalledOnce();

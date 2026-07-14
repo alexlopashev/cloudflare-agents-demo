@@ -1,9 +1,10 @@
 import { env } from "cloudflare:workers";
-import { evictDurableObject, runInDurableObject } from "cloudflare:test";
+import { evictDurableObject, runInDurableObject, SELF } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PlatformEnvironment, RegressionSurgeonAgent } from "../../workers/platform/src/index";
 import { createTelemetryStore } from "../../workers/platform/src/telemetry/store";
+import { openAgentChatProtocol } from "../support/agent-chat-protocol";
 
 declare global {
   namespace Cloudflare {
@@ -648,6 +649,54 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     expect(result.actionFingerprint).toBe(result.preparedFingerprint);
     expect(result.actionTraceId).toBe(result.preparedTraceId);
   });
+
+  it("replays reconnect and deduplicates an approval resend", async () => {
+    await seedRegressionEvidence();
+    Reflect.set(env, "CF_VERSION_METADATA", {
+      id: "worker-test-version",
+      timestamp: "2026-07-14T12:00:00.000Z",
+    });
+    const session = "protocol-reconnect-approval";
+    const path = `/agents/regression-surgeon-agent/${session}`;
+    const requestId = "reviewer-turn-1";
+    const input =
+      "Investigate the seeded latency regression and prepare the guarded remediation preview.";
+
+    const first = await openAgentChatProtocol(SELF, path);
+    first.sendTurn(requestId, input);
+    const pending = await first.waitForApproval();
+    expect(pending.toolCallId).toMatch(/^deterministic-call-/);
+    first.close();
+
+    const reconnected = await openAgentChatProtocol(SELF, path);
+    reconnected.requestResume();
+    const replayed = await reconnected.waitForApproval();
+    reconnected.sendApproval(replayed.toolCallId, true);
+    reconnected.sendApproval(replayed.toolCallId, true);
+    await reconnected.waitForActionResult();
+    reconnected.close();
+
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName(session);
+    const persisted = await runInDurableObject<
+      RegressionSurgeonAgent,
+      { actionParts: unknown[]; userMessages: unknown[] }
+    >(stub, async (instance) => {
+      await instance.onStart();
+      const messages = await instance.getMessages();
+      return {
+        actionParts: messages
+          .flatMap((message) => message.parts)
+          .filter((part) => part.type === "tool-create_draft_pr"),
+        userMessages: messages.filter((message) => message.role === "user"),
+      };
+    });
+    expect(persisted.userMessages).toHaveLength(1);
+    expect(persisted.actionParts).toHaveLength(1);
+    expect(persisted.actionParts[0]).toMatchObject({
+      state: "output-available",
+      output: { status: "preview", writesPerformed: false },
+    });
+  }, 30_000);
 
   it("rejects a changed proposal after the receipt fingerprint is prepared", async () => {
     await seedRegressionEvidence();

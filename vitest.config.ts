@@ -10,6 +10,7 @@ export default defineConfig({
     },
   },
   test: {
+    name: "ordinary",
     include: ["tests/**/*.test.{ts,tsx}"],
     exclude: ["tests/**/*.worker.test.ts"],
   },

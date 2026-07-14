@@ -39,8 +39,9 @@ The issue #27 implementation now includes failed-turn retry, the simplified head
 forcing, and Workers-compatible GitHub fetch invocation. Later live runs recovered Workers AI access
 and reached GitHub inspection, but the supplied fine-grained token returned HTTP 403. No source read,
 proposal, branch, commit, or PR occurred; rollback and secret deletion left the public runtime
-write-disabled. Issue #42 now blocks #27 until a credential-free structured smoke and browser turn
-prove all five incident-scoped evidence phases. A real GitHub write remains optional in issue #30.
+write-disabled. The v1.2 exact-verification work now validates one shared structured receipt locally
+and in deployed smoke; #27 owns the fresh credential-free public smoke and browser turn. A real
+GitHub write remains optional in issue #30.
 
 Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its ignored
 `.local/deploy/state.json` contains the exact remote version IDs and an owner-only smoke credential.
@@ -51,12 +52,14 @@ Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its 
   regression. Repository onboarding and arbitrary incidents are deferred.
 - The public demo has no user authentication or general rate limiting. Its diagnostic smoke route is
   protected by an unguessable Worker secret and returns 404 without it.
-- Without a scoped GitHub token, D1 must first resolve the measured Worker version to the known
-  regression SHA; only then does the repository boundary use the committed commit/PR/source fixture.
+- Without a scoped GitHub token, D1 first resolves the measured Worker version to its immutable SHA;
+  the bounded production GitHub adapter then performs unauthenticated commit, PR, source, base, and
+  blob reads. Deterministic fixtures remain local verification adapters only.
 - The published runtime keeps GitHub writes disabled. A live draft PR additionally needs a narrowly
   scoped token, explicit write enablement, Project Think approval, and all server-side safety gates.
-- Live-model prose is nondeterministic. Verification asserts tool selection, evidence references,
-  preview status, and terminal output rather than exact wording.
+- Live-model prose is nondeterministic. Verification asserts exact structured phases,
+  cross-references, required report sections, remediation fingerprint, preview status, and zero
+  writes rather than exact wording.
 - The agent cannot merge, deploy a proposed change, or roll back a release.
 - Deployment incurs Cloudflare D1 and Workers AI usage and creates intermediate Worker versions while
   atomically replacing the keyed smoke secret.
