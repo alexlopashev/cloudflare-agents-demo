@@ -22,6 +22,7 @@ import {
   runtimeAttributionRetryPolicy,
   runWithFailClosedRollback,
   waitForDeploymentVersion,
+  waitForDeploymentEvidenceReady,
   type DeploymentStage,
 } from "../../scripts/deploy-lib.ts";
 
@@ -74,6 +75,9 @@ describe("Cloudflare deployment contract", () => {
     ).toHaveLength(2);
     expect(deployScript).toContain("runtimeAttributionRetryPolicy.maxAttempts");
     expect(deployScript).toContain("runtimeAttributionRetryPolicy.delayMs");
+    expect(deployScript.indexOf("await waitForDeploymentEvidenceReady")).toBeLessThan(
+      deployScript.indexOf("await requestDeploymentSmokeWithRetry"),
+    );
     expect(deployScript.match(/prepareRemoteSourceEvidence\(/g)).toHaveLength(3);
     expect(deployScript).toContain('"migrations",\n    "apply"');
     expect(deployScript).toContain('"--file",\n      sourceEvidencePath');
@@ -241,6 +245,24 @@ describe("Cloudflare deployment contract", () => {
     expect(response.status).toBe(500);
     expect(request).toHaveBeenCalledOnce();
     expect(wait).not.toHaveBeenCalled();
+  });
+
+  it("retries only the keyed side-effect-free evidence readiness gate", async () => {
+    const responses = [
+      new Response(null, { status: 503 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 204 }),
+    ];
+    const request = vi.fn(async () => responses.shift() ?? new Response(null, { status: 500 }));
+    const wait = vi.fn(async () => undefined);
+
+    await expect(waitForDeploymentEvidenceReady(request, wait)).resolves.toBeUndefined();
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(wait).toHaveBeenCalledTimes(2);
+
+    const invalid = vi.fn(async () => new Response(null, { status: 405 }));
+    await expect(waitForDeploymentEvidenceReady(invalid, wait)).rejects.toThrow(/readiness/i);
+    expect(invalid).toHaveBeenCalledOnce();
   });
 
   it("surfaces only bounded incomplete evidence phase diagnostics", () => {

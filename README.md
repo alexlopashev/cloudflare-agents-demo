@@ -154,6 +154,10 @@ Measured health then carries the expected release through a deployment-only medi
 stale edge rejects it before dependency calls or trace persistence, and the one-shot deploy stops.
 Every keyed smoke applies the same consecutive exact-version gate to the recorded secret-bearing
 investigator before it checks public routes or submits executable verification.
+It then polls a smoke-key-protected, GET-only evidence-readiness route until the configured D1
+comparison, representative trace, source receipt, and exact deployed-main preview receipt are
+readable. Only 404/503 from that side-effect-free route may retry; it cannot call Workers AI,
+remediation, GitHub, health, or telemetry writes. The executable agent smoke remains single-shot.
 
 `mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
 `mise run deploy:smoke` repeats the deployed verification. `mise run deploy:reset` deletes only the

@@ -110,9 +110,10 @@ Do not assert exact natural-language output from a live model. Assert structured
 - Explicit write enablement must preserve measured evidence, record the expected posture, and leave
   keyed smoke preview-only with zero external writes.
 - Deployment smoke endpoints require an unguessable repository-local key and return 404 without it.
-- Deployment verification may retry only that pre-execution 404 while a rotated smoke key
-  propagates. It must never retry a response that could follow Workers AI or another endpoint side
-  effect.
+- Deployment verification may retry the pre-execution smoke 404 while a rotated key propagates and
+  may poll the keyed GET-only D1 evidence-readiness route on 404/503. That route cannot call Workers
+  AI, remediation, GitHub, health, or telemetry writes. It must never retry a response that could
+  follow Workers AI or another endpoint side effect.
 - Reset operations may delete only the two measured release IDs recorded in validated deployment state.
 - A deployed gate is not complete until public routes, runtime metadata, Workers AI evidence tools,
   structured report, no-write remediation preview, and write posture all pass.
