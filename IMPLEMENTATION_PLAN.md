@@ -913,7 +913,9 @@ also carries the expected release through a narrow media type so an older or sta
 request before dependencies or persistence. Issue #64 makes the keyed smoke classify the fixed
 five-phase receipt before remediation: incomplete evidence returns only bounded phase/status
 diagnostics plus a whitelisted reason code for errors, deployment surfaces the non-complete phases,
-and preview is never invoked.
+and preview is never invoked. Issue #68 applies the same consecutive exact-version readiness gate to
+the recorded secret-bearing investigator before every keyed smoke, preventing a prior no-key edge
+from receiving executable verification.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.

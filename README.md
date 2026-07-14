@@ -152,6 +152,8 @@ the public edge reports the exact Wrangler version three consecutive times. The 
 immutable version and Git attribution and cannot execute health, telemetry, agent, or write behavior.
 Measured health then carries the expected release through a deployment-only media type; an older or
 stale edge rejects it before dependency calls or trace persistence, and the one-shot deploy stops.
+Every keyed smoke applies the same consecutive exact-version gate to the recorded secret-bearing
+investigator before it checks public routes or submits executable verification.
 
 `mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
 `mise run deploy:smoke` repeats the deployed verification. `mise run deploy:reset` deletes only the
