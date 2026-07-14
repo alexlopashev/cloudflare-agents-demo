@@ -4,6 +4,10 @@ import {
   calculateCriticalPath,
   type TraceSpan,
 } from "../../../../packages/telemetry/src/traces";
+import {
+  parseReleaseSourceEvidence,
+  type ReleaseSourceEvidence,
+} from "../../../../packages/contracts/src/source-evidence";
 
 type Outcome = "success" | "partial" | "error";
 
@@ -283,6 +287,84 @@ export function createTelemetryStore(database: D1Database, options: TelemetrySto
       return release === null
         ? null
         : { versionId: release.release_id, commitSha: release.git_sha };
+    },
+
+    async recordReleaseSourceEvidence(input: ReleaseSourceEvidence) {
+      const evidence = parseReleaseSourceEvidence(input);
+      const release = await database
+        .prepare("SELECT git_sha FROM releases WHERE release_id = ?1 LIMIT 1")
+        .bind(evidence.releaseId)
+        .first<{ git_sha: string }>();
+      if (release === null || release.git_sha !== evidence.commitSha) {
+        throw new TypeError("Release source evidence does not match its release attribution.");
+      }
+      await database
+        .prepare(
+          `INSERT INTO release_source_evidence
+            (release_id, commit_sha, commit_subject, committed_at, pull_request_number,
+             pull_request_head_sha, source_path, blob_sha, byte_length, content)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+           ON CONFLICT (release_id) DO UPDATE SET
+             commit_sha = excluded.commit_sha,
+             commit_subject = excluded.commit_subject,
+             committed_at = excluded.committed_at,
+             pull_request_number = excluded.pull_request_number,
+             pull_request_head_sha = excluded.pull_request_head_sha,
+             source_path = excluded.source_path,
+             blob_sha = excluded.blob_sha,
+             byte_length = excluded.byte_length,
+             content = excluded.content`,
+        )
+        .bind(
+          evidence.releaseId,
+          evidence.commitSha,
+          evidence.commitSubject,
+          evidence.committedAt,
+          evidence.pullRequestNumber,
+          evidence.pullRequestHeadSha,
+          evidence.sourcePath,
+          evidence.blobSha,
+          evidence.byteLength,
+          evidence.content,
+        )
+        .run();
+    },
+
+    async getReleaseSourceEvidence(releaseId: string): Promise<ReleaseSourceEvidence | null> {
+      requireId(releaseId, "Release identifier");
+      const evidence = await database
+        .prepare(
+          `SELECT release_id, commit_sha, commit_subject, committed_at, pull_request_number,
+                  pull_request_head_sha, source_path, blob_sha, byte_length, content
+           FROM release_source_evidence WHERE release_id = ?1 LIMIT 1`,
+        )
+        .bind(releaseId)
+        .first<{
+          release_id: string;
+          commit_sha: string;
+          commit_subject: string;
+          committed_at: string;
+          pull_request_number: number;
+          pull_request_head_sha: string;
+          source_path: string;
+          blob_sha: string;
+          byte_length: number;
+          content: string;
+        }>();
+      return evidence === null
+        ? null
+        : parseReleaseSourceEvidence({
+            releaseId: evidence.release_id,
+            commitSha: evidence.commit_sha,
+            commitSubject: evidence.commit_subject,
+            committedAt: evidence.committed_at,
+            pullRequestNumber: evidence.pull_request_number,
+            pullRequestHeadSha: evidence.pull_request_head_sha,
+            sourcePath: evidence.source_path,
+            blobSha: evidence.blob_sha,
+            byteLength: evidence.byte_length,
+            content: evidence.content,
+          });
     },
 
     async compareReleases(input: {

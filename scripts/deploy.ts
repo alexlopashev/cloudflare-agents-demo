@@ -6,11 +6,14 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import { smokeVerificationReceiptSchema } from "../workers/platform/src/verification/smoke-contract.ts";
+import { configuredSourceEvidencePolicy } from "../packages/contracts/src/source-evidence.ts";
 
 import {
   buildDeploymentInteractionId,
   buildPlatformDeploymentConfig,
+  buildConfiguredSourceEvidence,
   buildEvidenceResetSql,
+  buildReleaseSourceEvidenceSql,
   deploymentSmokeRetryPolicy,
   deploymentSmokeFailureMessage,
   deploymentVersionPropagationPolicy,
@@ -62,6 +65,20 @@ function run(command: string, args: string[]): string {
   return output;
 }
 
+function capture(command: string, args: string[]): string {
+  const result = spawnSync(command, args, {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    env: { ...process.env, CI: "1" },
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `${command} ${args.join(" ")} failed with status ${result.status ?? "unknown"}.`,
+    );
+  }
+  return result.stdout ?? "";
+}
+
 function writeConfig(config: ReturnType<typeof buildPlatformDeploymentConfig>) {
   mkdirSync(deploymentDirectory, { recursive: true });
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
@@ -75,6 +92,69 @@ function findOrCreateDatabase(): string {
     return parseD1DatabaseId(
       run("wrangler", ["d1", "create", "regression-surgeon-telemetry", "--location", "wnam"]),
     );
+  }
+}
+
+function readConfiguredSourceEvidence(releaseId: string) {
+  const policy = configuredSourceEvidencePolicy;
+  const readCommit = (sha: string) => ({
+    sha,
+    content: capture("git", ["show", `${sha}:${policy.sourcePath}`]),
+    blobSha: capture("git", ["rev-parse", `${sha}:${policy.sourcePath}`]).trim(),
+  });
+  return buildConfiguredSourceEvidence({
+    releaseId,
+    regression: {
+      ...readCommit(policy.regressionCommitSha),
+      subject: capture("git", ["show", "-s", "--format=%s", policy.regressionCommitSha]).trim(),
+      committedAt: capture("git", [
+        "show",
+        "-s",
+        "--format=%cI",
+        policy.regressionCommitSha,
+      ]).trim(),
+    },
+    head: readCommit(policy.pullRequestHeadSha),
+    base: readCommit(policy.pullRequestBaseSha),
+  });
+}
+
+function prepareRemoteSourceEvidence(databaseId: string, degradedReleaseId: string) {
+  writeConfig(
+    buildPlatformDeploymentConfig({
+      databaseId,
+      repositoryRoot,
+      stage: { kind: "regression", gitSha: regressionGitSha },
+    }),
+  );
+  run("wrangler", [
+    "d1",
+    "migrations",
+    "apply",
+    "regression-surgeon-telemetry",
+    "--remote",
+    "--config",
+    configPath,
+  ]);
+  const sourceEvidencePath = resolve(deploymentDirectory, "source-evidence.sql");
+  writeFileSync(
+    sourceEvidencePath,
+    `${buildReleaseSourceEvidenceSql(readConfiguredSourceEvidence(degradedReleaseId))}\n`,
+    { mode: 0o600 },
+  );
+  try {
+    run("wrangler", [
+      "d1",
+      "execute",
+      "regression-surgeon-telemetry",
+      "--remote",
+      "--config",
+      configPath,
+      "--file",
+      sourceEvidencePath,
+    ]);
+  } finally {
+    rmSync(sourceEvidencePath, { force: true });
   }
 }
 
@@ -344,6 +424,7 @@ async function deploy() {
   );
   await assertDeployedVersion(degraded.url, degraded.versionId);
   const degradedWindow = await seedMeasuredTraffic(degraded.url, degraded.versionId, "degraded");
+  prepareRemoteSourceEvidence(databaseId, degraded.versionId);
 
   const deployedGitSha = run("git", ["rev-parse", "HEAD"]).trim();
   const smokeKey = crypto.randomUUID();
@@ -420,6 +501,7 @@ async function refreshInvestigator(githubWriteEnabled = false) {
   if (githubWriteEnabled) assertGitHubWriteSecret();
   run("pnpm", ["build"]);
   const previous = refreshStateSchema.parse(JSON.parse(readFileSync(statePath, "utf8")));
+  prepareRemoteSourceEvidence(previous.databaseId, previous.degradedReleaseId);
   const deployedGitSha = run("git", ["rev-parse", "HEAD"]).trim();
   if (!githubWriteEnabled) {
     await smoke(deployRefreshedInvestigator(previous, deployedGitSha, false));

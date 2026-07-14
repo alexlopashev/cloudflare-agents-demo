@@ -1,5 +1,6 @@
 import { regressionSource } from "../../../../packages/test-fixtures/src/scenario";
 import { regressionHealthSource } from "../../../../packages/test-fixtures/src/remediation";
+import type { ReleaseSourceEvidence } from "../../../../packages/contracts/src/source-evidence";
 import { RepositoryConnectorError } from "../github";
 import { createLiveEvidenceServices } from "./live-evidence-services";
 import type { InvestigationEvidenceServices } from "./tools";
@@ -11,6 +12,7 @@ type EvidenceStore = InvestigationEvidenceServices["telemetry"] & {
     versionId: string;
     commitSha: string;
   } | null>;
+  getReleaseSourceEvidence(releaseId: string): Promise<ReleaseSourceEvidence | null>;
 };
 
 export type EvidenceServiceOptions = {
@@ -18,6 +20,7 @@ export type EvidenceServiceOptions = {
   store: EvidenceStore;
   fetcher?: (request: Request) => Promise<Response>;
   token?: string;
+  sourceReleaseId?: string;
 };
 
 const regressionFile = {
