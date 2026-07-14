@@ -981,6 +981,9 @@ write-capable path.
 Issue #105 preserves the exact ordered four-section report contract while recognizing bounded
 line-level ATX Markdown, bold, and colon-label heading forms produced by live Workers AI. It does not
 inspect section prose and still rejects missing, duplicate, reordered, embedded, or renamed sections.
+Issue #107 makes the complete-receipt transition explicit: the same Project Think turn receives no
+active tools on its final step and must produce the required report. This prevents redundant evidence
+calls or an empty report without adding a second turn, retry, or server-authored prose.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1183,6 +1186,8 @@ Work packages:
   (#103, implementation complete pending the public smoke).
 - Recognize bounded live heading forms without weakening the exact four-section report contract
   (#105, implementation complete pending the public smoke).
+- Remove all tools from the same turn's final step after its evidence receipt completes (#107,
+  implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:

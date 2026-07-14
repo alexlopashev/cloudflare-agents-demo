@@ -334,7 +334,10 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
           system: `Submit the exact prepared remediation through create_draft_pr now. Do not replace or omit its receipt-bound input.\n\n${this.getSystemPrompt()}`,
         };
       }
-      return { system: this.getSystemPrompt() };
+      return {
+        activeTools: [],
+        system: `${this.getSystemPrompt()}\n\nThe evidence receipt is complete. Produce the required final report now without calling another tool.`,
+      };
     }
     return {
       activeTools: [requiredTool],

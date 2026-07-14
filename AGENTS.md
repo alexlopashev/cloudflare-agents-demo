@@ -53,6 +53,8 @@ The following invariants are especially important and must remain covered.
 - Once an investigation begins, the Project Think step policy forces each next missing evidence
   capability before final text, retries a bounded evidence failure at most once, and recovers its
   phase from persisted tool history without double-counting current-step results.
+- Once all five evidence phases complete, the same turn removes every tool from the final step so it
+  must produce the structured report without redundant evidence calls or another turn.
 - All five configured evidence tools derive selectors from runtime configuration or the persisted
   receipt; model arguments cannot substitute releases, windows, traces, commits, or paths.
 - The agent cannot propose a fix without telemetry and release evidence.
