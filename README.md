@@ -164,17 +164,17 @@ browser-local storage.
 
 No GitHub token is copied from `gh` or uploaded by the deployment task. In the credential-free public
 posture, D1 resolves the real Worker version to an immutable commit SHA. The bounded production
-adapter reads that commit's public patch plus only requested allowlisted raw source at the same SHA,
-computes the Git blob identity locally, and marks PR author/base/merge metadata unknown when the
-patch cannot prove it; the commit subject is not relabeled as a PR title. This avoids shared
-unauthenticated REST quota without adding a credential or fabricating evidence. For the configured
-incident, the source receipt binds to `workers/platform/src/api/health.ts` even when other allowlisted
-files occur earlier in the regression commit; it does not infer a remediation target from change
-order. Preview freshness reads the bounded public `main` Atom feed, then compares the
-allowlisted raw file at the evidenced and current immutable SHAs; tree metadata remains mandatory for
-the separate write-enabled path. A supplied scoped token may use bounded REST reads; external writes
-additionally require `GITHUB_WRITE_ENABLED=true`, explicit Project Think approval, and all
-repository/path/SHA/blob/size gates. The published demo deliberately keeps that flag false, so
+adapter reads only the configured PR #19 patch, requires its one immutable expected head, and reads
+only `workers/platform/src/api/health.ts` at that head and the D1-attributed regression SHA. Exact
+bytes and locally computed Git blob identities must match before PR #19 becomes provenance for that
+source. Commit message/date/author and PR title/author/base/merge metadata remain explicit unknowns;
+head metadata is never relabeled as regression metadata. This avoids shared unauthenticated REST
+quota without adding a credential or fabricating evidence. Other PR changes are bounded and parsed
+but cannot become release evidence. Preview freshness reads the bounded public `main` Atom feed, then
+compares the allowlisted raw file at the evidenced and current immutable SHAs; tree metadata remains
+mandatory for the separate write-enabled path. A supplied scoped token may use bounded REST reads;
+external writes additionally require `GITHUB_WRITE_ENABLED=true`, explicit Project Think approval,
+and all repository/path/SHA/blob/size gates. The published demo deliberately keeps that flag false, so
 approval yields a preview and cannot create or merge a pull request.
 
 #### Optional live draft PR

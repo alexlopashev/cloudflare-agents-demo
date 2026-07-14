@@ -10,6 +10,11 @@ type GitHubPublicFetchApiOptions = {
   fetcher?: Fetcher;
   repository: { owner: string; repo: string };
   maxResponseBytes: number;
+  provenance?: {
+    pullRequestNumber: number;
+    pullRequestHeadSha: string;
+    sourcePath: string;
+  };
 };
 
 const repositorySchema = z
@@ -20,6 +25,17 @@ const repositorySchema = z
   .strict();
 const immutableSha = z.string().regex(/^[0-9a-f]{40}$/i);
 
+type ConfiguredProvenance = {
+  sha: string;
+  pullRequestHeadSha: string;
+  files: {
+    filename: string;
+    status: "added" | "modified" | "removed";
+    additions: number;
+    deletions: number;
+  }[];
+};
+
 function malformed(label: string): RepositoryConnectorError {
   return new RepositoryConnectorError("malformed-response", `${label} did not match its contract.`);
 }
@@ -29,12 +45,30 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
   readonly maxResponseBytes: number;
   readonly #fetcher: Fetcher;
   readonly #owner: string;
+  readonly #provenance:
+    | {
+        pullRequestNumber: number;
+        pullRequestHeadSha: string;
+        sourcePath: string;
+      }
+    | undefined;
+  readonly #provenanceRequests = new Map<string, Promise<ConfiguredProvenance>>();
   readonly #repo: string;
 
   constructor(options: GitHubPublicFetchApiOptions) {
     const repository = repositorySchema.safeParse(options.repository);
+    const provenance = z
+      .object({
+        pullRequestNumber: z.number().int().positive(),
+        pullRequestHeadSha: immutableSha,
+        sourcePath: z.string().min(1).max(512).refine(isSafeRepositoryPath),
+      })
+      .strict()
+      .optional()
+      .safeParse(options.provenance);
     if (
       !repository.success ||
+      !provenance.success ||
       !Number.isSafeInteger(options.maxResponseBytes) ||
       options.maxResponseBytes <= 0
     ) {
@@ -43,27 +77,36 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
     this.#fetcher = options.fetcher ?? fetch;
     this.#owner = repository.data.owner;
     this.#repo = repository.data.repo;
+    this.#provenance =
+      provenance.data === undefined
+        ? undefined
+        : {
+            ...provenance.data,
+            pullRequestHeadSha: provenance.data.pullRequestHeadSha.toLowerCase(),
+          };
     this.repository = { owner: this.#owner, repo: this.#repo };
     this.maxResponseBytes = options.maxResponseBytes;
   }
 
   async getCommit(commitSha: string, pageSize: number): Promise<unknown> {
-    const parsed = await this.#readPatch(commitSha);
     if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
       throw new RepositoryConnectorError("invalid-input", "GitHub page size is invalid.");
     }
+    const parsed = await this.#readConfiguredProvenance(commitSha);
     if (parsed.files.length > pageSize) {
       throw new RepositoryConnectorError("limit-exceeded", "Commit changed-file limit exceeded.");
     }
+    const sourceFile = parsed.files.find((file) => file.filename === this.#provenance?.sourcePath);
+    if (sourceFile === undefined) throw malformed("GitHub configured PR source");
     return {
+      source: "configured-pr-provenance",
       sha: parsed.sha,
       html_url: `https://github.com/${this.#owner}/${this.#repo}/commit/${parsed.sha}`,
-      commit: {
-        message: parsed.subject,
-        committer: { date: parsed.committedAt },
+      metadata: {
+        status: "partial",
+        unknowns: ["message", "committed-at", "author-login"],
       },
-      author: null,
-      files: parsed.files,
+      files: [sourceFile],
     };
   }
 
@@ -71,18 +114,14 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
     if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
       throw new RepositoryConnectorError("invalid-input", "GitHub page size is invalid.");
     }
-    const parsed = await this.#readPatch(commitSha);
-    const match = /\s\(#([1-9]\d*)\)$/.exec(parsed.subject);
-    if (match?.[1] === undefined) return [];
-    const number = Number.parseInt(match[1], 10);
-    if (!Number.isSafeInteger(number)) throw malformed("GitHub public patch");
+    const parsed = await this.#readConfiguredProvenance(commitSha);
+    const provenance = this.#requireProvenance();
     return [
       {
-        source: "public-patch",
-        number,
-        commitSubject: parsed.subject.slice(0, match.index),
-        html_url: `https://github.com/${this.#owner}/${this.#repo}/pull/${number}`,
-        head: { sha: parsed.sha },
+        source: "configured-pr-provenance",
+        number: provenance.pullRequestNumber,
+        html_url: `https://github.com/${this.#owner}/${this.#repo}/pull/${provenance.pullRequestNumber}`,
+        head: { sha: parsed.pullRequestHeadSha },
       },
     ];
   }
@@ -92,12 +131,7 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
     if (!isSafeRepositoryPath(path)) {
       throw new RepositoryConnectorError("not-allowed", "Repository path is not allowed.");
     }
-    const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-    const url = new URL(
-      `/${encodeURIComponent(this.#owner)}/${encodeURIComponent(this.#repo)}/${sha}/${encodedPath}`,
-      "https://raw.githubusercontent.com",
-    );
-    const bytes = await this.#requestBytes(url);
+    const bytes = await this.#readRawFile(sha, path);
     let content: string;
     try {
       content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -138,11 +172,23 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
     return { sha: parsed.data.toLowerCase() };
   }
 
-  async #readPatch(commitSha: string) {
+  async #readConfiguredProvenance(commitSha: string): Promise<ConfiguredProvenance> {
     const sha = this.#requireSha(commitSha);
+    const existing = this.#provenanceRequests.get(sha);
+    if (existing !== undefined) return existing;
+    const request = this.#loadConfiguredProvenance(sha).catch((error: unknown) => {
+      this.#provenanceRequests.delete(sha);
+      throw error;
+    });
+    this.#provenanceRequests.set(sha, request);
+    return request;
+  }
+
+  async #loadConfiguredProvenance(sha: string): Promise<ConfiguredProvenance> {
+    const provenance = this.#requireProvenance();
     const url = new URL(
-      `/${encodeURIComponent(this.#owner)}/${encodeURIComponent(this.#repo)}/commit/${sha}.patch`,
-      "https://github.com",
+      `/raw/${encodeURIComponent(this.#owner)}/${encodeURIComponent(this.#repo)}/pull/${provenance.pullRequestNumber}.patch`,
+      "https://patch-diff.githubusercontent.com",
     );
     const bytes = await this.#requestBytes(url);
     let text: string;
@@ -151,24 +197,21 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
     } catch {
       throw malformed("GitHub public patch");
     }
-    const headerEnd = text.indexOf("\n\n");
-    if (headerEnd < 0 || !text.startsWith(`From ${sha} Mon Sep 17 00:00:00 2001\n`)) {
-      throw malformed("GitHub public patch");
+    const commitHeaders = Array.from(
+      text.matchAll(/^From ([0-9a-f]{40}) Mon Sep 17 00:00:00 2001$/gim),
+    );
+    if (
+      commitHeaders.length !== 1 ||
+      commitHeaders[0]?.index !== 0 ||
+      commitHeaders[0]?.[1]?.toLowerCase() !== provenance.pullRequestHeadSha
+    ) {
+      throw malformed("GitHub configured PR patch");
     }
-    const headers = text.slice(0, headerEnd).split("\n");
-    const date = headers.find((line) => line.startsWith("Date: "))?.slice(6);
-    const subjectHeader = headers.find((line) => line.startsWith("Subject: "))?.slice(9);
-    const timestamp = date === undefined ? Number.NaN : Date.parse(date);
-    if (subjectHeader === undefined || !Number.isFinite(timestamp)) {
-      throw malformed("GitHub public patch");
-    }
-    const subject = subjectHeader.replace(/^\[PATCH\]\s+/, "");
-    if (subject.length === 0 || subject.length > 1_024) throw malformed("GitHub public patch");
 
     const allDiffLines = text.match(/^diff --git .+$/gm) ?? [];
     const matches = Array.from(text.matchAll(/^diff --git a\/([^\s]+) b\/([^\s]+)$/gm));
     if (matches.length === 0 || matches.length !== allDiffLines.length) {
-      throw malformed("GitHub public patch");
+      throw malformed("GitHub configured PR patch");
     }
     const files = matches.map((match, index) => {
       const left = match[1];
@@ -179,7 +222,7 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
         left !== right ||
         !isSafeRepositoryPath(left)
       ) {
-        throw malformed("GitHub public patch path");
+        throw malformed("GitHub configured PR patch path");
       }
       const start = match.index + match[0].length;
       const end = matches[index + 1]?.index ?? text.length;
@@ -197,7 +240,50 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
         deletions,
       };
     });
-    return { sha, subject, committedAt: new Date(timestamp).toISOString(), files };
+    if (!files.some((file) => file.filename === provenance.sourcePath)) {
+      throw malformed("GitHub configured PR source");
+    }
+    const [headBytes, regressionBytes] = await Promise.all([
+      this.#readRawFile(provenance.pullRequestHeadSha, provenance.sourcePath),
+      this.#readRawFile(sha, provenance.sourcePath),
+    ]);
+    if (
+      headBytes.byteLength !== regressionBytes.byteLength ||
+      headBytes.some((byte, index) => byte !== regressionBytes[index])
+    ) {
+      throw malformed("GitHub configured PR source equality");
+    }
+    const [headBlobSha, regressionBlobSha] = await Promise.all([
+      this.#gitBlobSha(headBytes),
+      this.#gitBlobSha(regressionBytes),
+    ]);
+    if (headBlobSha !== regressionBlobSha) {
+      throw malformed("GitHub configured PR source identity");
+    }
+    return {
+      sha,
+      pullRequestHeadSha: provenance.pullRequestHeadSha,
+      files,
+    };
+  }
+
+  #requireProvenance() {
+    if (this.#provenance === undefined) {
+      throw new RepositoryConnectorError(
+        "invalid-input",
+        "GitHub configured PR provenance is required for release inspection.",
+      );
+    }
+    return this.#provenance;
+  }
+
+  async #readRawFile(sha: string, path: string): Promise<Uint8Array> {
+    const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+    const url = new URL(
+      `/${encodeURIComponent(this.#owner)}/${encodeURIComponent(this.#repo)}/${sha}/${encodedPath}`,
+      "https://raw.githubusercontent.com",
+    );
+    return this.#requestBytes(url);
   }
 
   #requireSha(value: string): string {

@@ -7,6 +7,12 @@ import {
 import type { EvidenceServiceOptions } from "./evidence-services";
 import type { InvestigationEvidenceServices } from "./tools";
 
+const configuredPublicProvenance = {
+  pullRequestNumber: 19,
+  pullRequestHeadSha: "9af361e5a9420323b2c86f2670e3bf812ac58620",
+  sourcePath: "workers/platform/src/api/health.ts",
+} as const;
+
 export function createLiveEvidenceServices(
   options: EvidenceServiceOptions,
 ): InvestigationEvidenceServices {
@@ -17,6 +23,7 @@ export function createLiveEvidenceServices(
       ? new GitHubPublicFetchApi({
           repository: options.repository,
           maxResponseBytes: 64 * 1_024,
+          provenance: configuredPublicProvenance,
           ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
         })
       : new GitHubFetchApi({

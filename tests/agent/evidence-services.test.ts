@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createAgentEvidenceServices } from "../../workers/platform/src/agent/evidence-services";
 
 const regressionSha = "d591869a8ef995f1835ef80152f4de085b10255b";
+const pullRequestHeadSha = "9af361e5a9420323b2c86f2670e3bf812ac58620";
 
 function telemetryStore() {
   return {
@@ -59,8 +60,8 @@ describe("agent evidence services", () => {
     const store = telemetryStore();
     const fetcher = vi.fn(async (request: Request) => {
       const url = new URL(request.url);
-      if (url.hostname === "github.com") {
-        return new Response(`From ${regressionSha} Mon Sep 17 00:00:00 2001
+      if (url.hostname === "patch-diff.githubusercontent.com") {
+        return new Response(`From ${pullRequestHeadSha} Mon Sep 17 00:00:00 2001
 From: Sasha <sasha@example.test>
 Date: Sat, 11 Jul 2026 18:42:21 -0700
 Subject: [PATCH] perf: serialize health checks (#19)
@@ -92,8 +93,21 @@ index 0000000..1111111 100644
     await expect(
       services.repository.inspectRelease("regression-sequential"),
     ).resolves.toMatchObject({
-      commit: { sha: regressionSha },
-      pullRequest: { status: "found", number: 19 },
+      commit: {
+        sha: regressionSha,
+        message: null,
+        committedAt: null,
+        authorLogin: null,
+        metadata: {
+          status: "partial",
+          unknowns: ["message", "committed-at", "author-login"],
+        },
+      },
+      pullRequest: {
+        status: "found",
+        number: 19,
+        headSha: pullRequestHeadSha,
+      },
     });
     await expect(
       services.repository.readFiles({
@@ -103,12 +117,15 @@ index 0000000..1111111 100644
     ).resolves.toMatchObject([
       { path: "workers/platform/src/api/health.ts", content: "sequential\n" },
     ]);
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(4);
     expect(fetcher.mock.calls.every(([request]) => !request.headers.has("authorization"))).toBe(
       true,
     );
     expect(
       fetcher.mock.calls.some(([request]) => new URL(request.url).hostname === "api.github.com"),
+    ).toBe(false);
+    expect(
+      fetcher.mock.calls.some(([request]) => new URL(request.url).hostname === "github.com"),
     ).toBe(false);
   });
 

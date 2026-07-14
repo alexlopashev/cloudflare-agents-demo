@@ -850,9 +850,11 @@ permission, and preview/write-scoped incident idempotency. The
 server-side service validates configured repository and path, matching regression/base SHA, current
 blob SHA, replacement byte and line bounds, changed-line count, draft-only output, evidence-rich body,
 and deterministic branch state. Fake mode always returns a validated preview without network access.
-Credential-free live reads use bounded immutable public patch/raw evidence and compute the Git blob
-identity locally; PR metadata unavailable from the patch, including the exact PR title, remains
-explicitly partial. Write-disabled
+Credential-free live release inspection reads only configured PR #19's bounded patch and
+`workers/platform/src/api/health.ts` at its immutable expected head and the D1-attributed regression
+SHA. Exact bytes and locally computed Git blob identities must match before that PR becomes source
+provenance. Unavailable regression commit and PR metadata remains explicitly partial rather than
+borrowing the PR head's metadata. Write-disabled
 preview validation resolves the current `main` SHA from its bounded public Atom feed and compares only
 the allowlisted source at the evidenced and current immutable SHAs. Tree metadata remains mandatory
 for writes. A normalized scoped token selects the bounded REST adapter, is required before writes can
@@ -919,8 +921,9 @@ also carries the expected release through a narrow media type so an older or sta
 request before dependencies or persistence. Issue #64 makes the keyed smoke classify the fixed
 five-phase receipt before remediation: incomplete evidence returns only bounded phase/status
 diagnostics plus a whitelisted reason code for errors, deployment surfaces the non-complete phases,
-and preview is never invoked. Credential-free live evidence uses the exact commit's bounded public
-patch and allowlisted raw source instead of shared unauthenticated REST quota; incomplete PR metadata
+and preview is never invoked. Credential-free live evidence uses configured PR #19's bounded public
+patch and proves the exact remediation source matches at the immutable PR head and D1-attributed
+regression SHA instead of using shared unauthenticated REST quota; incomplete commit and PR metadata
 remains explicit rather than fabricated. Its write-disabled remediation preview resolves `main` from
 the bounded public Atom feed and validates the allowlisted file at immutable SHAs. Issue #71 binds
 the one configured incident to its exact `workers/platform/src/api/health.ts` remediation source
@@ -931,6 +934,9 @@ applies the same consecutive exact-version readiness gate to the recorded secret
 before every keyed smoke, preventing a prior no-key edge from receiving executable verification.
 Issue #75 distinguishes an invalid receipt shape from missing preparation using only whitelisted
 contract-surface names, without returning values, validation messages, secrets, or model prose.
+Issue #77 replaces the unavailable credential-free commit-patch origin with configured PR #19's
+bounded patch and exact immutable `health.ts` source equality; it does not generalize PR discovery,
+repository paths, or release selection.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1102,6 +1108,9 @@ Work packages:
   implemented).
 - Diagnose incomplete live evidence with bounded phase statuses before remediation, then restore the
   exact five-phase public smoke (#64, diagnostic implemented; live recovery in progress).
+- Bind source selection and server-authoritative evidence selectors, expose bounded invalid receipt
+  diagnostics, and prove configured PR provenance by exact immutable source equality (#71, #73, #75,
+  and #77; implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:
