@@ -10,6 +10,12 @@ export const runtimeAttributionRetryPolicy = Object.freeze({
   delayMs: 750,
 });
 
+export const deploymentVersionPropagationPolicy = Object.freeze({
+  maxAttempts: 80,
+  delayMs: 750,
+  consecutiveMatches: 3,
+});
+
 export const deploymentSmokeRetryPolicy = Object.freeze({
   maxAttempts: 16,
   delayMs: 750,
@@ -49,13 +55,20 @@ export async function waitForDeploymentVersion(
 ): Promise<void> {
   const expected = uuidSchema.safeParse(expectedVersion);
   if (!expected.success) throw new TypeError("Expected deployment version is invalid.");
-  for (let attempt = 0; attempt < runtimeAttributionRetryPolicy.maxAttempts; attempt += 1) {
+  let consecutiveMatches = 0;
+  for (let attempt = 0; attempt < deploymentVersionPropagationPolicy.maxAttempts; attempt += 1) {
     try {
-      if ((await readVersion()) === expected.data) return;
+      if ((await readVersion()) === expected.data) {
+        consecutiveMatches += 1;
+        if (consecutiveMatches >= deploymentVersionPropagationPolicy.consecutiveMatches) return;
+      } else {
+        consecutiveMatches = 0;
+      }
     } catch {
+      consecutiveMatches = 0;
       // The read-only version route can be unavailable while the edge changes versions.
     }
-    if (attempt < runtimeAttributionRetryPolicy.maxAttempts - 1) await wait();
+    if (attempt < deploymentVersionPropagationPolicy.maxAttempts - 1) await wait();
   }
   throw new Error(`Deployment version ${expected.data} did not reach the public edge.`);
 }

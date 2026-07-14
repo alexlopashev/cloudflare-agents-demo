@@ -908,7 +908,9 @@ effect. Each measured interaction identifier includes the immutable Worker versi
 deployments cannot collide with historical sample ordinals. Side-effect-free runtime identity
 polling remains isolated from those request paths. A narrow readiness route exposes only immutable
 version/Git attribution so deployment can wait for the exact baseline or degraded version at the
-public edge before starting any measured POST.
+public edge for three consecutive observations before starting any measured POST. Deployment health
+also carries the expected release through a narrow media type so an older or stale edge rejects the
+request before dependency calls or trace persistence.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -917,6 +919,7 @@ public edge before starting any measured POST.
 - Attempt each measured health and telemetry POST exactly once and fail visibly on any error.
 - Scope each deployment interaction identifier to its immutable Worker version and sample ordinal.
 - Poll exact public edge version/Git readiness before starting either measured sequence.
+- Reject stale deployment health before dependencies or trace persistence without retrying it.
 - Deploy the public investigator.
 - Perform the complete reviewer walkthrough.
 

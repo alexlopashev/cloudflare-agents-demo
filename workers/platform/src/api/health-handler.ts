@@ -20,6 +20,7 @@ export type HealthApiOptions = {
 };
 
 const bodyLimit = 2_048;
+const deploymentHealthMediaType = "application/vnd.regression-surgeon.deployment-health+json";
 
 function errorResponse(status: number, code: string, message: string, headers: HeadersInit = {}) {
   return Response.json(
@@ -75,8 +76,20 @@ export async function handleHealthApiRequest(
     .split(";", 1)[0]
     ?.trim()
     .toLowerCase();
-  if (mediaType !== "application/json") {
+  const expectedRelease = request.headers.get("x-deployment-expected-release");
+  const expectedMediaType =
+    expectedRelease === null ? "application/json" : deploymentHealthMediaType;
+  if (mediaType !== expectedMediaType) {
     return errorResponse(415, "unsupported-media-type", "Use an application/json request body.");
+  }
+  if (expectedRelease !== null) {
+    const parsedExpectedRelease = evidenceIdSchema.safeParse(expectedRelease);
+    if (!parsedExpectedRelease.success) {
+      return errorResponse(400, "invalid-expected-release", "Expected release is invalid.");
+    }
+    if (parsedExpectedRelease.data !== options.releaseId) {
+      return errorResponse(409, "release-not-ready", "Expected release has not reached this edge.");
+    }
   }
 
   let text: string | null;

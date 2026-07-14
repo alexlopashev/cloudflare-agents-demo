@@ -8,6 +8,7 @@ import {
   buildPlatformDeploymentConfig,
   buildEvidenceResetSql,
   deploymentSmokeRetryPolicy,
+  deploymentVersionPropagationPolicy,
   parseD1DatabaseId,
   parseDeploymentResult,
   parseGitHubWriteSecretInventory,
@@ -56,6 +57,10 @@ describe("Cloudflare deployment contract", () => {
     );
     expect(deployScript).toContain("await assertDeployedVersion(baseline.url, baseline.versionId)");
     expect(deployScript).toContain("await assertDeployedVersion(degraded.url, degraded.versionId)");
+    expect(deployScript).toContain(
+      '"content-type": "application/vnd.regression-surgeon.deployment-health+json"',
+    );
+    expect(deployScript).toContain('"x-deployment-expected-release": expectedReleaseId');
     expect(
       deployScript.match(/if \(githubWriteEnabled\) assertGitHubWriteSecret\(\);/g),
     ).toHaveLength(2);
@@ -252,23 +257,30 @@ describe("Cloudflare deployment contract", () => {
   });
 
   it("polls only immutable version identity before measured traffic", async () => {
-    const versions = [degradedVersionId, undefined, baselineVersionId];
+    const versions = [
+      baselineVersionId,
+      degradedVersionId,
+      baselineVersionId,
+      baselineVersionId,
+      baselineVersionId,
+    ];
     const readVersion = vi.fn(async () => versions.shift());
     const wait = vi.fn(async () => undefined);
 
     await expect(
       waitForDeploymentVersion(readVersion, baselineVersionId, wait),
     ).resolves.toBeUndefined();
-    expect(readVersion).toHaveBeenCalledTimes(3);
-    expect(wait).toHaveBeenCalledTimes(2);
+    expect(readVersion).toHaveBeenCalledTimes(5);
+    expect(wait).toHaveBeenCalledTimes(4);
+    expect(deploymentVersionPropagationPolicy.consecutiveMatches).toBe(3);
 
     const staleVersion = vi.fn(async () => degradedVersionId);
     const boundedWait = vi.fn(async () => undefined);
     await expect(
       waitForDeploymentVersion(staleVersion, baselineVersionId, boundedWait),
     ).rejects.toThrow(/did not reach the public edge/i);
-    expect(staleVersion).toHaveBeenCalledTimes(runtimeAttributionRetryPolicy.maxAttempts);
-    expect(boundedWait).toHaveBeenCalledTimes(runtimeAttributionRetryPolicy.maxAttempts - 1);
+    expect(staleVersion).toHaveBeenCalledTimes(deploymentVersionPropagationPolicy.maxAttempts);
+    expect(boundedWait).toHaveBeenCalledTimes(deploymentVersionPropagationPolicy.maxAttempts - 1);
   });
 
   it("bounds repeated propagation-only smoke responses", async () => {

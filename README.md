@@ -148,8 +148,10 @@ automation never replays an endpoint that may already have recorded telemetry or
 Each interaction identifier includes its immutable Worker version, so a later deployment cannot
 collide with or rewrite historical evidence for the same sample ordinal.
 Before either measured sequence begins, deployment polls a side-effect-free readiness route until
-the public edge reports the exact Wrangler version. The route exposes only immutable version and Git
-attribution and cannot execute health, telemetry, agent, or write behavior.
+the public edge reports the exact Wrangler version three consecutive times. The route exposes only
+immutable version and Git attribution and cannot execute health, telemetry, agent, or write behavior.
+Measured health then carries the expected release through a deployment-only media type; an older or
+stale edge rejects it before dependency calls or trace persistence, and the one-shot deploy stops.
 
 `mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
 `mise run deploy:smoke` repeats the deployed verification. `mise run deploy:reset` deletes only the
