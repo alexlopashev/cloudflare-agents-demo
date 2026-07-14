@@ -8,6 +8,7 @@ import { z } from "zod";
 import { smokeVerificationReceiptSchema } from "../workers/platform/src/verification/smoke-contract.ts";
 
 import {
+  buildDeploymentInteractionId,
   buildPlatformDeploymentConfig,
   buildEvidenceResetSql,
   deploymentSmokeRetryPolicy,
@@ -162,11 +163,15 @@ async function assertRuntimeAttribution(state: z.infer<typeof stateSchema>) {
   throw new Error("The exact deployed runtime did not reach the edge.");
 }
 
-async function seedMeasuredTraffic(url: string, expectedReleaseId: string, label: string) {
+async function seedMeasuredTraffic(
+  url: string,
+  expectedReleaseId: string,
+  label: "baseline" | "degraded",
+) {
   const startedAtMs = Date.now();
   const durations: number[] = [];
   for (let sample = 0; sample < 20; sample += 1) {
-    const interactionId = `${label}-${String(sample + 1).padStart(2, "0")}`;
+    const interactionId = buildDeploymentInteractionId(label, expectedReleaseId, sample + 1);
     const startedAt = performance.now();
     const response = await requestDeploymentEndpointOnce(
       async () =>

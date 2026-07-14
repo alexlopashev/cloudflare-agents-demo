@@ -15,6 +15,19 @@ export const deploymentSmokeRetryPolicy = Object.freeze({
   delayMs: 750,
 });
 
+export function buildDeploymentInteractionId(
+  label: "baseline" | "degraded",
+  releaseId: string,
+  sampleNumber: number,
+): string {
+  const release = uuidSchema.safeParse(releaseId);
+  if (!release.success) throw new TypeError("Deployment release identifier is invalid.");
+  if (!Number.isInteger(sampleNumber) || sampleNumber < 1 || sampleNumber > 20) {
+    throw new RangeError("Deployment sample number must be between 1 and 20.");
+  }
+  return `${label}-${release.data}-${String(sampleNumber).padStart(2, "0")}`;
+}
+
 export async function requestDeploymentEndpointOnce(
   request: () => Promise<Response>,
   label: string,

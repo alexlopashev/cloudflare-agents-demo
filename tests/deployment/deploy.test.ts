@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildDeploymentInteractionId,
   buildPlatformDeploymentConfig,
   buildEvidenceResetSql,
   deploymentSmokeRetryPolicy,
@@ -49,6 +50,9 @@ describe("Cloudflare deployment contract", () => {
     expect(deployScript).not.toContain("gh auth token");
     expect(deployScript).not.toContain("requestWithRetry");
     expect(deployScript.match(/await requestDeploymentEndpointOnce/g)).toHaveLength(3);
+    expect(deployScript).toContain(
+      "buildDeploymentInteractionId(label, expectedReleaseId, sample + 1)",
+    );
     expect(
       deployScript.match(/if \(githubWriteEnabled\) assertGitHubWriteSecret\(\);/g),
     ).toHaveLength(2);
@@ -75,6 +79,27 @@ describe("Cloudflare deployment contract", () => {
       GIT_SHA: "b".repeat(40),
       HEALTH_LOADING_MODE: "sequential",
     });
+  });
+
+  it("scopes every measured interaction to its immutable release", () => {
+    const firstRelease = buildDeploymentInteractionId("baseline", baselineVersionId, 1);
+    const secondRelease = buildDeploymentInteractionId("baseline", degradedVersionId, 1);
+
+    expect(firstRelease).toBe(`baseline-${baselineVersionId}-01`);
+    expect(secondRelease).toBe(`baseline-${degradedVersionId}-01`);
+    expect(secondRelease).not.toBe(firstRelease);
+    expect(buildDeploymentInteractionId("degraded", degradedVersionId, 20)).toBe(
+      `degraded-${degradedVersionId}-20`,
+    );
+    expect(() => buildDeploymentInteractionId("baseline", baselineVersionId, 0)).toThrow(
+      /sample number/i,
+    );
+    expect(() => buildDeploymentInteractionId("baseline", baselineVersionId, 21)).toThrow(
+      /sample number/i,
+    );
+    expect(() => buildDeploymentInteractionId("baseline", "not-a-version", 1)).toThrow(
+      /release identifier/i,
+    );
   });
 
   it("injects measured version IDs into the public investigator while writes stay off", () => {
