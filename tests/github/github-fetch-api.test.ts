@@ -8,6 +8,21 @@ import {
 const commitSha = "1111111111111111111111111111111111111111";
 
 describe("GitHubFetchApi", () => {
+  it("identifies every credential-free request with the fixed product user agent", async () => {
+    const fetcher = vi.fn(async (_request: Request) => Response.json({ ok: true }));
+    const api = new GitHubFetchApi({
+      fetcher,
+      repository: { owner: "example", repo: "supervised" },
+      maxResponseBytes: 1_024,
+    });
+
+    await api.getCommit(commitSha, 1);
+
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher.mock.calls[0]?.[0].headers.get("user-agent")).toBe("Regression-Surgeon");
+    expect(fetcher.mock.calls[0]?.[0].headers.has("authorization")).toBe(false);
+  });
+
   it("invokes a Workers-compatible fetcher without changing its receiver", async () => {
     async function receiverSensitiveFetcher(this: unknown, _request: Request) {
       if (this !== undefined) throw new TypeError("Illegal invocation");
