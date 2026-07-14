@@ -57,6 +57,8 @@ The following invariants are especially important and must remain covered.
   receipt; model arguments cannot substitute releases, windows, traces, commits, or paths.
 - The agent cannot propose a fix without telemetry and release evidence.
 - Tool failures are bounded and visible to the model without corrupting persisted state.
+- Missing configured receipt selectors are reported as fixed invalid input, distinct from a fixed
+  evidence-source unavailable result; neither exposes values or exception text.
 - Step limits stop runaway loops.
 - Tool results are size-bounded before entering context.
 - Reports distinguish evidence, inference, confidence, and unknowns.

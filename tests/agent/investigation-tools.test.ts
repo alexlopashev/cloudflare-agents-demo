@@ -212,6 +212,33 @@ describe("investigation tools", () => {
     expect(JSON.stringify(evidence.repository.readFiles.mock.calls)).not.toContain("secrets");
   });
 
+  it("distinguishes absent receipt selectors from evidence service unavailability", async () => {
+    const evidence = services();
+    const tools = createInvestigationTools(evidence, {
+      incident: {
+        incidentId: "configured-latency-regression",
+        baselineReleaseId: "baseline-concurrent",
+        degradedReleaseId: "regression-sequential",
+        traceWindow: { sinceMs: 1_000, untilMs: 2_000 },
+      },
+      selectedTraceId: () => undefined,
+      selectedSource: () => undefined,
+    });
+
+    await expect(execute(tools.inspect_trace, {})).resolves.toEqual({
+      status: "error",
+      code: "invalid-input",
+      message: "Configured evidence selector is unavailable.",
+    });
+    await expect(execute(tools.read_repo_files, {})).resolves.toEqual({
+      status: "error",
+      code: "invalid-input",
+      message: "Configured evidence selector is unavailable.",
+    });
+    expect(evidence.telemetry.getTraceDetail).not.toHaveBeenCalled();
+    expect(evidence.repository.readFiles).not.toHaveBeenCalled();
+  });
+
   it("truncates oversized tool results deterministically before model context", async () => {
     const evidence = services();
     evidence.repository.readFiles.mockResolvedValue([

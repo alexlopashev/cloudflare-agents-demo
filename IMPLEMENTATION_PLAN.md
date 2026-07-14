@@ -971,6 +971,9 @@ text, model prose, and credentials.
 Issue #99 completes the server-authoritative selector boundary across all five configured evidence
 tools. Model arguments are stripped before execution; runtime configuration supplies release/window
 selectors, and the persisted receipt supplies trace and source commit/path selectors.
+Issue #101 distinguishes a missing receipt-backed selector (`invalid-input`) from an evidence-service
+failure (`unavailable`) without exposing values or exception text. A real Durable Object regression
+also proves the current-step receipt reaches the immediately following trace tool locally.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1167,6 +1170,8 @@ Work packages:
   complete pending the public smoke).
 - Make all configured evidence arguments server-authoritative and immune to model selector shape
   (#99, implementation complete pending the public smoke).
+- Classify receipt-selector absence separately from evidence-source unavailability (#101,
+  implementation complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 
 Acceptance criteria:
