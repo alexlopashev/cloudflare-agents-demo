@@ -168,6 +168,50 @@ describe("investigation tools", () => {
     );
   });
 
+  it("ignores malformed model selectors for every configured evidence phase", async () => {
+    const evidence = services();
+    const tools = createInvestigationTools(evidence, {
+      incident: {
+        incidentId: "configured-latency-regression",
+        baselineReleaseId: "baseline-concurrent",
+        degradedReleaseId: "regression-sequential",
+        traceWindow: { sinceMs: 1_000, untilMs: 2_000 },
+      },
+      selectedTraceId: () => "receipt-trace",
+      selectedSource: () => ({
+        commitSha: "d591869a8ef995f1835ef80152f4de085b10255b",
+        path: "workers/platform/src/api/health.ts",
+      }),
+    });
+
+    await execute(tools.compare_releases, { sql: "private", windowMs: "all" });
+    await execute(tools.find_slow_traces, { releaseId: 42, limit: "all" });
+    await execute(tools.inspect_trace, { traceId: 42, repository: "other/repo" });
+    await execute(tools.inspect_release, { versionId: 42, path: "secrets" });
+    await execute(tools.read_repo_files, { commitSha: "generated", paths: ["secrets"] });
+
+    expect(evidence.telemetry.compareReleases).toHaveBeenCalledExactlyOnceWith({
+      baselineReleaseId: "baseline-concurrent",
+      candidateReleaseId: "regression-sequential",
+      windowMs: 30 * 24 * 60 * 60 * 1_000,
+    });
+    expect(evidence.telemetry.findSlowTraces).toHaveBeenCalledExactlyOnceWith({
+      releaseId: "regression-sequential",
+      sinceMs: 1_000,
+      untilMs: 2_000,
+      limit: 5,
+    });
+    expect(evidence.telemetry.getTraceDetail).toHaveBeenCalledExactlyOnceWith("receipt-trace");
+    expect(evidence.repository.inspectRelease).toHaveBeenCalledExactlyOnceWith(
+      "regression-sequential",
+    );
+    expect(evidence.repository.readFiles).toHaveBeenCalledExactlyOnceWith({
+      commitSha: "d591869a8ef995f1835ef80152f4de085b10255b",
+      paths: ["workers/platform/src/api/health.ts"],
+    });
+    expect(JSON.stringify(evidence.repository.readFiles.mock.calls)).not.toContain("secrets");
+  });
+
   it("truncates oversized tool results deterministically before model context", async () => {
     const evidence = services();
     evidence.repository.readFiles.mockResolvedValue([

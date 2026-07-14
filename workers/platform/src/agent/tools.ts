@@ -123,6 +123,7 @@ export function createInvestigationTools(
   options: {
     incident?: IncidentReference;
     maxResultBytes?: number;
+    selectedSource?: () => { commitSha: string; path: string } | undefined;
     selectedTraceId?: () => string | undefined;
   } = {},
 ): ToolSet {
@@ -132,19 +133,16 @@ export function createInvestigationTools(
   }
   const incident =
     options.incident === undefined ? undefined : parseIncidentReference(options.incident);
-  const configuredCompareReleasesSchema = compareReleasesSchema.partial();
-  const configuredFindSlowTracesSchema = findSlowTracesSchema.partial();
-  const configuredInspectTraceSchema = inspectTraceSchema.partial();
-  const configuredInspectReleaseSchema = inspectReleaseSchema.partial();
+  const configuredInputSchema = z.object({});
 
   return {
     compare_releases: tool({
       description: "Compare only the configured measured release pair in one bounded window.",
-      inputSchema: incident === undefined ? compareReleasesSchema : configuredCompareReleasesSchema,
+      inputSchema: incident === undefined ? compareReleasesSchema : configuredInputSchema,
       execute: async (rawInput) => {
         const query = (() => {
           if (incident === undefined) return compareReleasesSchema.parse(rawInput);
-          configuredCompareReleasesSchema.parse(rawInput);
+          configuredInputSchema.parse(rawInput);
           return {
             baselineReleaseId: incident.baselineReleaseId,
             candidateReleaseId: incident.degradedReleaseId,
@@ -156,7 +154,7 @@ export function createInvestigationTools(
     }),
     find_slow_traces: tool({
       description: "Find a bounded set of slow traces for the configured degraded release.",
-      inputSchema: incident === undefined ? findSlowTracesSchema : configuredFindSlowTracesSchema,
+      inputSchema: incident === undefined ? findSlowTracesSchema : configuredInputSchema,
       execute: async (rawInput) => {
         const query = (() => {
           if (incident === undefined) {
@@ -171,7 +169,7 @@ export function createInvestigationTools(
               ...(input.releaseId === undefined ? {} : { releaseId: input.releaseId }),
             };
           }
-          configuredFindSlowTracesSchema.parse(rawInput);
+          configuredInputSchema.parse(rawInput);
           return {
             releaseId: incident.degradedReleaseId,
             sinceMs: incident.traceWindow.sinceMs,
@@ -185,7 +183,7 @@ export function createInvestigationTools(
     inspect_trace: tool({
       description:
         "Inspect one selected trace and its bounded parent-aware critical path with explicit parentage diagnostics.",
-      inputSchema: incident === undefined ? inspectTraceSchema : configuredInspectTraceSchema,
+      inputSchema: incident === undefined ? inspectTraceSchema : configuredInputSchema,
       execute: async (rawInput) => {
         if (incident === undefined) {
           const input = inspectTraceSchema.parse(rawInput);
@@ -194,7 +192,7 @@ export function createInvestigationTools(
             maxResultBytes,
           );
         }
-        configuredInspectTraceSchema.parse(rawInput);
+        configuredInputSchema.parse(rawInput);
         return executeBounded(async () => {
           const selectedTraceId = evidenceId.parse(options.selectedTraceId?.());
           return services.telemetry.getTraceDetail(selectedTraceId);
@@ -204,11 +202,11 @@ export function createInvestigationTools(
     inspect_release: tool({
       description:
         "Resolve one measured release to its immutable Git commit, associated pull request, and bounded changed-file evidence.",
-      inputSchema: incident === undefined ? inspectReleaseSchema : configuredInspectReleaseSchema,
+      inputSchema: incident === undefined ? inspectReleaseSchema : configuredInputSchema,
       execute: async (rawInput) => {
         const versionId = (() => {
           if (incident === undefined) return inspectReleaseSchema.parse(rawInput).versionId;
-          configuredInspectReleaseSchema.parse(rawInput);
+          configuredInputSchema.parse(rawInput);
           return incident.degradedReleaseId;
         })();
         return executeBounded(() => services.repository.inspectRelease(versionId), maxResultBytes);
@@ -217,9 +215,17 @@ export function createInvestigationTools(
     read_repo_files: tool({
       description:
         "Read a small allowlisted set of repository files at one full immutable commit SHA.",
-      inputSchema: readFilesSchema,
+      inputSchema: incident === undefined ? readFilesSchema : configuredInputSchema,
       execute: async (rawInput) => {
-        const input = readFilesSchema.parse(rawInput);
+        const input = (() => {
+          if (incident === undefined) return readFilesSchema.parse(rawInput);
+          configuredInputSchema.parse(rawInput);
+          const selected = options.selectedSource?.();
+          return readFilesSchema.parse({
+            commitSha: selected?.commitSha,
+            paths: selected === undefined ? undefined : [selected.path],
+          });
+        })();
         return executeBounded(() => services.repository.readFiles(input), maxResultBytes);
       },
     }),

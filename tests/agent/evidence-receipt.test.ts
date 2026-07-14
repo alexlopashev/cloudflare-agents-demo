@@ -172,32 +172,19 @@ describe("incident-scoped evidence receipt", () => {
   it("validates configured evidence outputs without treating model selectors as incident identity", () => {
     const driftedSelectors = completeResults.map((evidence) => {
       if (evidence.toolName === "compare_releases") {
-        return {
-          ...evidence,
-          input: {
-            ...evidence.input,
-            baselineReleaseId: "generated-baseline",
-            candidateReleaseId: "generated-candidate",
-            windowMs: 60_000,
-          },
-        };
+        return { ...evidence, input: { sql: "private", windowMs: "all" } };
       }
       if (evidence.toolName === "find_slow_traces") {
-        return {
-          ...evidence,
-          input: {
-            ...evidence.input,
-            releaseId: "generated-release",
-            sinceMs: incident.traceWindow.sinceMs + 1,
-            untilMs: incident.traceWindow.untilMs + 1,
-          },
-        };
+        return { ...evidence, input: { releaseId: 42, limit: "all" } };
       }
       if (evidence.toolName === "inspect_trace") {
-        return { ...evidence, input: { traceId: "model-generated-trace" } };
+        return { ...evidence, input: { traceId: 42, repository: "other/repo" } };
       }
       if (evidence.toolName === "inspect_release") {
-        return { ...evidence, input: { versionId: "generated-release" } };
+        return { ...evidence, input: { versionId: 42, path: "secrets" } };
+      }
+      if (evidence.toolName === "read_repo_files") {
+        return { ...evidence, input: { commitSha: "generated", paths: ["secrets"] } };
       }
       return evidence;
     });

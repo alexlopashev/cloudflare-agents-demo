@@ -150,6 +150,13 @@ rollback occurred.${prepared}`;
       }),
       {
         incident,
+        selectedSource: () => {
+          if (this.state.status !== "investigating") return;
+          const { commitSha, sourcePath } = this.state.receipt.evidence;
+          return commitSha === undefined || sourcePath === undefined
+            ? undefined
+            : { commitSha, path: sourcePath };
+        },
         selectedTraceId: () =>
           this.state.status === "investigating"
             ? this.state.receipt.evidence.selectedTraceId
