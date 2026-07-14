@@ -112,6 +112,8 @@ Do not assert exact natural-language output from a live model. Assert structured
 - Explicit write enablement must preserve measured evidence, record the expected posture, and leave
   keyed smoke preview-only with zero external writes.
 - Deployment smoke endpoints require an unguessable repository-local key and return 404 without it.
+- Final smoke verification failures expose only the fixed code and bounded whitelisted contract
+  surfaces; values, identifiers, source, model prose, exception text, and credentials stay private.
 - Deployment verification may retry the pre-execution smoke 404 while a rotated key propagates and
   may poll the keyed GET-only D1 evidence-readiness route on 404/503. That route cannot call Workers
   AI, remediation, GitHub, health, or telemetry writes. It must never retry a response that could

@@ -46,7 +46,7 @@ export function deploymentSmokeFailureMessage(status: number, body: unknown): st
     if (!postEvidence.success) return `Public agent smoke returned HTTP ${status}.`;
     return postEvidence.data.error.code === "remediation-preview-failed"
       ? `Public agent smoke returned HTTP ${status}: remediation-preview-failed (${postEvidence.data.error.reason}).`
-      : `Public agent smoke returned HTTP ${status}: invalid-smoke-verification.`;
+      : `Public agent smoke returned HTTP ${status}: invalid-smoke-verification (invalid fields: ${postEvidence.data.error.invalidFields.join(", ")}).`;
   }
   if (
     parsed.data.error.code === "invalid-evidence-receipt" &&

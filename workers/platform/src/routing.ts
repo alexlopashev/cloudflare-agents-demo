@@ -16,8 +16,9 @@ import { handleScenarioRequest } from "./scenario/handler";
 import { createTelemetryStore } from "./telemetry/store";
 import {
   createSmokeEvidenceDiagnostic,
-  smokeRemediationFailureReasonSchema,
   createSmokeVerificationReceipt,
+  smokeRemediationFailureReasonSchema,
+  smokeVerificationFailureDiagnostic,
 } from "./verification/smoke-contract";
 import { handleUxTelemetryRequest } from "./telemetry/ux-handler";
 
@@ -312,8 +313,8 @@ export async function handlePlatformRequest(
     let verification: ReturnType<typeof createSmokeVerificationReceipt>;
     try {
       verification = createSmokeVerificationReceipt({ investigation, remediation });
-    } catch {
-      return Response.json({ error: { code: "invalid-smoke-verification" } }, { status: 422 });
+    } catch (error) {
+      return Response.json(smokeVerificationFailureDiagnostic(error), { status: 422 });
     }
     return Response.json({ verification });
   }

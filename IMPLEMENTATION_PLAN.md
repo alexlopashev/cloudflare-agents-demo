@@ -965,6 +965,9 @@ receipt selection and configured degraded release.
 Issue #95 extends only the protected smoke route's pre-execution 404 handoff to the same bounded
 one-minute propagation horizon as deployment readiness. Every response that could follow execution
 and every ambiguous transport failure remain single-shot.
+Issue #97 classifies the remaining final-verification mismatch with only seven whitelisted contract
+surface names. It preserves the fixed error code and excludes values, identifiers, source, exception
+text, model prose, and credentials.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.
@@ -1156,6 +1159,8 @@ Work packages:
 - Keep public trace inspection on the receipt-selected, readiness-proven evidence path (#93,
   implementation complete pending the public smoke).
 - Bound rotated smoke-key 404 handoff without replaying executable responses (#95, implementation
+  complete pending the public smoke).
+- Classify final verification only by bounded whitelisted contract surfaces (#97, implementation
   complete pending the public smoke).
 - Complete clean-room release verification and project-system alignment (#45).
 

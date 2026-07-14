@@ -322,7 +322,9 @@ Run gates.`,
     );
     expect(verificationFailure.status).toBe(422);
     const boundedFailure = await verificationFailure.json();
-    expect(boundedFailure).toEqual({ error: { code: "invalid-smoke-verification" } });
+    expect(boundedFailure).toEqual({
+      error: { code: "invalid-smoke-verification", invalidFields: ["input-shape"] },
+    });
     expect(JSON.stringify(boundedFailure)).not.toContain("model prose");
   });
 
