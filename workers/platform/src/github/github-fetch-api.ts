@@ -100,6 +100,7 @@ export class GitHubFetchApi implements GitHubRepositoryApi {
     );
     const headers = new Headers({
       accept: "application/vnd.github+json",
+      "user-agent": "Regression-Surgeon",
       "x-github-api-version": "2022-11-28",
     });
     if (this.#token !== undefined) headers.set("authorization", `Bearer ${this.#token}`);
