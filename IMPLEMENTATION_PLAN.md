@@ -39,7 +39,7 @@ separate operator-enabled extension; it is not required for the credential-free 
 | Supported hosts | macOS and Linux, ARM64 and x64 |
 | Supported shells | sh, Bash, Zsh, Fish, and Nu |
 | Optional containers | Colima with Compose |
-| GitHub runtime integration | GitHub REST API through constrained Worker tools |
+| GitHub runtime integration | Immutable public patch/raw evidence by default; optional GitHub REST through constrained Worker tools |
 | PR behavior | Validated preview by default; optional approved, guarded, idempotent draft PR |
 
 ## 3. Node and Workers runtime
@@ -91,7 +91,7 @@ References:
 │   │   └── src/
 │   │       ├── agent/            # Think model, evidence tools, and services
 │   │       ├── api/              # Supervised application API
-│   │       ├── github/           # GitHub REST adapter
+│   │       ├── github/           # Public patch/raw and optional GitHub REST adapters
 │   │       ├── telemetry/        # D1 ingestion and queries
 │   │       └── index.ts
 │   │
@@ -150,7 +150,7 @@ flowchart LR
     Health["Health-service Worker"]
     D1["D1 telemetry"]
     DO["Agent Durable Object"]
-    GitHub["GitHub REST API"]
+    GitHub["GitHub public evidence and REST API"]
     AI["Workers AI"]
 
     Browser -->|"/app and RUM"| Platform
@@ -562,7 +562,8 @@ remediation eligibility, reviewer UI, and smoke verification. No tool accepts ar
 
 ## 14. GitHub PR safety
 
-The deployed Worker uses GitHub REST through `fetch`; it cannot invoke the mise-installed `gh` executable.
+The deployed Worker uses immutable GitHub public patch/raw endpoints and optional REST through
+`fetch`; it cannot invoke the mise-installed `gh` executable.
 
 `gh` is used for repository setup, authentication checks, and operator workflows.
 
@@ -849,14 +850,19 @@ permission, and preview/write-scoped incident idempotency. The
 server-side service validates configured repository and path, matching regression/base SHA, current
 blob SHA, replacement byte and line bounds, changed-line count, draft-only output, evidence-rich body,
 and deterministic branch state. Fake mode always returns a validated preview without network access.
-The live GitHub REST adapters allow bounded unauthenticated reads and preview validation, require a
-normalized scoped token before writes can be enabled, and remain write-disabled until the explicit
-flag is set. Existing PRs are reused, and uncertain branch or PR responses return deterministic recoverable
-state without creating another branch. Recovery accepts only a branch exactly one commit ahead of
-the evidenced base with exactly the approved file changed. No merge endpoint or tool exists. The
-action is unavailable until the same incident's receipt is complete. The receipt then prepares and
-persists the exact one-file replacement and stable fingerprint; authorization rejects a changed
-fingerprint or proposal, while repository branch identity remains stable per incident.
+Credential-free live reads use bounded immutable public patch/raw evidence and compute the Git blob
+identity locally; PR metadata unavailable from the patch, including the exact PR title, remains
+explicitly partial. Write-disabled
+preview validation resolves the current `main` SHA from its bounded public Atom feed and compares only
+the allowlisted source at the evidenced and current immutable SHAs. Tree metadata remains mandatory
+for writes. A normalized scoped token selects the bounded REST adapter, is required before writes can
+be enabled, and remains write-disabled until the explicit flag is set. Existing PRs are reused, and
+uncertain branch or PR responses return deterministic recoverable state without creating another
+branch. Recovery accepts only a branch exactly one commit ahead of the evidenced base with exactly the
+approved file changed. No merge endpoint or tool exists. The action is unavailable until the same
+incident's receipt is complete. The receipt then prepares and persists the exact one-file replacement
+and stable fingerprint; authorization rejects a changed fingerprint or proposal, while repository
+branch identity remains stable per incident.
 
 - Add guarded PR proposal creation.
 - Add Project Think approval interaction.
@@ -913,9 +919,12 @@ also carries the expected release through a narrow media type so an older or sta
 request before dependencies or persistence. Issue #64 makes the keyed smoke classify the fixed
 five-phase receipt before remediation: incomplete evidence returns only bounded phase/status
 diagnostics plus a whitelisted reason code for errors, deployment surfaces the non-complete phases,
-and preview is never invoked. Issue #68 applies the same consecutive exact-version readiness gate to
-the recorded secret-bearing investigator before every keyed smoke, preventing a prior no-key edge
-from receiving executable verification.
+and preview is never invoked. Credential-free live evidence uses the exact commit's bounded public
+patch and allowlisted raw source instead of shared unauthenticated REST quota; incomplete PR metadata
+remains explicit rather than fabricated. Its write-disabled remediation preview resolves `main` from
+the bounded public Atom feed and validates the allowlisted file at immutable SHAs. Issue #68 applies
+the same consecutive exact-version readiness gate to the recorded secret-bearing investigator before
+every keyed smoke, preventing a prior no-key edge from receiving executable verification.
 
 - Create the remote D1 database.
 - Deploy the good version and generate baseline traffic.

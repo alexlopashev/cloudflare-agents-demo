@@ -27,7 +27,7 @@ does not select or modify the seeded incident investigated by the agent.
 - SQLite-backed Durable Object state for conversations
 - D1 for measured UX events, traces, spans, and releases
 - An auxiliary health-service Worker reached through a service binding
-- A constrained, read-only GitHub REST adapter for immutable repository evidence
+- Constrained GitHub public-patch/raw and optional REST adapters for immutable repository evidence
 - An approval-gated GitHub adapter for bounded, idempotent draft PR creation
 - React, TypeScript, pnpm, and a mise-managed toolchain
 
@@ -163,11 +163,17 @@ owner-only permissions. The public app requires no login and creates a durable s
 browser-local storage.
 
 No GitHub token is copied from `gh` or uploaded by the deployment task. In the credential-free public
-posture, D1 resolves the real Worker version to an immutable commit SHA and the bounded production
-GitHub adapter performs unauthenticated commit, PR, source, base, and blob reads. A supplied scoped
-token may authenticate those reads; external writes additionally require `GITHUB_WRITE_ENABLED=true`, explicit
-Project Think approval, and all repository/path/SHA/blob/size gates. The published demo deliberately
-keeps that flag false, so approval yields a preview and cannot create or merge a pull request.
+posture, D1 resolves the real Worker version to an immutable commit SHA. The bounded production
+adapter reads that commit's public patch plus only requested allowlisted raw source at the same SHA,
+computes the Git blob identity locally, and marks PR author/base/merge metadata unknown when the
+patch cannot prove it; the commit subject is not relabeled as a PR title. This avoids shared
+unauthenticated REST quota without adding a credential or
+fabricating evidence. Preview freshness reads the bounded public `main` Atom feed, then compares the
+allowlisted raw file at the evidenced and current immutable SHAs; tree metadata remains mandatory for
+the separate write-enabled path. A supplied scoped token may use bounded REST reads; external writes
+additionally require `GITHUB_WRITE_ENABLED=true`, explicit Project Think approval, and all
+repository/path/SHA/blob/size gates. The published demo deliberately keeps that flag false, so
+approval yields a preview and cannot create or merge a pull request.
 
 #### Optional live draft PR
 
@@ -275,9 +281,10 @@ Live Worker composition now imports only Workers AI and production GitHub adapte
 tests explicitly substitute a deterministic demo adapter; the production build dry-runs and scans
 the live bundle to reject test-provider, fixture, and mock-model markers. Missing, empty, and
 whitespace-only GitHub tokens normalize once as absent, permitting bounded unauthenticated evidence
-reads and a write-disabled preview but never satisfying write enablement. Runtime version, Git SHA,
-and deployment timestamp are validated before health telemetry or runtime identity can be emitted.
-The deterministic and live paths both prepare the same complete-file bounded-concurrency edit.
+reads through immutable public patch/raw endpoints and a write-disabled preview whose branch
+freshness uses the bounded public Atom feed, but never satisfying write enablement. Runtime version,
+Git SHA, and deployment timestamp are validated before health telemetry or runtime identity can be
+emitted. The deterministic and live paths both prepare the same complete-file bounded-concurrency edit.
 
 The active [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
 hardens that slice rather than expanding it. Work now makes evidence incident-scoped, binds

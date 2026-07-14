@@ -36,6 +36,17 @@ const pullRequestResponse = z.object({
   base: z.object({ sha: immutableSha }),
   head: z.object({ sha: immutableSha }),
 });
+const publicPatchPullRequestResponse = z.object({
+  source: z.literal("public-patch"),
+  number: z.number().int().positive(),
+  commitSubject: z.string().min(1).max(1_024),
+  html_url: z.url(),
+  head: z.object({ sha: immutableSha }),
+});
+const associatedPullRequestResponse = z.union([
+  pullRequestResponse,
+  publicPatchPullRequestResponse,
+]);
 
 export interface GitHubRepositoryApi {
   readonly repository: { owner: string; repo: string };
@@ -76,6 +87,18 @@ export type PullRequestEvidence =
       headSha: string;
       mergedAt: string | null;
       url: string;
+    }
+  | {
+      status: "found";
+      number: number;
+      title: null;
+      authorLogin: null;
+      headSha: string;
+      url: string;
+      metadata: {
+        status: "partial";
+        unknowns: readonly ["title", "author-login", "base-sha", "merged-at"];
+      };
     }
   | { status: "unknown"; reason: "not-found" | "ambiguous" };
 
@@ -197,7 +220,7 @@ export class RepositoryConnector {
     }
 
     const pullRequests = parseExternal(
-      z.array(pullRequestResponse).max(11),
+      z.array(associatedPullRequestResponse).max(11),
       rawPullRequests,
       "GitHub pull request response",
     );
@@ -304,7 +327,23 @@ export class RepositoryConnector {
     return files;
   }
 
-  #toPullRequestEvidence(pullRequest: z.infer<typeof pullRequestResponse>): PullRequestEvidence {
+  #toPullRequestEvidence(
+    pullRequest: z.infer<typeof associatedPullRequestResponse>,
+  ): PullRequestEvidence {
+    if (!("base" in pullRequest)) {
+      return {
+        status: "found",
+        number: pullRequest.number,
+        title: null,
+        authorLogin: null,
+        headSha: pullRequest.head.sha,
+        url: pullRequest.html_url,
+        metadata: {
+          status: "partial",
+          unknowns: ["title", "author-login", "base-sha", "merged-at"],
+        },
+      };
+    }
     return {
       status: "found",
       number: pullRequest.number,
@@ -318,6 +357,24 @@ export class RepositoryConnector {
   }
 
   #parseFile(rawFile: unknown, expectedPath: string) {
+    const publicFile = z
+      .object({
+        source: z.literal("public-raw"),
+        type: z.literal("file"),
+        path: z.string().min(1).max(512),
+        sha: immutableSha,
+        size: z.number().int().nonnegative(),
+        content: z.string(),
+      })
+      .safeParse(rawFile);
+    if (publicFile.success) {
+      if (publicFile.data.path !== expectedPath) throw malformed("GitHub public file response");
+      const bytes = new TextEncoder().encode(publicFile.data.content);
+      if (bytes.byteLength !== publicFile.data.size) {
+        throw malformed("GitHub public file response");
+      }
+      return { blobSha: publicFile.data.sha, bytes };
+    }
     const encodedByteLimit = Math.ceil(this.#limits.maxFileBytes / 3) * 4;
     const lineBreakAllowance = Math.ceil(encodedByteLimit / 60) + 2;
     const schema = z.object({

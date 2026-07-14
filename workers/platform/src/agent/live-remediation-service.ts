@@ -1,4 +1,4 @@
-import { GitHubDraftPrApi } from "../github";
+import { GitHubDraftPrApi, GitHubPublicPreviewApi } from "../github";
 import { createRemediationService } from "../remediation/service";
 import type { RemediationServiceOptions } from "./remediation-services";
 
@@ -11,13 +11,21 @@ export function createLiveRemediationService(options: RemediationServiceOptions)
   if (options.writeEnabled && token === undefined) {
     throw new TypeError("GitHub writes require an explicit non-empty scoped token.");
   }
-  const api = new GitHubDraftPrApi({
-    repository: options.repository,
-    allowedPaths,
-    maxResponseBytes: 64 * 1_024,
-    ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
-    ...(token === undefined ? {} : { token }),
-  });
+  const api =
+    token === undefined
+      ? new GitHubPublicPreviewApi({
+          repository: options.repository,
+          allowedPaths,
+          maxResponseBytes: 64 * 1_024,
+          ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
+        })
+      : new GitHubDraftPrApi({
+          repository: options.repository,
+          allowedPaths,
+          maxResponseBytes: 64 * 1_024,
+          ...(options.fetcher === undefined ? {} : { fetcher: options.fetcher }),
+          token,
+        });
   return createRemediationService({
     api,
     repository: options.repository,

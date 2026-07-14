@@ -59,6 +59,63 @@ describe("agent evidence services", () => {
     const store = telemetryStore();
     const fetcher = vi.fn(async (request: Request) => {
       const url = new URL(request.url);
+      if (url.hostname === "github.com") {
+        return new Response(`From ${regressionSha} Mon Sep 17 00:00:00 2001
+From: Sasha <sasha@example.test>
+Date: Sat, 11 Jul 2026 18:42:21 -0700
+Subject: [PATCH] perf: serialize health checks (#19)
+
+---
+ workers/platform/src/api/health.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/workers/platform/src/api/health.ts b/workers/platform/src/api/health.ts
+index 0000000..1111111 100644
+--- a/workers/platform/src/api/health.ts
++++ b/workers/platform/src/api/health.ts
+@@ -1 +1 @@
+-concurrent
++sequential
+`);
+      }
+      if (url.hostname === "raw.githubusercontent.com") return new Response("sequential\n");
+      return new Response("not found", { status: 404 });
+    });
+    const services = createAgentEvidenceServices({
+      mode: "workers-ai",
+      repository: { owner: "alexlopashev", repo: "cloudflare-agents-demo" },
+      store,
+      fetcher,
+      ...(token === undefined ? {} : { token }),
+    });
+
+    await expect(
+      services.repository.inspectRelease("regression-sequential"),
+    ).resolves.toMatchObject({
+      commit: { sha: regressionSha },
+      pullRequest: { status: "found", number: 19 },
+    });
+    await expect(
+      services.repository.readFiles({
+        commitSha: regressionSha,
+        paths: ["workers/platform/src/api/health.ts"],
+      }),
+    ).resolves.toMatchObject([
+      { path: "workers/platform/src/api/health.ts", content: "sequential\n" },
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls.every(([request]) => !request.headers.has("authorization"))).toBe(
+      true,
+    );
+    expect(
+      fetcher.mock.calls.some(([request]) => new URL(request.url).hostname === "api.github.com"),
+    ).toBe(false);
+  });
+
+  it("keeps a non-empty token on the bounded REST read adapter", async () => {
+    const store = telemetryStore();
+    const fetcher = vi.fn(async (request: Request) => {
+      const url = new URL(request.url);
       if (url.pathname.endsWith(`/commits/${regressionSha}`)) {
         return Response.json({
           sha: regressionSha,
@@ -78,40 +135,39 @@ describe("agent evidence services", () => {
           ],
         });
       }
-      if (url.pathname.endsWith(`/commits/${regressionSha}/pulls`)) {
-        return Response.json([
-          {
-            number: 19,
-            title: "Scenario: serialize health checks",
-            html_url: "https://github.com/alexlopashev/cloudflare-agents-demo/pull/19",
-            state: "closed",
-            merged_at: "2026-07-12T01:42:21Z",
-            user: { login: "alexlopashev" },
-            base: { sha: "cf25e5253b106b1e7514340abe94bd42fd748725" },
-            head: { sha: regressionSha },
-          },
-        ]);
-      }
-      return new Response("not found", { status: 404 });
+      return Response.json([
+        {
+          number: 19,
+          title: "Scenario: serialize health checks",
+          html_url: "https://github.com/alexlopashev/cloudflare-agents-demo/pull/19",
+          state: "closed",
+          merged_at: "2026-07-12T01:42:21Z",
+          user: { login: "alexlopashev" },
+          base: { sha: "cf25e5253b106b1e7514340abe94bd42fd748725" },
+          head: { sha: regressionSha },
+        },
+      ]);
     });
     const services = createAgentEvidenceServices({
       mode: "workers-ai",
       repository: { owner: "alexlopashev", repo: "cloudflare-agents-demo" },
       store,
       fetcher,
-      ...(token === undefined ? {} : { token }),
+      token: "scoped-read-token",
     });
 
     await expect(
       services.repository.inspectRelease("regression-sequential"),
-    ).resolves.toMatchObject({
-      commit: { sha: regressionSha },
-      pullRequest: { status: "found", number: 19 },
-    });
+    ).resolves.toMatchObject({ pullRequest: { status: "found", number: 19 } });
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(fetcher.mock.calls.every(([request]) => !request.headers.has("authorization"))).toBe(
-      true,
-    );
+    expect(
+      fetcher.mock.calls.every(([request]) => new URL(request.url).hostname === "api.github.com"),
+    ).toBe(true);
+    expect(
+      fetcher.mock.calls.every(
+        ([request]) => request.headers.get("authorization") === "Bearer scoped-read-token",
+      ),
+    ).toBe(true);
   });
 
   it("fails closed for mismatched fake attribution and unsupported modes", async () => {

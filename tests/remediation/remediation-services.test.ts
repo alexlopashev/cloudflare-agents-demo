@@ -26,25 +26,27 @@ describe("agent remediation services", () => {
 
   it("allows credential-free Workers AI previews but requires a token before enabling writes", async () => {
     const repository = { owner: "alexlopashev", repo: "cloudflare-agents-demo" };
-    const treeSha = "1111111111111111111111111111111111111111";
-    const encodedSource = btoa(regressionHealthSource);
+    const sourceBytes = new TextEncoder().encode(regressionHealthSource);
+    const prefix = new TextEncoder().encode(`blob ${sourceBytes.byteLength}\0`);
+    const input = new Uint8Array(prefix.byteLength + sourceBytes.byteLength);
+    input.set(prefix);
+    input.set(sourceBytes, prefix.byteLength);
+    const expectedBlobSha = Array.from(
+      new Uint8Array(await crypto.subtle.digest("SHA-1", input)),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("");
+    const proposal = { ...remediationFixture, expectedBlobSha };
+    const feed = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry><id>tag:github.com,2008:Grit::Commit/${remediationFixture.expectedBaseSha}</id></entry>
+</feed>`;
     const fetcher = vi.fn(async (request: Request) => {
       const url = new URL(request.url);
-      if (url.pathname.endsWith("/git/ref/heads/main")) {
-        return Response.json({ object: { sha: remediationFixture.expectedBaseSha } });
+      if (url.hostname === "github.com" && url.pathname.endsWith("/commits/main.atom")) {
+        return new Response(feed, { headers: { "content-type": "application/atom+xml" } });
       }
-      if (url.pathname.endsWith(`/git/commits/${remediationFixture.expectedBaseSha}`)) {
-        return Response.json({ sha: remediationFixture.expectedBaseSha, tree: { sha: treeSha } });
-      }
-      if (url.pathname.endsWith("/contents/workers/platform/src/api/health.ts")) {
-        return Response.json({
-          type: "file",
-          path: remediationFixture.path,
-          sha: remediationFixture.expectedBlobSha,
-          size: new TextEncoder().encode(regressionHealthSource).byteLength,
-          encoding: "base64",
-          content: encodedSource,
-        });
+      if (url.hostname === "raw.githubusercontent.com") {
+        return new Response(regressionHealthSource, { headers: { "content-type": "text/plain" } });
       }
       return new Response("not found", { status: 404 });
     });
@@ -57,15 +59,18 @@ describe("agent remediation services", () => {
         fetcher,
         ...(token === undefined ? {} : { token }),
       });
-      await expect(preview.execute(remediationFixture)).resolves.toMatchObject({
+      await expect(preview.execute(proposal)).resolves.toMatchObject({
         status: "preview",
         writesPerformed: false,
       });
     }
-    expect(fetcher).toHaveBeenCalledTimes(9);
+    expect(fetcher).toHaveBeenCalledTimes(6);
     expect(fetcher.mock.calls.every(([request]) => !request.headers.has("authorization"))).toBe(
       true,
     );
+    expect(
+      fetcher.mock.calls.some(([request]) => new URL(request.url).hostname === "api.github.com"),
+    ).toBe(false);
     for (const token of [undefined, "", "   "]) {
       expect(() =>
         createAgentRemediationService({
