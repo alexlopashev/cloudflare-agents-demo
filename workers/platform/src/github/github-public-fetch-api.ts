@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { readBoundedResponseBytes, type BoundedResponseFailure } from "./bounded-response";
 import { RepositoryConnectorError } from "./errors";
 import { isSafeRepositoryPath } from "./path-policy";
 import type { GitHubRepositoryApi } from "./repository-connector";
@@ -304,19 +305,6 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
         `GitHub public request failed with HTTP ${response.status}.`,
       );
     }
-    const declared = response.headers.get("content-length");
-    if (declared !== null) {
-      const length = Number.parseInt(declared, 10);
-      if (!/^(?:0|[1-9]\d*)$/.test(declared) || !Number.isSafeInteger(length)) {
-        throw malformed("GitHub public content length");
-      }
-      if (length > this.maxResponseBytes) {
-        throw new RepositoryConnectorError(
-          "limit-exceeded",
-          "GitHub public response byte limit exceeded.",
-        );
-      }
-    }
     const contentRange = response.headers.get("content-range");
     const total = contentRange === null ? undefined : /\/([1-9]\d*)$/.exec(contentRange)?.[1];
     if (total !== undefined && Number.parseInt(total, 10) > this.maxResponseBytes) {
@@ -325,38 +313,27 @@ export class GitHubPublicFetchApi implements GitHubRepositoryApi {
         "GitHub public response byte limit exceeded.",
       );
     }
-    if (response.body === null) throw malformed("GitHub public response");
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let totalBytes = 0;
-    while (true) {
-      let result: ReadableStreamReadResult<Uint8Array>;
-      try {
-        result = await reader.read();
-      } catch {
-        throw new RepositoryConnectorError(
-          "unavailable",
-          "GitHub public response stream is unavailable.",
-        );
-      }
-      if (result.done) break;
-      totalBytes += result.value.byteLength;
-      if (totalBytes > this.maxResponseBytes) {
-        await reader.cancel();
-        throw new RepositoryConnectorError(
-          "limit-exceeded",
-          "GitHub public response byte limit exceeded.",
-        );
-      }
-      chunks.push(result.value);
+    return readBoundedResponseBytes(response, this.maxResponseBytes, (reason) =>
+      this.#responseBodyError(reason),
+    );
+  }
+
+  #responseBodyError(reason: BoundedResponseFailure): RepositoryConnectorError {
+    if (reason === "limit-exceeded") {
+      return new RepositoryConnectorError(
+        "limit-exceeded",
+        "GitHub public response byte limit exceeded.",
+      );
     }
-    const bytes = new Uint8Array(totalBytes);
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.byteLength;
+    if (reason === "stream-unavailable") {
+      return new RepositoryConnectorError(
+        "unavailable",
+        "GitHub public response stream is unavailable.",
+      );
     }
-    return bytes;
+    return malformed(
+      reason === "invalid-length" ? "GitHub public content length" : "GitHub public response",
+    );
   }
 
   async #gitBlobSha(bytes: Uint8Array): Promise<string> {

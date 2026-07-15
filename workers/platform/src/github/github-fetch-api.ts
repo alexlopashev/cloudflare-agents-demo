@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { RepositoryConnectorError } from "./errors";
+import { readBoundedResponseBytes, type BoundedResponseFailure } from "./bounded-response";
 import { isSafeRepositoryPath } from "./path-policy";
 import type { GitHubRepositoryApi } from "./repository-connector";
 
@@ -133,30 +134,9 @@ export class GitHubFetchApi implements GitHubRepositoryApi {
       );
     }
 
-    const declaredLength = response.headers.get("content-length");
-    if (declaredLength !== null) {
-      if (!/^(?:0|[1-9]\d*)$/.test(declaredLength)) {
-        throw new RepositoryConnectorError(
-          "malformed-response",
-          "GitHub content length is invalid.",
-        );
-      }
-      const parsedLength = Number.parseInt(declaredLength, 10);
-      if (!Number.isSafeInteger(parsedLength)) {
-        throw new RepositoryConnectorError(
-          "malformed-response",
-          "GitHub content length is invalid.",
-        );
-      }
-      if (parsedLength > this.#maxResponseBytes) {
-        throw new RepositoryConnectorError(
-          "limit-exceeded",
-          "GitHub response byte limit exceeded.",
-        );
-      }
-    }
-
-    const bytes = await this.#readBoundedBody(response);
+    const bytes = await readBoundedResponseBytes(response, this.#maxResponseBytes, (reason) =>
+      this.#responseBodyError(reason),
+    );
     let text: string;
     try {
       text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -170,38 +150,19 @@ export class GitHubFetchApi implements GitHubRepositoryApi {
     }
   }
 
-  async #readBoundedBody(response: Response): Promise<Uint8Array> {
-    if (response.body === null) {
-      throw new RepositoryConnectorError("malformed-response", "GitHub returned an empty body.");
+  #responseBodyError(reason: BoundedResponseFailure): RepositoryConnectorError {
+    if (reason === "limit-exceeded") {
+      return new RepositoryConnectorError("limit-exceeded", "GitHub response byte limit exceeded.");
     }
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let totalBytes = 0;
-    while (true) {
-      let result: ReadableStreamReadResult<Uint8Array>;
-      try {
-        result = await reader.read();
-      } catch {
-        throw new RepositoryConnectorError("unavailable", "GitHub response stream failed.");
-      }
-      if (result.done) break;
-      totalBytes += result.value.byteLength;
-      if (totalBytes > this.#maxResponseBytes) {
-        await reader.cancel();
-        throw new RepositoryConnectorError(
-          "limit-exceeded",
-          "GitHub response byte limit exceeded.",
-        );
-      }
-      chunks.push(result.value);
+    if (reason === "stream-unavailable") {
+      return new RepositoryConnectorError("unavailable", "GitHub response stream failed.");
     }
-    const output = new Uint8Array(totalBytes);
-    let offset = 0;
-    for (const chunk of chunks) {
-      output.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    return output;
+    return new RepositoryConnectorError(
+      "malformed-response",
+      reason === "invalid-length"
+        ? "GitHub content length is invalid."
+        : "GitHub returned an empty body.",
+    );
   }
 }
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { evidenceIdSchema } from "../../../../packages/contracts/src/health";
+import { readBoundedRequestText } from "../http/bounded-request";
 import type { UxEventRecord } from "./store";
 
 type UxTelemetryOptions = {
@@ -28,35 +29,6 @@ function errorResponse(status: number, code: string, headers: HeadersInit = {}) 
   );
 }
 
-async function readBody(request: Request): Promise<string> {
-  const declaredLength = request.headers.get("content-length");
-  if (declaredLength !== null) {
-    if (!/^(?:0|[1-9]\d*)$/.test(declaredLength)) throw new TypeError("invalid length");
-    if (Number.parseInt(declaredLength, 10) > bodyLimit) throw new RangeError("body too large");
-  }
-  if (request.body === null) return "";
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let byteLength = 0;
-  while (true) {
-    const result = await reader.read();
-    if (result.done) break;
-    byteLength += result.value.byteLength;
-    if (byteLength > bodyLimit) {
-      await reader.cancel();
-      throw new RangeError("body too large");
-    }
-    chunks.push(result.value);
-  }
-  const bytes = new Uint8Array(byteLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-}
-
 export async function handleUxTelemetryRequest(
   request: Request,
   options: UxTelemetryOptions,
@@ -74,7 +46,7 @@ export async function handleUxTelemetryRequest(
 
   let text: string;
   try {
-    text = await readBody(request);
+    text = await readBoundedRequestText(request, bodyLimit);
   } catch (error) {
     return errorResponse(error instanceof RangeError ? 413 : 400, "invalid-request");
   }

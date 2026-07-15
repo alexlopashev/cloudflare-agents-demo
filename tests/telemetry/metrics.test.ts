@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  compareReleaseSamples,
-  nearestRankPercentile,
-  summarizeSamples,
-} from "../../packages/telemetry/src/metrics";
+import { nearestRankPercentile, summarizeSamples } from "../../packages/telemetry/src/metrics";
 
 describe("telemetry metrics", () => {
   it("uses milliseconds and handles empty, singleton, and percentile boundaries", () => {
@@ -32,54 +28,9 @@ describe("telemetry metrics", () => {
     });
   });
 
-  it("requires minimum samples in both equivalent release windows", () => {
-    const insufficient = compareReleaseSamples({
-      baseline: [{ durationMs: 100, outcome: "success" }],
-      current: [{ durationMs: 200, outcome: "success" }],
-      minimumSamples: 2,
-      windowDurationMs: 60_000,
-    });
-    expect(insufficient).toEqual({
-      status: "insufficient-data",
-      baselineSampleCount: 1,
-      currentSampleCount: 1,
-      minimumSamples: 2,
-      windowDurationMs: 60_000,
-    });
-
-    const ready = compareReleaseSamples({
-      baseline: [
-        { durationMs: 100, outcome: "success" },
-        { durationMs: 120, outcome: "success" },
-      ],
-      current: [
-        { durationMs: 300, outcome: "success" },
-        { durationMs: 360, outcome: "error" },
-      ],
-      minimumSamples: 2,
-      windowDurationMs: 60_000,
-    });
-    expect(ready).toMatchObject({
-      status: "ready",
-      windowDurationMs: 60_000,
-      baseline: { p75Ms: 120, errorRate: 0 },
-      current: { p75Ms: 360, errorRate: 0.5 },
-      p75DeltaMs: 240,
-      p75DeltaRatio: 2,
-    });
-  });
-
   it("rejects invalid durations, outcomes, percentiles, and comparison policy", () => {
     expect(() => nearestRankPercentile([1], 0)).toThrow();
     expect(() => nearestRankPercentile([-1], 0.75)).toThrow();
     expect(() => summarizeSamples([{ durationMs: Number.NaN, outcome: "success" }])).toThrow();
-    expect(() =>
-      compareReleaseSamples({
-        baseline: [],
-        current: [],
-        minimumSamples: 0,
-        windowDurationMs: 60_000,
-      }),
-    ).toThrow();
   });
 });

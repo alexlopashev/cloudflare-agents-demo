@@ -11,7 +11,6 @@
   "dependencies": {
     "@ai-sdk/provider": "3.0.14",
     "@cloudflare/ai-chat": "0.9.3",
-    "@cloudflare/shell": "0.4.1",
     "@cloudflare/think": "0.12.1",
     "agents": "0.17.3",
     "ai": "6.0.224",
@@ -23,7 +22,7 @@
     "zod": "4.4.3"
   },
   "scripts": {
-    "build": "vite build && wrangler deploy --dry-run --config wrangler.live.jsonc --outdir .local/live-bundle && node scripts/assert-live-bundle.ts .local/live-bundle",
+    "build": "vite build && wrangler deploy --dry-run --config wrangler.live.jsonc --outdir .local/live-bundle && node scripts/assert-live-bundle.ts .local/live-bundle apps/web/dist/client",
     "check": "pnpm doctor && pnpm container:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm e2e && pnpm build",
     "container:check": "docker-cli-plugin-docker-compose --file compose.yaml config --quiet",
     "db:migrate:local": "CI=1 wrangler d1 migrations apply regression-surgeon-telemetry --local --config wrangler.jsonc",

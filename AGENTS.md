@@ -207,6 +207,10 @@ Do not bypass pinned tools with globally installed alternatives. Do not replace 
 
 ## TypeScript standards
 
+- The repository is one root TypeScript package. Domain directories must not acquire nested package
+  manifests or independent workspace boundaries without a documented architectural change.
+- Production build output must stay within the enforced 7 MiB live-Worker JavaScript budget and
+  768 KiB client-output budget; raising either limit requires measured justification.
 - Enable strict TypeScript compiler options.
 - Keep repository Node automation in `scripts/*.ts`; `.mjs` automation entrypoints are forbidden.
 - Directly executed scripts must use only erasable TypeScript syntax supported by the pinned Node 24

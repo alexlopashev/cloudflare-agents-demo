@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { baselineDeployedAtMs, degradedDeployedAtMs, scenarioReleaseIds } from "./generator";
+import { readBoundedRequestText } from "../http/bounded-request";
 
 export const scenarioLocalKey = "regression-surgeon-local-only";
 
@@ -48,35 +49,6 @@ function hiddenResponse() {
   return new Response("Not found", { status: 404 });
 }
 
-async function readBoundedJson(request: Request): Promise<unknown> {
-  const declaredLength = request.headers.get("content-length");
-  if (declaredLength !== null) {
-    if (!/^(?:0|[1-9]\d*)$/.test(declaredLength)) throw new TypeError("invalid length");
-    if (Number.parseInt(declaredLength, 10) > bodyLimit) throw new RangeError("body too large");
-  }
-  if (request.body === null) throw new TypeError("missing body");
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let byteLength = 0;
-  while (true) {
-    const result = await reader.read();
-    if (result.done) break;
-    byteLength += result.value.byteLength;
-    if (byteLength > bodyLimit) {
-      await reader.cancel();
-      throw new RangeError("body too large");
-    }
-    chunks.push(result.value);
-  }
-  const bytes = new Uint8Array(byteLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
-}
-
 export async function handleScenarioRequest(
   request: Request,
   options: ScenarioControlOptions,
@@ -119,7 +91,7 @@ export async function handleScenarioRequest(
 
   let payload: unknown;
   try {
-    payload = await readBoundedJson(request);
+    payload = JSON.parse(await readBoundedRequestText(request, bodyLimit)) as unknown;
   } catch {
     return Response.json({ error: { code: "invalid-request" } }, { status: 400 });
   }

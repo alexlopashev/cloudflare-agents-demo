@@ -41,11 +41,25 @@ describe("live production bundle contract", () => {
     expect(() => assertLiveBundle(directory)).toThrow(/MockLanguageModelV3/);
   });
 
+  it("rejects Worker and client output beyond explicit byte budgets", () => {
+    const directory = mkdtempSync(join(tmpdir(), "regression-surgeon-live-bundle-"));
+    const clientDirectory = mkdtempSync(join(tmpdir(), "regression-surgeon-client-bundle-"));
+    temporaryDirectories.push(directory, clientDirectory);
+    writeFileSync(join(directory, "index.js"), "x".repeat(7 * 1_024 * 1_024 + 1), "utf8");
+    writeFileSync(join(clientDirectory, "index.js"), "export default {}", "utf8");
+
+    expect(() => assertLiveBundle(directory, clientDirectory)).toThrow(/Worker.*byte budget/i);
+
+    writeFileSync(join(directory, "index.js"), "export default {}", "utf8");
+    writeFileSync(join(clientDirectory, "index.js"), "x".repeat(768 * 1_024 + 1), "utf8");
+    expect(() => assertLiveBundle(directory, clientDirectory)).toThrow(/client.*byte budget/i);
+  });
+
   it("accepts a production-only bundle", () => {
     const directory = mkdtempSync(join(tmpdir(), "regression-surgeon-live-bundle-"));
     temporaryDirectories.push(directory);
     writeFileSync(join(directory, "index.js"), "export default { fetch() {} }", "utf8");
 
-    expect(() => assertLiveBundle(directory)).not.toThrow();
+    expect(() => assertLiveBundle(directory, directory)).not.toThrow();
   });
 });
