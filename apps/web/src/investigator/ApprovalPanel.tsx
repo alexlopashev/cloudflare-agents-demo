@@ -21,6 +21,18 @@ export type ApprovalRequest = {
 export type PreparedApprovalDetails = {
   fingerprint: string;
   writeEnabled: boolean;
+  proposal: {
+    expectedBlobSha: string;
+    incident: {
+      regressionCommitSha: string;
+      sourcePullRequestNumber: number;
+      traceId: string;
+    };
+    path: string;
+    rationale: string;
+    replacementContent: string;
+    title: string;
+  };
   diff: {
     additions: number;
     currentContent: string;
@@ -70,55 +82,39 @@ export function buildApprovalRequests(
       ) {
         continue;
       }
-      const incident = property(input, "incident");
-      if (incident === null || typeof incident !== "object") continue;
       const approvalId = stringProperty(approval, "id");
       const toolCallId = stringProperty(part, "toolCallId");
-      const title = stringProperty(input, "title");
-      const path = stringProperty(input, "path");
       const proposalFingerprint = stringProperty(input, "proposalFingerprint");
-      const replacementContent = stringProperty(input, "replacementContent");
-      const rationale = stringProperty(input, "rationale");
-      const expectedBlobSha = stringProperty(input, "expectedBlobSha");
-      const traceId = stringProperty(incident, "traceId");
-      const regressionCommitSha = stringProperty(incident, "regressionCommitSha");
-      const sourcePullRequestNumber = positiveIntegerProperty(incident, "sourcePullRequestNumber");
       if (
         approvalId === undefined ||
         toolCallId === undefined ||
-        title === undefined ||
-        path === undefined ||
         proposalFingerprint === undefined ||
-        replacementContent === undefined ||
-        rationale === undefined ||
-        expectedBlobSha === undefined ||
-        traceId === undefined ||
-        regressionCommitSha === undefined ||
-        sourcePullRequestNumber === undefined ||
         prepared === undefined ||
         prepared.fingerprint !== proposalFingerprint ||
-        prepared.diff.path !== path ||
-        prepared.diff.replacementContent !== replacementContent
+        prepared.diff.path !== prepared.proposal.path ||
+        prepared.diff.replacementContent !== prepared.proposal.replacementContent ||
+        positiveIntegerProperty(prepared.proposal.incident, "sourcePullRequestNumber") === undefined
       ) {
         continue;
       }
+      const { proposal } = prepared;
       requests.push({
         additions: prepared.diff.additions,
         approvalId,
         changedLineCount: prepared.diff.additions + prepared.diff.deletions,
         currentContent: prepared.diff.currentContent,
         deletions: prepared.diff.deletions,
-        expectedBlobSha,
+        expectedBlobSha: proposal.expectedBlobSha,
         fileCount: 1,
         toolCallId,
-        title,
-        path,
+        title: proposal.title,
+        path: proposal.path,
         proposalFingerprint,
-        rationale,
-        regressionCommitSha,
-        replacementContent,
-        sourcePullRequestNumber,
-        traceId,
+        rationale: proposal.rationale,
+        regressionCommitSha: proposal.incident.regressionCommitSha,
+        replacementContent: proposal.replacementContent,
+        sourcePullRequestNumber: proposal.incident.sourcePullRequestNumber,
+        traceId: proposal.incident.traceId,
         writePosture: prepared.writeEnabled
           ? "Live draft-PR writes enabled"
           : "Preview only — external GitHub writes disabled",

@@ -653,9 +653,9 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     const pending = await runInDurableObject<
       RegressionSurgeonAgent,
       {
+        actionInputKeys: string[];
         approvalId: string | undefined;
         proposalFingerprint: string | undefined;
-        replacementContent: string | undefined;
         output: unknown;
         state: string | undefined;
       }
@@ -669,15 +669,17 @@ describe("RegressionSurgeonAgent investigation policy", () => {
         .find((candidate) => candidate.type === "tool-create_draft_pr");
       if (part === undefined || !("state" in part)) {
         return {
+          actionInputKeys: [],
           approvalId: undefined,
           proposalFingerprint: undefined,
-          replacementContent: undefined,
           output: undefined,
           state: undefined,
         };
       }
       const approval = "approval" in part ? part.approval : undefined;
+      const input = "input" in part && typeof part.input === "object" ? part.input : undefined;
       return {
+        actionInputKeys: input !== undefined && input !== null ? Object.keys(input).sort() : [],
         approvalId:
           approval !== undefined && typeof approval === "object" && approval !== null
             ? Reflect.get(approval, "id")
@@ -686,19 +688,15 @@ describe("RegressionSurgeonAgent investigation policy", () => {
           "input" in part && typeof part.input === "object" && part.input !== null
             ? Reflect.get(part.input, "proposalFingerprint")
             : undefined,
-        replacementContent:
-          "input" in part && typeof part.input === "object" && part.input !== null
-            ? Reflect.get(part.input, "replacementContent")
-            : undefined,
         output: "output" in part ? part.output : undefined,
         state: typeof part.state === "string" ? part.state : undefined,
       };
     });
 
     expect(pending).toEqual({
+      actionInputKeys: ["proposalFingerprint"],
       approvalId: expect.any(String),
       proposalFingerprint: expect.stringMatching(/^proposal-v1-[0-9a-f]{16}$/),
-      replacementContent: expect.stringMatching(/maximumConcurrentChecks = 2/),
       output: undefined,
       state: "approval-requested",
     });
@@ -713,7 +711,6 @@ describe("RegressionSurgeonAgent investigation policy", () => {
       {
         actionFingerprint: string | undefined;
         actionState: string | undefined;
-        actionTraceId: string | undefined;
         phaseStatuses: string[];
         preparedFingerprint: string | undefined;
         preparedTraceId: string | undefined;
@@ -732,10 +729,6 @@ describe("RegressionSurgeonAgent investigation policy", () => {
         action !== undefined && "input" in action && typeof action.input === "object"
           ? action.input
           : undefined;
-      const actionIncident =
-        actionInput !== undefined && actionInput !== null
-          ? Reflect.get(actionInput, "incident")
-          : undefined;
       const prepared =
         instance.state.status === "investigating" ? instance.state.preparedRemediation : undefined;
       return {
@@ -746,10 +739,6 @@ describe("RegressionSurgeonAgent investigation policy", () => {
         actionState:
           action !== undefined && "state" in action && typeof action.state === "string"
             ? action.state
-            : undefined,
-        actionTraceId:
-          typeof actionIncident === "object" && actionIncident !== null
-            ? Reflect.get(actionIncident, "traceId")
             : undefined,
         phaseStatuses:
           instance.state.status === "investigating"
@@ -772,7 +761,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     ]);
     expect(result.actionState).toBe("approval-requested");
     expect(result.actionFingerprint).toBe(result.preparedFingerprint);
-    expect(result.actionTraceId).toBe(result.preparedTraceId);
+    expect(result.preparedTraceId).toMatch(/^regression-sequential-trace-/);
   });
 
   it("replays reconnect and deduplicates an approval resend", async () => {
@@ -823,7 +812,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     });
   }, 30_000);
 
-  it("rejects a changed proposal after the receipt fingerprint is prepared", async () => {
+  it("rejects an unprepared fingerprint after the receipt proposal is prepared", async () => {
     await seedRegressionEvidence();
     const stub = env.REGRESSION_SURGEON_AGENT.getByName("fingerprint-authorization");
     await (
@@ -844,9 +833,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
         try {
           await action.config.execute(
             {
-              ...instance.state.preparedRemediation.proposal,
-              proposalFingerprint: instance.state.preparedRemediation.fingerprint,
-              replacementContent: "a different model-supplied proposal",
+              proposalFingerprint: "proposal-v1-fedcba9876543210",
             },
             {} as never,
           );

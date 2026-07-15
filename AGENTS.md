@@ -101,6 +101,9 @@ Do not assert exact natural-language output from a live model. Assert structured
 - GitHub token entry delegates directly to pinned Wrangler's TTY prompt. Tokens must never come from
   `gh`, command arguments, environment files, repository state, or chat.
 - Explicit approval is required before every external write.
+- The model-facing draft-PR action carries only the prepared proposal fingerprint. The server resolves
+  the exact persisted proposal, and the approval UI renders that persisted proposal and diff; model
+  output cannot replace source, paths, SHAs, incident evidence, or remediation prose.
 - Only the configured repository and allowlisted source paths can change.
 - Base and blob SHAs prevent stale writes.
 - An advanced base is accepted only when the allowlisted source has the same immutable blob and

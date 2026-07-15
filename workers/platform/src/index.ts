@@ -109,7 +109,7 @@ export class RegressionSurgeonAgent extends Think<PlatformEnvironment, Investiga
         : "";
     const prepared =
       this.state.status === "investigating" && this.state.preparedRemediation !== undefined
-        ? `\nThe complete receipt prepared this exact remediation input. You may call create_draft_pr only with this unchanged JSON: ${JSON.stringify({ ...this.state.preparedRemediation.proposal, proposalFingerprint: this.state.preparedRemediation.fingerprint })}`
+        ? `\nThe complete receipt prepared remediation fingerprint ${this.state.preparedRemediation.fingerprint}. You may call create_draft_pr only with this unchanged JSON: ${JSON.stringify({ proposalFingerprint: this.state.preparedRemediation.fingerprint })}`
         : "";
     return `You are Regression Surgeon, an evidence-first latency investigator.
 ${measuredEvidence}${receiptContext}
@@ -188,14 +188,10 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
     });
     return createRemediationAction(service, {
       idempotencyScope: writeEnabled ? "write" : "preview",
-      authorize: (input) => {
-        if (this.state.status !== "investigating") return false;
+      resolveProposal: (proposalFingerprint) => {
+        if (this.state.status !== "investigating") return;
         const prepared = this.state.preparedRemediation;
-        if (prepared === undefined || input.proposalFingerprint !== prepared.fingerprint) {
-          return false;
-        }
-        const { proposalFingerprint: _proposalFingerprint, ...proposal } = input;
-        return JSON.stringify(proposal) === JSON.stringify(prepared.proposal);
+        return prepared?.fingerprint === proposalFingerprint ? prepared.proposal : undefined;
       },
     });
   }
@@ -394,7 +390,6 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
     const action = this.createRemediationAction(false);
     return action.config.execute(
       {
-        ...prepared.proposal,
         proposalFingerprint: prepared.fingerprint,
       },
       {} as never,

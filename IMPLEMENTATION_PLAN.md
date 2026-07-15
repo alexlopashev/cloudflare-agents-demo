@@ -551,6 +551,7 @@ Evidence tools:
 
 - Remain unavailable until the same incident has a complete evidence receipt.
 - Prepare and persist an exact bounded diff plus fingerprint.
+- Accept only that fingerprint from the model and resolve the exact proposal from persisted state.
 - Require explicit approval of that fingerprint.
 - Return a validated preview by default; optionally create or reuse one idempotent draft PR.
 
@@ -865,8 +866,10 @@ uncertain branch or PR responses return deterministic recoverable state without 
 branch. Recovery accepts only a branch exactly one commit ahead of the evidenced base with exactly the
 approved file changed. No merge endpoint or tool exists. The action is unavailable until the same
 incident's receipt is complete. The receipt then prepares and persists the exact one-file replacement
-and stable fingerprint; authorization rejects a changed fingerprint or proposal, while repository
-branch identity remains stable per incident.
+and stable fingerprint. The model-facing action accepts only that fingerprint; the server resolves
+the exact persisted proposal, and the reviewer UI renders the prepared proposal and diff from agent
+state. An unprepared fingerprint fails closed, and repository branch identity remains stable per
+incident.
 
 - Add guarded PR proposal creation.
 - Add Project Think approval interaction.
@@ -1084,7 +1087,9 @@ Acceptance criteria:
 - The Project Think step policy forces the ordered evidence capabilities, restores persisted phase,
   does not double-count a tool call, and permits a low-confidence final report after two bounded
   failures rather than looping.
-- A real public browser message completes that evidence-tool chain and produces an assistant response.
+- A real public browser message completes that evidence-tool chain and produces an assistant response;
+  its explicit guarded-preview follow-up yields the native approval request using fingerprint-only
+  model input.
 - The top-right route pills are absent without changing either public route contract.
 - Full local gates, deployed smoke, responsive browser verification, and project-system alignment pass.
 
