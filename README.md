@@ -1,78 +1,59 @@
 # Regression Surgeon
 
-Regression Surgeon is a Cloudflare-native agent that investigates a measured UX latency regression,
-traces it through a supervised full-stack application, correlates the degraded release with immutable
-GitHub evidence, and prepares a minimal evidence-backed remediation preview. A real draft PR is an
-optional, approval-gated operator extension.
+Regression Surgeon is a Cloudflare-native agent that traces a measured UX latency regression from
+release telemetry to an immutable Git commit and prepares a bounded remediation preview. The public
+demo is credential-free and write-disabled; a real draft PR is an optional, explicitly enabled
+operator workflow.
 
-The project is a take-home exercise for building and deploying a genuine multi-step AI agent on
-Cloudflare Workers. The agent and the application it supervises live in this repository.
+- [Open the public demo](https://regression-surgeon-platform.alexlopashev.workers.dev/app)
+- [Read the current implementation plan](IMPLEMENTATION_PLAN.md)
+- [Review dated delivery evidence](RELEASE_READINESS.md)
+- [Browse the project wiki](https://github.com/alexlopashev/cloudflare-agents-demo/wiki)
 
-## Intended demonstration
+## Five-minute demonstration
 
-1. Open Regression Investigator from Deployboard's floating launcher.
+1. Open **Regression Investigator** from Deployboard's floating launcher.
 2. Start the configured seeded-latency investigation.
-3. Watch five bounded evidence phases connect releases, traces, immutable Git history, and source.
-4. Review the structured evidence, inference, confidence, and unknowns.
-5. Inspect the exact one-file remediation diff and its evidence references.
-6. Verify that the public runtime is write-disabled and the result is a validated preview.
+3. Watch five persisted evidence phases compare releases, select and inspect a trace, inspect the
+   immutable release, and read the allowlisted source.
+4. Review the separate evidence, inference, confidence, and unknowns sections.
+5. Inspect the exact one-file remediation diff and its immutable evidence references.
+6. Confirm that the runtime is write-disabled and the result is a validated preview.
 
-Deployboard's fixed-size metric generator is an optional demonstration of telemetry ingestion. It
-does not select or modify the seeded incident investigated by the agent.
+The optional metric generator writes fixed batches of 5, 10, or 20 current-release samples. It
+demonstrates real ingestion but cannot replace or modify the configured incident.
 
 ## Architecture
 
-- Cloudflare Workers and the Cloudflare Vite plugin
-- Project Think with GLM 5.2 through one named Cloudflare AI Gateway
-- SQLite-backed Durable Object state for conversations
-- D1 for measured UX events, traces, spans, and releases
-- An auxiliary health-service Worker reached through a service binding
-- Immutable D1 source/preview receipts and an optional constrained GitHub REST adapter
-- An approval-gated GitHub adapter for bounded, idempotent draft PR creation
-- React, TypeScript, pnpm, and a mise-managed toolchain
+```mermaid
+flowchart LR
+    Browser["Deployboard and investigator"] --> Platform["Platform Worker"]
+    Platform --> Health["Health-service Worker"]
+    Platform --> D1["D1 telemetry and evidence"]
+    Platform --> Agent["Project Think Durable Object"]
+    Agent --> AI["GLM 5.2 through AI Gateway"]
+    Agent -. "optional approved write" .-> GitHub["GitHub REST API"]
+```
 
-The initial product supports one controlled repository, one supervised application, one latency-regression scenario, and one guarded remediation path. It is intentionally not a general-purpose coding agent.
+- React and the Cloudflare Vite plugin serve Deployboard and the investigator from one public URL.
+- D1 stores releases, UX events, traces, spans, and immutable source/preview evidence.
+- Project Think persists the conversation, evidence receipt, and prepared remediation in a
+  SQLite-backed Durable Object.
+- The live model is `@cf/zai-org/glm-5.2` through the named `regression-surgeon` AI Gateway.
+- The public preview uses read-only persisted evidence. Only the optional token-backed adapter has
+  GitHub write capabilities.
+- A separate health-service Worker provides a real service-binding path for the controlled
+  concurrent-versus-sequential regression.
 
-This is one TypeScript package with domain directories, not a multi-package monorepo. `apps/`,
-`workers/`, and `packages/` organize one deployment and share the root manifest, lockfile, compiler,
-and quality gates.
+This is one strict TypeScript package with domain directories, not a multi-package monorepo. The
+`apps/`, `workers/`, and `packages/` directories share one manifest, lockfile, compiler, and quality
+gate. The product intentionally supports one repository, one application, one metric, one seeded
+incident, and one remediation path.
 
-## Supported development environments
+## Local setup
 
-- macOS ARM64 and x64
-- Linux ARM64 and x64
-- sh, Bash, Zsh, Fish, and Nu
-
-Hosted CI runs the complete gate on Linux ARM64 and x64. macOS remains a supported local environment
-and is verified through developer and dated clean-room evidence rather than hosted CI.
-
-Bootstrap is repository-local and shell-neutral. It never edits a shell profile, installs tools into
-a system path, or inherits tools from a user's global mise configuration. It fixes mise discovery to
-this project's configuration and installs only the explicitly named locked tool set, so a successful
-bootstrap does not rewrite `mise.lock`. Activation opens a
-project-scoped child shell, so leaving that shell removes its environment changes.
-Repository automation uses `scripts/*.ts`, executed directly through Node 24.18's stable type
-stripping with `erasableSyntaxOnly`; `tsc --noEmit` remains the separate strict type-checking gate.
-
-The reproducible foundation, Cloudflare application skeleton, supervised Deployboard, immutable
-repository connector, measured telemetry pipeline, and evidence-driven investigation are
-implemented, including guarded remediation preview and write boundaries.
-
-Deployboard can generate fixed batches of 5, 10, or 20 real current-release interactions as an
-optional ingestion demonstration. Samples run sequentially and count only after UX telemetry is
-stored; refresh and generation cannot overlap. They do not replace or select the configured
-baseline/degraded evidence pair.
-The investigator remains mounted as a collapsible support-style dialog with a floating launcher,
-availability status, safe GitHub-flavored Markdown, and literal user requests. A first-time reviewer
-can start the one configured incident with a single action, and no unread badge appears before an
-assistant result exists. Evidence progress comes from the persisted five-phase receipt. Before
-approval, the action carries only the persisted proposal fingerprint; the panel resolves that
-fingerprint against agent state and shows the current evidenced source, exact replacement, rationale,
-one-file and changed-line counts, immutable evidence references, and current write posture.
-The desktop panel is bounded, while the mobile panel fills the viewport with a full-width 44px send
-action. `/investigator` opens the same Deployboard experience with the widget expanded.
-
-### Bootstrap
+Supported hosts are macOS and Linux on ARM64 and x64. Supported shells are sh, Bash, Zsh, Fish, and
+Nu. Hosted CI runs on Linux ARM64 and x64; dated clean-room evidence covers macOS.
 
 From the repository root:
 
@@ -81,320 +62,146 @@ From the repository root:
 ./scripts/activate
 ```
 
-The same POSIX entrypoints work from sh, Bash, Zsh, Fish, and Nu. `activate` opens the shell named by
-`SHELL` with the repository-local mise binary and shims available. To run one command without
-opening a child shell, pass it directly, for example `./scripts/activate mise run check`.
-
-Each filesystem-changing bootstrap stage uses a single-keystroke `Y/n` confirmation. The approved
-path installs the locked dependencies, applies repository-local D1 migrations, loads the measured
-good/bad fixtures, builds the application, and runs the complete credential-free verification suite.
-Colima is never started by bootstrap.
-
-### Core tasks
+Bootstrap installs the pinned toolchain and dependencies inside the repository, applies local D1
+migrations, seeds deterministic evidence, and runs the credential-free verification flow after
+single-keystroke consent. It never edits shell profiles, installs into system paths, starts Colima,
+or changes the active Docker context. Activation opens a project-scoped child shell or runs the
+command supplied after it:
 
 ```text
-mise run doctor
-mise run build
-mise run check
-mise run test
-mise run test:watch
-mise run db:migrate
-mise run scenario:reset
-mise run scenario:reseed
+./scripts/activate mise run check
+```
+
+The canonical local runtime is:
+
+```text
 mise run dev
-mise run dev:live
-mise run e2e
-mise run auth:cloudflare
-mise run ai:gateway:ensure
-mise run github:writes:secret
-mise run github:writes:secret:delete
-mise run deploy
-mise run deploy:smoke
-mise run deploy:refresh
-mise run deploy:usage:enable
-mise run deploy:usage:disable
-mise run deploy:writes:enable
-mise run deploy:writes:disable
-mise run deploy:reset
-mise run container:check
-mise run container:up
-mise run container:down
-mise run teardown
 ```
 
-`mise run dev` first applies pending migrations to the repository-local D1 database, then starts the
-complete Cloudflare stack in deterministic fake-model mode, with no credentials or remote AI usage.
-It serves Deployboard at `/app`, the durable Project Think session at `/investigator`, and the
-platform APIs from one URL. The current release intentionally serializes the three 120 ms service
-checks to create the controlled regression. `mise run scenario:reseed` regenerates 20 measured
-concurrent and 20 measured sequential interactions in local D1; `mise run scenario:reset` removes
-only those two releases. `mise run dev:live` builds the app and starts the same Worker with the
-explicit Workers AI configuration. Live inference uses `@cf/zai-org/glm-5.2` through the named
-`regression-surgeon` AI Gateway; Cloudflare authentication and remote usage apply. `mise run e2e`
-verifies both public routes, runtime metadata, the auxiliary service binding, trace persistence,
-correlated browser telemetry, statistically distinguishable scenario evidence, and a credential-free
-five-operation Project Think investigation that cites the measured trace, immutable commit, and source PR.
-It also validates an evidence-rich draft-PR preview against base/blob freshness, path, byte, line, and
-changed-line limits while proving that local mode performs no GitHub writes.
+It serves `/app`, `/investigator`, `/api/*`, and `/agents/*` in deterministic fake-model mode with
+no credentials or remote AI usage. Use `mise run scenario:reseed` to recreate 20 baseline and 20
+degraded measurements. `mise run dev:live` switches to Workers AI and therefore requires Cloudflare
+authentication and paid usage.
 
-`mise run test -- <target>` dispatches a foundation, ordinary Vitest, or Worker target only to its
-compatible test layer. `mise run test:watch` loads named ordinary and Worker Vitest projects so
-either behavior can be selected during TDD. `mise run check` is the single non-deployment CI gate:
-doctor, container contract, formatting, linting, type checking, all test layers, deterministic E2E,
-and the production build/bundle assertion run once in a fixed order. The build rejects a live Worker
-above 7 MiB of JavaScript or client output above 768 KiB, in addition to scanning for test-only code.
+## Core tasks
 
-### Public Cloudflare deployment
+| Purpose | Tasks |
+| --- | --- |
+| Verify | `mise run doctor`, `mise run check`, `mise run build` |
+| Test-driven development | `mise run test -- <target>`, `mise run test:watch` |
+| Local data | `mise run db:migrate`, `mise run scenario:reset`, `mise run scenario:reseed` |
+| Local runtime | `mise run dev`, `mise run dev:live` |
+| Deployment | `mise run deploy`, `mise run deploy:smoke`, `mise run deploy:refresh` |
+| Public posture | `mise run deploy:usage:enable`, `mise run deploy:usage:disable` |
+| GitHub writes | `mise run deploy:writes:enable`, `mise run deploy:writes:disable` |
+| Remote cleanup | `mise run deploy:reset` |
+| Optional container | `mise run container:check`, `mise run container:up`, `mise run container:down` |
+| Local cleanup | `mise run teardown` |
 
-The current no-login demo is
-[regression-surgeon-platform.alexlopashev.workers.dev](https://regression-surgeon-platform.alexlopashev.workers.dev/app).
-Authenticate once with `mise run auth:cloudflare`. Gateway management additionally requires an
-ephemeral `CLOUDFLARE_API_TOKEN` with **AI Gateway Write** permission in the current process;
-Wrangler's OAuth token is not accepted by that API. Never put this token in chat, a command argument,
-an environment file, or repository state. Deployment keeps the token only in the direct Gateway API
-client and removes it from every child-process environment, so Wrangler continues to use its OAuth
-session. `mise run ai:gateway:ensure` is the only ordinary operator task that may create or repair
-the named gateway and its one enabled, unscoped `$5` cost rule over a fixed 86,400-second UTC-day
-window. It preserves the gateway's other mutable settings and verifies a fresh read after mutation.
-Normal deploy and refresh never alter that budget: they fail before build or live inference when the
-gateway or exact rule is missing, disabled, duplicated, scoped, or drifted. Then run
-`mise run deploy`. The task reuses or creates only the named D1 database, builds both Workers and the
-web app, applies remote migrations,
-uploads a concurrent baseline and sequential regression behind the current write-disabled
-investigator, measures 20 interactions against each exact version, then deploys the public GLM 5.2
-investigator through that gateway with those exact Cloudflare version IDs and trace timestamps. It finishes with a
-keyed smoke that verifies the two public routes, runtime metadata, five exact incident-scoped
-evidence phases, their trace, release,
-commit, PR, source, and blob cross-references, all four report sections, the remediation fingerprint
-and change counts, a validated zero-write preview, and the expected GitHub write posture.
-Machine cross-references come from the validated persisted receipt; live report prose proves the
-four exact ordered section boundary through bounded line-level Markdown, bold, or colon-label
-headings without needing to repeat identifiers in incidental wording. Once that receipt completes,
-the same Project Think turn removes all tools from its final step and produces the report.
+`mise run check` is the complete non-deployment gate: doctor, resolved Compose contract,
+formatting, linting, strict type checking, every test layer, deterministic E2E, and the production
+build. The current suite protects normal, boundary, failure, retry, persistence, idempotency,
+approval, and resource-limit behavior. The build rejects test-only code in the live Worker and
+enforces a 7 MiB Worker JavaScript budget and a 768 KiB client-output budget.
 
-Every measured health and telemetry POST is attempted exactly once. A transport failure or any
-non-success response stops the deployment with the failing stage and sample identifier; deployment
-automation never replays an endpoint that may already have recorded telemetry or another effect.
-Each interaction identifier includes its immutable Worker version, so a later deployment cannot
-collide with or rewrite historical evidence for the same sample ordinal.
+## Deployment and operating posture
 
-The configured GLM 5.2 model requires a Workers Paid plan. On a Workers Free account, the named
-Gateway still records the routed attempt, but Workers AI rejects inference before consuming tokens;
-see Cloudflare's [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
-Before either measured sequence begins, deployment keeps the validated write-disabled investigator
-at 100% traffic, adds the measured version to the active deployment at 0%, and polls a
-side-effect-free readiness route with Cloudflare's exact-version override until that version answers
-three consecutive times, then allows a bounded global-settle interval before executable traffic.
-The same override pins every one-shot health and telemetry request; the route and pre-execution
-release check still reject an unavailable or mismatched version before dependency calls or trace
-persistence. A failed normal deployment uses Cloudflare's rollback flow to restore and verify the
-prior write-disabled investigator even when the smoke secret rotated, or reports both the deployment
-and bounded rollback failures.
-Every keyed smoke applies the same consecutive exact-version gate to the recorded secret-bearing
-investigator before it checks public routes or submits executable verification.
-It then polls a smoke-key-protected, GET-only evidence-readiness route until the configured D1
-comparison, representative trace, source receipt, and exact deployed-main preview receipt are
-readable through the exact named Durable Object session that will run the smoke. This proves
-availability at the agent execution boundary instead of only at the outer Worker. Only 404/503 from
-that side-effect-free route may retry; it cannot call Workers AI, remediation, GitHub, health, or
-telemetry writes. The executable agent smoke remains single-shot.
-If a complete evidence receipt fails afterward, deployment reports only whether the bounded preview
-failed (with one whitelisted policy code) or which bounded final-verification contract surfaces were
-invalid. Exception text, source, model prose, identifiers, and credentials are never returned.
+Authenticate Wrangler once with `mise run auth:cloudflare`. AI Gateway management additionally
+requires an ephemeral `CLOUDFLARE_API_TOKEN` with **AI Gateway Write** permission in the current
+process. Never place it in chat, command arguments, environment files, or repository state.
+Deployment removes it from child-process environments so Wrangler continues to use its separate
+OAuth session.
 
-`mise run deploy:refresh` redeploys only the investigator while preserving the measured evidence.
-`mise run deploy:smoke` repeats the deployed verification. `mise run deploy:reset` deletes only the
-two release IDs recorded by the last deployment from remote D1; run `mise run deploy` afterward to
-recreate evidence. The deployment state and smoke key live under ignored `.local/deploy` with
-owner-only permissions. The public app requires no login and creates a durable session identifier in
-browser-local storage.
+`mise run ai:gateway:ensure` is the only task that may create or repair the named Gateway and its
+single enabled, unscoped `$5` cost limit over a fixed 86,400-second window. Ordinary deploy and
+refresh verify that exact rule and fail before build or inference if it drifted.
 
-#### Public usage bounds and emergency shutdown
+`mise run deploy` then:
 
-The remote Worker uses two independent Cloudflare Rate Limiting bindings. A new public paid-model
-turn consumes one of 10 investigator requests per 60 seconds before Workers AI inference begins;
-the internal tool loop and continuations remain part of that one turn. Public `/api/health` and
-`/api/telemetry/ux` requests share a separate 60-request-per-60-second metric budget. A maximum
-20-sample reviewer batch consumes 40 metric requests, leaving room for normal page refreshes.
-Validated deployment measurement requests bypass the public metric budget because they are pinned
-to an exact release and attempted only once. The keyed programmatic smoke likewise bypasses the
-public turn budget, while remaining one-shot and subject to the same Gateway spend cap.
+1. reuses or creates the named D1 database and applies migrations;
+2. builds the health Worker, platform Worker, and client;
+3. uploads concurrent baseline and sequential degraded versions at 0% ordinary traffic;
+4. sends 20 one-shot interactions to each exact Worker version;
+5. seeds immutable release, source, and preview evidence from validated local Git objects;
+6. deploys the write-disabled investigator with the measured IDs and windows; and
+7. runs one keyed smoke over the public routes, evidence receipt, report sections, remediation
+   fingerprint, preview, and runtime posture.
 
-An exhausted budget returns `429` with `Retry-After: 60`; a missing or failed limiter returns `503`.
-Both paths stop before Workers AI, health-service calls, trace persistence, or UX telemetry writes.
-Cloudflare [documents these counters as local per edge location and intentionally
-approximate](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/), so they
-are an abuse bound rather than a globally exact billing control. The independent Gateway rule tracks
-estimated billable model cost across all current and future providers and models routed through this
-gateway. Cloudflare documents spend-limit accounting as eventually consistent, so concurrent
-requests can briefly overshoot `$5`; the public turn limiter bounds that burst window. Once the
-Gateway returns `429`, Project Think permits at most one provider retry, exposes only a bounded
-model-unavailable result, and preserves the existing incident receipt without enabling remediation
-or GitHub writes.
+Side-effecting measurement and smoke requests are never retried. Only pre-execution propagation
+checks and the keyed, GET-only evidence-readiness route may poll. Any failed normal deployment
+restores and verifies the prior write-disabled investigator or reports both deployment and rollback
+failures. `mise run deploy:reset` deletes only the two measured release IDs recorded in validated
+local deployment state.
 
-The fixed window resets on the next UTC-day boundary. Monitor cumulative model spend in the AI
-Gateway Analytics dashboard. Budget exhaustion is distinct from both Workers AI's included neuron
-allowance and the per-edge request counters above: wait for the UTC reset or emergency-disable public
-usage; do not raise or remove the rule through deploy or refresh. If readback reports configuration
-drift, rerun `mise run ai:gateway:ensure` with the short-lived management token, verify the exact
-rule, and then retry the deployment.
+### Public usage bounds
 
-`mise run deploy:usage:disable` redeploys the preserved evidence with public AI and metric-writing
-traffic disabled and GitHub writes off. `mise run deploy:usage:enable` restores the rate-limited
-posture; each operation rotates the smoke key and verifies the exact runtime mode. Local
-deterministic `mise run dev` remains unrestricted and credential-free. These deployment operations
-require the same short-lived AI Gateway Write token as refresh; never paste it into chat or persist it.
+The public Worker admits at most 10 new paid investigator turns per 60 seconds and 60 metric-writing
+requests per 60 seconds through independent Cloudflare rate-limit bindings. A denied or unverifiable
+limit stops before inference, dependency calls, or telemetry writes. These per-edge counters are an
+abuse bound; the Gateway's fixed daily cost rule is the separate account-level ceiling. A provider
+429 retries at most once and becomes a bounded model-unavailable result without changing the
+persisted receipt or enabling remediation.
 
-No GitHub token is copied from `gh` or uploaded by the deployment task. In the credential-free public
-posture, D1 resolves the real Worker version to an immutable commit SHA and stores one bounded source
-receipt for `workers/platform/src/api/health.ts`. Deployment derives that receipt from local immutable
-Git objects, validates configured PR #19's base, head, and regression relationship, requires exact
-head/regression bytes and Git blob identities, and requires the base source to differ before seeding
-the measured degraded release. Runtime release inspection and source reading use only that receipt
-and make no GitHub request. Commit subject/date are evidenced; author, PR title/author/base/merge
-metadata, and diff counts remain explicit unknowns. This avoids depending on GitHub network
-reachability without adding a credential, exposing generic source access, or fabricating evidence for
-another file. Deployment also validates the exact deployed-main source from local Git and stores a
-companion preview receipt only when its bytes/blob equal the evidenced regression source. The
-write-disabled preview reads those two immutable D1 refs and performs no GitHub request; tree metadata
-remains mandatory for the separate write-enabled path. A supplied scoped token may use bounded REST reads;
-external writes additionally require `GITHUB_WRITE_ENABLED=true`, explicit Project Think approval,
-and all repository/path/SHA/blob/size gates. The published demo deliberately keeps that flag false, so
-approval yields a preview and cannot create or merge a pull request.
+`mise run deploy:usage:disable` emergency-disables paid turns and metric writes while keeping
+GitHub writes off. `mise run deploy:usage:enable` restores the rate-limited posture. Both preserve
+measured evidence, rotate the smoke key, and verify the result.
 
-#### Optional live draft PR
+### Optional live draft PR
 
-To demonstrate a real draft PR, create a short-lived fine-grained GitHub token restricted to this
-repository with **Contents: read and write** and **Pull requests: read and write**; leave Actions,
-Administration, Secrets, and every other write permission disabled. Run
-`mise run github:writes:secret` and enter the token only at Wrangler's terminal prompt. Then run
-`mise run deploy:writes:enable`. The task fails closed unless Cloudflare reports the exact secret,
-preserves the measured evidence pair, deploys the explicit write posture, and runs a preview-only
-smoke that cannot create a PR. If deployment or smoke fails after mutation begins, the task
-automatically redeploys the preserved evidence with writes disabled and verifies that posture
-without calling Workers AI; if rollback cannot be verified, both errors are reported. A real PR can
-be created only when the browser agent requests the
-high-risk action and a human clicks Approve. If `main` has advanced, the write service proceeds only
-when the allowlisted source blob is unchanged from the evidenced regression commit, then parents the
-new one-file commit on current `main`; otherwise it fails stale. Run
-`mise run deploy:writes:disable` immediately after the demonstration; ordinary `deploy` and
-`deploy:refresh` also return to the default-off posture.
-After disabling writes, run `mise run github:writes:secret:delete` to revoke the Worker credential.
-The keyed smoke may retry the endpoint's pre-execution 404 for at most one minute while a newly
-rotated smoke key propagates across Cloudflare. It returns every other status immediately, so a
-Workers AI turn or other endpoint work is never duplicated. Before remediation, the keyed route
-classifies the fixed
-five-phase receipt. An incomplete receipt returns only bounded tool names and statuses, while an
-invalid receipt shape exposes only a bounded whitelist of contract surfaces—never values or
-validation messages. Deployment prints that safe diagnostic, and the smoke stops without invoking
-preview or exposing model prose. All five configured tools derive selectors from runtime
-configuration or that receipt; model-generated releases, windows, traces, commits, and paths cannot
-redirect or block the investigation. A missing receipt selector is fixed `invalid-input`, while an
-actual evidence-service failure is fixed `unavailable`; neither diagnostic exposes values.
-
-The real WebSocket protocol contract is also exercised locally: reconnect replays the persisted
-pending approval, and a repeated approval response commits one guarded preview result without
-duplicating the user turn, action effect, branch, PR, or external write.
-
-### Optional Colima parity
-
-The native path above is canonical. For a clean Linux-container parity check, run:
+The public demo cannot write to GitHub. To demonstrate a real draft PR, create a short-lived,
+fine-grained token restricted to this repository with only **Contents: read and write** and **Pull
+requests: read and write**. Enter it directly through:
 
 ```text
-mise run container:up
+mise run github:writes:secret
+mise run deploy:writes:enable
 ```
 
-This starts the dedicated `polylane-take-home` Colima profile without changing the active Docker
-context, assigns the profile 4 GiB of memory, mounts the exact repository root, builds one Linux
-service, waits for its health check, and exposes the same application at `http://127.0.0.1:5173`.
-The container runs the canonical `mise run dev` task. Source code is bind mounted, while
-`node_modules`, `.local`, and `.wrangler` use Linux-owned named volumes so host-native `workerd`
-binaries can never leak into the container. The explicit repository mount means clones and worktrees
-outside the home directory behave the same way.
+A browser action still requires explicit human approval. The server accepts only the persisted
+proposal fingerprint, resolves the exact prepared diff, and enforces repository, path, base SHA,
+blob SHA, file, byte, line, changed-line, branch-idempotency, and stale-base gates. It has no merge
+capability. Failed enablement automatically restores and verifies the write-disabled posture.
 
-`mise run container:down` removes the Compose containers and network, stops Colima only when this
-project started it, and preserves the named volumes for a fast restart. `mise run teardown` is the
-full reset: it also removes project Compose volumes and deletes a Colima profile only when a
-repository ownership marker proves this project created it. Both operations are repeatable, and a
-failed start retains the marker required for safe recovery. A pre-existing profile is never deleted.
+Immediately afterward:
 
-## Engineering method
+```text
+mise run deploy:writes:disable
+mise run github:writes:secret:delete
+```
 
-This repository follows strict test-driven development. Every behavior change begins with a test that fails for the intended reason, proceeds through the smallest passing implementation, and ends with refactoring plus repository quality gates.
+## Optional container parity
 
-Read [AGENTS.md](AGENTS.md) before changing code. It defines the required TDD workflow, behavioral invariants, linting and formatting standards, security constraints, and definition of done.
+`mise run container:up` starts a dedicated `polylane-take-home` Colima profile and one Compose
+service with 4 GiB of memory. Only the repository root is bind-mounted; Linux-owned named volumes
+isolate `node_modules`, `.local`, and `.wrangler` from the host. `container:down` preserves those
+volumes for reuse. `teardown` removes only resources proven to be owned by this project.
 
-## Project documentation
+## Scope and limitations
 
-- [Implementation plan](IMPLEMENTATION_PLAN.md)
-- [Dated v1–v1.2 release-readiness evidence](RELEASE_READINESS.md)
-- [GitHub wiki](https://github.com/alexlopashev/cloudflare-agents-demo/wiki)
-- [v1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/1)
-- [v1.1 interactive-demo milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/2)
-- [Delivered v1.2 review-readiness milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
-- [Next-session handoff and delivery tracker](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48)
-- [Interactive demo UX issue](https://github.com/alexlopashev/cloudflare-agents-demo/issues/25)
-- [Delivery tracking issue](https://github.com/alexlopashev/cloudflare-agents-demo/issues/1)
-- [Open v1.2 delivery issues](https://github.com/alexlopashev/cloudflare-agents-demo/issues?q=is%3Aissue%20state%3Aopen%20milestone%3A%22v1.2%20%E2%80%94%20Review-ready%20evidence%20core%22)
-- [Project alignment skill](.agents/skills/align-project-system/SKILL.md)
+- Live model prose is nondeterministic; verification asserts structured phases, cross-references,
+  report sections, preview state, and zero writes.
+- Without a scoped GitHub token, the public investigator reads only the persisted immutable source
+  and preview receipts. Missing metadata remains an explicit unknown.
+- Cloudflare rate-limit counters and Gateway spend accounting are eventually consistent.
+- The agent cannot merge, deploy a proposed change, or roll back production.
+- Windows, PowerShell, OAuth, arbitrary repository onboarding, arbitrary SQL/filesystem access,
+  sub-agents, and general-purpose code editing are out of scope.
 
-After every meaningful change, contributors must reassess and align the implementation plan, GitHub milestone and dependency graph, wiki and README, `AGENTS.md`, and repository-local skills.
+## Project records
 
-## Current status
+- [Implementation plan](IMPLEMENTATION_PLAN.md) — current architecture, contracts, and scope
+- [Release readiness](RELEASE_READINESS.md) — dated clean-room and public evidence
+- [Delivered v1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/1)
+- [Delivered v1.1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/2)
+- [Delivered v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
+- [Optional real-write proof](https://github.com/alexlopashev/cloudflare-agents-demo/issues/30)
+- [Maintenance-footprint overhaul](https://github.com/alexlopashev/cloudflare-agents-demo/issues/121)
+- [Project-system alignment skill](.agents/skills/align-project-system/SKILL.md)
 
-The existing vertical slice works locally and on Cloudflare: measured baseline/degraded evidence,
-bounded repository inspection, a multi-step Project Think investigation, durable conversation state,
-and a guarded zero-write remediation preview. GitHub writes remain disabled by default.
-
-Each investigation now starts from one validated incident reference containing its incident ID,
-immutable baseline/degraded release pair, and bounded degraded trace window. That reference persists
-with the investigation, scopes evidence requests and remediation preparation, and appears in runtime
-verification. Starting again creates fresh investigation state, while optional current-release
-metric ingestion cannot replace the configured incident.
-
-Five single-purpose tools advance one persisted receipt in order: release comparison, slow-trace
-selection, trace inspection, immutable release inspection, and allowlisted source reading. Prose,
-truncated or malformed output, cross-release identifiers, and out-of-order results cannot complete a
-phase. The server—not model-generated arguments—binds the configured release pair, comparison
-window, degraded trace window, trace limit, and degraded release lookup. Validated tool output still
-has to match that incident. A failed phase gets one retry; after its second failed attempt, receipt
-persistence rejects additional attempts and the step policy exposes no evidence tools, allowing only
-a low-confidence report. The final report cites the receipt. Only a complete receipt can persist
-the exact one-file replacement and proposal fingerprint. The model can submit only that fingerprint;
-the server resolves the stored proposal, approval shows its exact replacement, and an unprepared
-fingerprint fails closed. Preview and write retries keep one branch identity per incident.
-
-Telemetry ingestion is retry-safe at its D1 boundary. Exact release, trace, span, and UX-event
-replays remain idempotent; conflicting identifier reuse aborts the whole write before related rows
-can be appended. A UX event is accepted only when its release and interaction match the referenced
-trace, so optional ingestion cannot cross-attribute evidence between releases.
-
-Trace inspection reports one parent-aware critical path with `wallTimeMs`. Parallel siblings are not
-flattened into one path; sequential spans, nesting, gaps, and fork/join ties follow a deterministic
-contract. Missing or cyclic parentage is excluded from the selected path and returned as bounded
-diagnostics instead of silently fabricating causality.
-
-Live Worker composition now imports only Workers AI and production GitHub adapters. Its model ID and
-gateway ID are validated before construction, every live inference is sent through the
-`regression-surgeon` Gateway, and parallel tool calls remain disabled. Vite and Worker tests
-explicitly substitute a deterministic demo adapter; the production build dry-runs and scans
-the live bundle to reject test-provider, fixture, and mock-model markers and enforce the Worker and
-client byte budgets. Missing, empty, and
-whitespace-only GitHub tokens normalize once as absent, selecting the persisted D1 release/source and
-preview receipts without satisfying write enablement or making a GitHub request. Runtime version,
-Git SHA, and deployment timestamp are validated before health telemetry or runtime identity can be
-emitted. The deterministic and live paths both prepare the same complete-file bounded-concurrency edit.
-
-The delivered [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
-hardens that slice rather than expanding it. Its implementation, public reviewer journey,
-clean-room verification, and project-system alignment are complete. Post-review extensions remain
-separately scoped and do not change the take-home completion contract.
-
-Mutable deployment snapshots and incident history live in issue comments and the dated
-[release record](RELEASE_READINESS.md). A real GitHub draft PR remains the optional operator proof in
-[issue #30](https://github.com/alexlopashev/cloudflare-agents-demo/issues/30), not a prerequisite for
-the credential-free reviewer journey.
+The three delivery milestones are complete. The public runtime remains rate-limited and
+write-disabled by default. After any meaningful change, contributors reassess the plan, relevant
+issues and native blockers, wiki, README, `AGENTS.md`, and repository-local skills.
 
 ## License
 
-MIT
+[MIT](LICENSE)

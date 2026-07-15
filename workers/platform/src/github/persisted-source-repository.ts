@@ -1,5 +1,6 @@
 import {
   configuredSourceEvidencePolicy,
+  gitBlobSha,
   parseReleaseSourceEvidence,
   type ReleaseSourceEvidence,
 } from "../../../../packages/contracts/src/source-evidence";
@@ -21,16 +22,6 @@ type PersistedSourceRepositoryOptions = {
 
 function malformed(message: string): RepositoryConnectorError {
   return new RepositoryConnectorError("malformed-response", message);
-}
-
-async function gitBlobSha(content: string): Promise<string> {
-  const source = new TextEncoder().encode(content);
-  const header = new TextEncoder().encode(`blob ${source.byteLength}\0`);
-  const input = new Uint8Array(header.byteLength + source.byteLength);
-  input.set(header);
-  input.set(source, header.byteLength);
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-1", input));
-  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export class PersistedSourceRepository {

@@ -50,7 +50,7 @@ describe("PersistedPreviewApi", () => {
     await expect(api.getFile(baseSha, sourcePath)).resolves.toEqual({ blobSha, content });
   });
 
-  it("fails closed on mismatched content, refs, paths, branches, and every write", async () => {
+  it("fails closed on mismatched evidence without exposing write capabilities", async () => {
     await expect(fixture({ content: "changed\n" }).getBase("main")).rejects.toMatchObject({
       code: "malformed-response",
     });
@@ -62,10 +62,8 @@ describe("PersistedPreviewApi", () => {
     await expect(api.getFile(commitSha, "README.md")).rejects.toMatchObject({
       code: "not-allowed",
     });
-    await expect(api.createBlob("source")).rejects.toThrow(/write-disabled/i);
-    await expect(api.createBranch("branch", commitSha)).rejects.toThrow(/write-disabled/i);
-    await expect(
-      api.createDraftPullRequest({ title: "x", body: "x", head: "x", base: "main" }),
-    ).rejects.toThrow(/write-disabled/i);
+    expect("createBlob" in api).toBe(false);
+    expect("createBranch" in api).toBe(false);
+    expect("createDraftPullRequest" in api).toBe(false);
   });
 });

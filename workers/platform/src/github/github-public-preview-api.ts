@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { DraftPullRequestApi } from "../remediation/service";
+import type { RemediationReadApi } from "../remediation/service";
 import { RepositoryConnectorError } from "./errors";
 import { GitHubPublicFetchApi } from "./github-public-fetch-api";
 import { isSafeRepositoryPath } from "./path-policy";
@@ -22,7 +22,7 @@ const publicFileResponse = z
   })
   .passthrough();
 
-export class GitHubPublicPreviewApi implements DraftPullRequestApi {
+export class GitHubPublicPreviewApi implements RemediationReadApi {
   readonly repository: { owner: string; repo: string };
   readonly #allowedPaths: ReadonlySet<string>;
   readonly #publicApi: GitHubPublicFetchApi;
@@ -70,51 +70,6 @@ export class GitHubPublicPreviewApi implements DraftPullRequestApi {
       );
     }
     return { blobSha: result.data.sha, content: result.data.content };
-  }
-
-  async findOpenDraftPullRequest(_branch: string): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async getBranch(_branch: string): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async getChangedPaths(_baseSha: string, _headSha: string): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async createBlob(_content: string): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async createTree(_input: { baseTreeSha: string; path: string; blobSha: string }): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async createCommit(_input: {
-    message: string;
-    treeSha: string;
-    parentSha: string;
-  }): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async createBranch(_branch: string, _commitSha: string): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async createDraftPullRequest(_input: {
-    title: string;
-    body: string;
-    head: string;
-    base: string;
-  }): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  #writeDisabled(): never {
-    throw new RepositoryConnectorError("not-allowed", "GitHub public preview is write-disabled.");
   }
 }
 

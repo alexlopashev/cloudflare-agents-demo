@@ -2,7 +2,7 @@ import {
   regressionHealthSource,
   remediationFixture,
 } from "../../../../packages/test-fixtures/src/remediation";
-import { createRemediationService, type DraftPullRequestApi } from "../remediation/service";
+import { createRemediationService, type RemediationReadApi } from "../remediation/service";
 import { createLiveRemediationService } from "./live-remediation-service";
 
 export { createLiveRemediationService } from "./live-remediation-service";
@@ -23,10 +23,7 @@ export type RemediationServiceOptions = {
 const allowedPaths = ["workers/platform/src/api/health.ts"] as const;
 const limits = { maxFileBytes: 16_384, maxChangedLines: 80, maxLines: 400 } as const;
 
-function createDeterministicApi(repository: { owner: string; repo: string }): DraftPullRequestApi {
-  const writesAreForbidden = async (): Promise<never> => {
-    throw new Error("Deterministic remediation cannot write to GitHub.");
-  };
+function createDeterministicApi(repository: { owner: string; repo: string }): RemediationReadApi {
   return {
     repository,
     async getBase() {
@@ -41,20 +38,6 @@ function createDeterministicApi(repository: { owner: string; repo: string }): Dr
         content: regressionHealthSource,
       };
     },
-    async findOpenDraftPullRequest() {
-      return null;
-    },
-    async getBranch() {
-      return null;
-    },
-    async getChangedPaths() {
-      return [remediationFixture.path];
-    },
-    createBlob: writesAreForbidden,
-    createTree: writesAreForbidden,
-    createCommit: writesAreForbidden,
-    createBranch: writesAreForbidden,
-    createDraftPullRequest: writesAreForbidden,
   };
 }
 
