@@ -62,6 +62,7 @@ const stateSchema = z.object({
   investigatorReleaseId: z.string().uuid(),
   deployedGitSha: z.string().regex(/^[0-9a-f]{40}$/),
   githubWriteEnabled: z.boolean().default(false),
+  publicUsageMode: z.enum(["disabled", "rate-limited"]).default("rate-limited"),
   smokeKey: z.string().min(20).max(128),
 });
 const refreshStateSchema = stateSchema.omit({ smokeKey: true });
@@ -352,6 +353,7 @@ async function assertRuntimeAttribution(state: z.infer<typeof stateSchema>) {
     versionId: z.literal(state.investigatorReleaseId),
     gitSha: z.literal(state.deployedGitSha),
     githubWriteEnabled: z.literal(state.githubWriteEnabled),
+    publicUsageMode: z.literal(state.publicUsageMode),
     incident: z.object({
       incidentId: z.literal(state.incidentId),
       baselineReleaseId: z.literal(state.baselineReleaseId),
@@ -589,6 +591,7 @@ async function deploy() {
           degradedUntilMs: degradedWindow.untilMs,
           smokeKey,
           githubWriteEnabled: false,
+          publicUsageMode: "rate-limited",
         },
       });
       const investigator = deployPlatformWithSmokeSecret(investigatorConfig, smokeKey);
@@ -604,6 +607,7 @@ async function deploy() {
         investigatorReleaseId: investigator.versionId,
         deployedGitSha,
         githubWriteEnabled: false,
+        publicUsageMode: "rate-limited",
         smokeKey,
       });
     },
@@ -618,6 +622,7 @@ function deployRefreshedInvestigator(
   previous: z.infer<typeof refreshStateSchema>,
   deployedGitSha: string,
   githubWriteEnabled: boolean,
+  publicUsageMode: "disabled" | "rate-limited",
 ) {
   const smokeKey = crypto.randomUUID();
   const investigatorConfig = buildPlatformDeploymentConfig({
@@ -633,6 +638,7 @@ function deployRefreshedInvestigator(
       degradedUntilMs: previous.degradedUntilMs,
       smokeKey,
       githubWriteEnabled,
+      publicUsageMode,
     },
   });
   const investigator = deployPlatformWithSmokeSecret(investigatorConfig, smokeKey);
@@ -643,29 +649,39 @@ function deployRefreshedInvestigator(
     investigatorReleaseId: investigator.versionId,
     deployedGitSha,
     githubWriteEnabled,
+    publicUsageMode,
     smokeKey,
   });
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
   return state;
 }
 
-async function refreshInvestigator(githubWriteEnabled = false) {
+async function refreshInvestigator(
+  githubWriteEnabled = false,
+  requestedPublicUsageMode?: "disabled" | "rate-limited",
+) {
   run("wrangler", ["whoami"]);
   await ensureNamedAiGateway();
   if (githubWriteEnabled) assertGitHubWriteSecret();
   run("pnpm", ["build"]);
   const previous = refreshStateSchema.parse(JSON.parse(readFileSync(statePath, "utf8")));
+  const publicUsageMode = requestedPublicUsageMode ?? previous.publicUsageMode;
   const deployedGitSha = capture("git", ["rev-parse", "HEAD"]).trim();
   prepareRemoteSourceEvidence(previous.databaseId, previous.degradedReleaseId, deployedGitSha);
   if (!githubWriteEnabled) {
-    await smoke(deployRefreshedInvestigator(previous, deployedGitSha, false));
+    await smoke(deployRefreshedInvestigator(previous, deployedGitSha, false, publicUsageMode));
     return;
   }
   await runWithFailClosedRollback(
-    async () => deployRefreshedInvestigator(previous, deployedGitSha, true),
+    async () => deployRefreshedInvestigator(previous, deployedGitSha, true, publicUsageMode),
     smoke,
     async () => {
-      const rollbackState = deployRefreshedInvestigator(previous, deployedGitSha, false);
+      const rollbackState = deployRefreshedInvestigator(
+        previous,
+        deployedGitSha,
+        false,
+        publicUsageMode,
+      );
       await assertRuntimeAttribution(rollbackState);
       console.error(
         "Write enablement failed; the public runtime was rolled back to writes disabled.",
@@ -690,6 +706,7 @@ function resetRemoteEvidence() {
         degradedUntilMs: state.degradedUntilMs,
         smokeKey: state.smokeKey,
         githubWriteEnabled: state.githubWriteEnabled,
+        publicUsageMode: state.publicUsageMode,
       },
     }),
   );
@@ -711,6 +728,8 @@ if (action === "deploy") await deploy();
 else if (action === "refresh") await refreshInvestigator(false);
 else if (action === "enable-writes") await refreshInvestigator(true);
 else if (action === "disable-writes") await refreshInvestigator(false);
+else if (action === "enable-usage") await refreshInvestigator(false, "rate-limited");
+else if (action === "disable-usage") await refreshInvestigator(false, "disabled");
 else if (action === "reset") resetRemoteEvidence();
 else if (action === "gateway") {
   run("wrangler", ["whoami"]);
@@ -720,5 +739,5 @@ else if (action === "gateway") {
   await smoke(stateSchema.parse(JSON.parse(readFileSync(statePath, "utf8"))));
 else
   throw new Error(
-    "Usage: node scripts/deploy.ts <deploy|refresh|enable-writes|disable-writes|reset|smoke|gateway>",
+    "Usage: node scripts/deploy.ts <deploy|refresh|enable-writes|disable-writes|enable-usage|disable-usage|reset|smoke|gateway>",
   );

@@ -16,6 +16,7 @@ import {
   smokeVerificationFailureDiagnostic,
 } from "./verification/smoke-contract";
 import { handleUxTelemetryRequest } from "./telemetry/ux-handler";
+import type { PublicUsageLimiter } from "./public-usage";
 
 export interface FetchBinding {
   fetch(request: Request): Promise<Response>;
@@ -35,6 +36,9 @@ export interface PlatformBindings extends IncidentEnvironment {
   HEALTH_LOADING_MODE: "concurrent" | "sequential";
   HEALTH_SERVICE: FetchBinding;
   MODEL_MODE: string;
+  PUBLIC_AI_TURN_LIMITER?: PublicUsageLimiter;
+  PUBLIC_METRIC_LIMITER?: PublicUsageLimiter;
+  PUBLIC_USAGE_MODE: string;
   REGRESSION_SURGEON_AGENT: DurableObjectNamespace;
   SCENARIO_CONTROL_ENABLED: string;
   TELEMETRY_DB: D1Database;
@@ -70,6 +74,7 @@ export async function handlePlatformRequest(
       ...(bindings.GITHUB_TOKEN === undefined ? {} : { githubToken: bindings.GITHUB_TOKEN }),
       githubWriteEnabled: bindings.GITHUB_WRITE_ENABLED,
       modelMode: bindings.MODEL_MODE,
+      publicUsageMode: bindings.PUBLIC_USAGE_MODE,
     });
   } catch {
     return Response.json({ error: { code: "invalid-runtime-configuration" } }, { status: 503 });
@@ -148,6 +153,12 @@ export async function handlePlatformRequest(
       loadingMode: bindings.HEALTH_LOADING_MODE,
       deployedAtMs: externalConfiguration.runtime.deployedAtMs,
       recordTrace: store.recordTrace,
+      publicUsage: {
+        mode: externalConfiguration.publicUsageMode,
+        ...(bindings.PUBLIC_METRIC_LIMITER === undefined
+          ? {}
+          : { limiter: bindings.PUBLIC_METRIC_LIMITER }),
+      },
     });
   }
 
@@ -156,6 +167,12 @@ export async function handlePlatformRequest(
     return handleUxTelemetryRequest(request, {
       now: Date.now,
       recordUxEvent: store.recordUxEvent,
+      publicUsage: {
+        mode: externalConfiguration.publicUsageMode,
+        ...(bindings.PUBLIC_METRIC_LIMITER === undefined
+          ? {}
+          : { limiter: bindings.PUBLIC_METRIC_LIMITER }),
+      },
     });
   }
 
@@ -171,6 +188,7 @@ export async function handlePlatformRequest(
         ? {}
         : { aiGatewayId: externalConfiguration.aiGatewayId }),
       mode: externalConfiguration.modelMode,
+      publicUsageMode: externalConfiguration.publicUsageMode,
       versionId: externalConfiguration.runtime.versionId,
       gitSha: externalConfiguration.runtime.gitSha,
       incident,

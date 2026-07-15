@@ -114,6 +114,18 @@ export function InvestigatorWidgetChrome({
 export const configuredInvestigationPrompt =
   "Investigate the seeded latency regression and prepare the guarded remediation preview.";
 
+export function InvestigatorError({ error }: { error: Error | undefined }) {
+  if (error === undefined) return null;
+  const message = /^Public investigator (?:limit reached|is temporarily)/.test(error.message)
+    ? error.message
+    : "Investigator response failed. Retrying is safe.";
+  return (
+    <p className="investigator-error" role="alert">
+      {message}
+    </p>
+  );
+}
+
 export function InvestigationStarter({
   disabled,
   onInvestigate,
@@ -141,7 +153,7 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
     agent: "RegressionSurgeonAgent",
     name: session,
   });
-  const { addToolApprovalResponse, messages, sendMessage, status } = useAgentChat({ agent });
+  const { addToolApprovalResponse, error, messages, sendMessage, status } = useAgentChat({ agent });
   const toolTimeline =
     agent.state?.status === "investigating" ? buildToolTimeline(agent.state.receipt) : [];
   const approvals = buildApprovalRequests(
@@ -240,6 +252,7 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
               </article>
             ))
           )}
+          <InvestigatorError error={error} />
         </div>
         <form className="composer" onSubmit={submit}>
           <label htmlFor="investigation-prompt">Investigation request</label>

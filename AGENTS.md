@@ -120,6 +120,12 @@ Do not assert exact natural-language output from a live model. Assert structured
 - Gateway creation and readback require a bounded, non-empty `CLOUDFLARE_API_TOKEN` with AI Gateway
   Write permission. Deployment must not use Wrangler's incompatible OAuth token or persist, echo,
   pass as a command argument, or expose the management token to the Worker runtime.
+- Live public usage must be either rate-limited or explicitly disabled; Workers AI may never use the
+  unbounded local posture. New paid turns and metric-writing requests consume independent
+  Cloudflare Rate Limiting bindings before inference, dependency calls, or telemetry writes.
+- Local deterministic mode does not read public limiters. Exhaustion returns a bounded retry-safe
+  response, limiter failure fails closed, and the keyed one-shot deployment path must remain
+  independently verifiable.
 - `mise run deploy` must preserve distinct baseline, degraded, and investigator Worker version IDs.
 - Remote evidence must come from measured requests and retain immutable version-to-SHA attribution.
 - Baseline and degraded versions must remain at 0% ordinary traffic while each readiness, health, and

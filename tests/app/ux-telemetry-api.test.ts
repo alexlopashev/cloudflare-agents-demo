@@ -71,4 +71,35 @@ describe("UX telemetry API", () => {
     expect(responses.map((response) => response.status)).toEqual([405, 415, 413, 400, 400]);
     expect(recordUxEvent).not.toHaveBeenCalled();
   });
+
+  it("rejects exhausted public metric traffic before writing telemetry", async () => {
+    const recordUxEvent = vi.fn(async () => undefined);
+    const limit = vi.fn(async () => ({ success: false }));
+    const response = await handleUxTelemetryRequest(
+      new Request("https://example.test/api/telemetry/ux", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          interactionId: "interaction-limited",
+          traceId: "trace-limited",
+          releaseId: "release-limited",
+          metricName: "service_grid_ready_ms",
+          durationMs: 125,
+          outcome: "success",
+        }),
+      }),
+      {
+        now: () => 2_000,
+        recordUxEvent,
+        publicUsage: { mode: "rate-limited", limiter: { limit } },
+      },
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("60");
+    expect(await response.json()).toMatchObject({
+      error: { code: "public-usage-rate-limited" },
+    });
+    expect(recordUxEvent).not.toHaveBeenCalled();
+  });
 });

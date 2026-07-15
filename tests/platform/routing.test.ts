@@ -37,6 +37,7 @@ function createBindings() {
     HEALTH_SERVICE: { fetch: healthFetch },
     HEALTH_LOADING_MODE: "sequential",
     MODEL_MODE: "fake",
+    PUBLIC_USAGE_MODE: "local",
     SCENARIO_CONTROL_ENABLED: "false",
     TELEMETRY_DB: {},
   } as unknown as PlatformBindings;
@@ -462,6 +463,7 @@ Run gates.`,
       gitSha: "0123456789abcdef0123456789abcdef01234567",
       githubWriteEnabled: false,
       mode: "fake",
+      publicUsageMode: "local",
       versionId: "version-good",
     });
   });
@@ -470,6 +472,7 @@ Run gates.`,
     const { bindings } = createBindings();
     bindings.MODEL_MODE = "workers-ai";
     bindings.AI_GATEWAY_ID = "regression-surgeon";
+    bindings.PUBLIC_USAGE_MODE = "rate-limited";
 
     const response = await handlePlatformRequest(
       new Request("https://example.test/api/runtime"),

@@ -5,6 +5,7 @@ import {
   canSubmitInvestigatorRequest,
   configuredInvestigationPrompt,
   InvestigationStarter,
+  InvestigatorError,
   InvestigatorWidgetChrome,
 } from "../../apps/web/src/investigator/InvestigatorWidget";
 
@@ -14,6 +15,22 @@ describe("investigator support widget", () => {
     expect(canSubmitInvestigatorRequest("error")).toBe(true);
     expect(canSubmitInvestigatorRequest("submitted")).toBe(false);
     expect(canSubmitInvestigatorRequest("streaming")).toBe(false);
+  });
+
+  it("shows a retry-safe public limit response without exposing unrelated errors", () => {
+    const limited = renderToStaticMarkup(
+      <InvestigatorError
+        error={new Error("Public investigator limit reached. Retry in 60 seconds.")}
+      />,
+    );
+    const privateFailure = renderToStaticMarkup(
+      <InvestigatorError error={new Error("private provider exception and credential detail")} />,
+    );
+
+    expect(limited).toContain('role="alert"');
+    expect(limited).toContain("Public investigator limit reached. Retry in 60 seconds.");
+    expect(privateFailure).toContain("Investigator response failed. Retrying is safe.");
+    expect(privateFailure).not.toContain("private provider exception");
   });
 
   it("collapses to an accessible floating launcher with attention and availability badges", () => {

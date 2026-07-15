@@ -27,6 +27,7 @@ export default defineConfig({
           GITHUB_WRITE_ENABLED: "false",
           HEALTH_LOADING_MODE: "sequential",
           MODEL_MODE: "fake",
+          PUBLIC_USAGE_MODE: "local",
           SCENARIO_CONTROL_ENABLED: "false",
         },
         compatibilityDate: "2026-07-11",

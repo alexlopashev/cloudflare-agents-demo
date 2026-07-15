@@ -108,6 +108,8 @@ mise run github:writes:secret:delete
 mise run deploy
 mise run deploy:smoke
 mise run deploy:refresh
+mise run deploy:usage:enable
+mise run deploy:usage:disable
 mise run deploy:writes:enable
 mise run deploy:writes:disable
 mise run deploy:reset
@@ -194,6 +196,30 @@ two release IDs recorded by the last deployment from remote D1; run `mise run de
 recreate evidence. The deployment state and smoke key live under ignored `.local/deploy` with
 owner-only permissions. The public app requires no login and creates a durable session identifier in
 browser-local storage.
+
+#### Public usage bounds and emergency shutdown
+
+The remote Worker uses two independent Cloudflare Rate Limiting bindings. A new public paid-model
+turn consumes one of 10 investigator requests per 60 seconds before Workers AI inference begins;
+the internal tool loop and continuations remain part of that one turn. Public `/api/health` and
+`/api/telemetry/ux` requests share a separate 60-request-per-60-second metric budget. A maximum
+20-sample reviewer batch consumes 40 metric requests, leaving room for normal page refreshes.
+Validated deployment measurement requests bypass the public metric budget because they are pinned
+to an exact release and attempted only once. The keyed programmatic smoke likewise bypasses the
+public turn budget, while remaining one-shot and subject to the separately planned Gateway spend cap.
+
+An exhausted budget returns `429` with `Retry-After: 60`; a missing or failed limiter returns `503`.
+Both paths stop before Workers AI, health-service calls, trace persistence, or UX telemetry writes.
+Cloudflare [documents these counters as local per edge location and intentionally
+approximate](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/), so they
+are an abuse bound rather than a globally exact billing control. Issue #57 owns the exact
+$5-per-UTC-day Gateway spend cap.
+
+`mise run deploy:usage:disable` redeploys the preserved evidence with public AI and metric-writing
+traffic disabled and GitHub writes off. `mise run deploy:usage:enable` restores the rate-limited
+posture; each operation rotates the smoke key and verifies the exact runtime mode. Local
+deterministic `mise run dev` remains unrestricted and credential-free. These deployment operations
+require the same short-lived AI Gateway Write token as refresh; never paste it into chat or persist it.
 
 No GitHub token is copied from `gh` or uploaded by the deployment task. In the credential-free public
 posture, D1 resolves the real Worker version to an immutable commit SHA and stores one bounded source

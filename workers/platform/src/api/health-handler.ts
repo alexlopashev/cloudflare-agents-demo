@@ -1,5 +1,10 @@
 import { evidenceIdSchema } from "../../../../packages/contracts/src/health";
 import { readBoundedRequestText } from "../http/bounded-request";
+import {
+  checkPublicUsage,
+  publicUsageDenialMessage,
+  type PublicUsageOptions,
+} from "../public-usage";
 import { createHealthAggregator, type HealthLoadingMode } from "./health";
 import type { SpanRecord, TraceRecord } from "../telemetry/store";
 
@@ -18,6 +23,7 @@ export type HealthApiOptions = {
     trace: TraceRecord;
     spans: readonly SpanRecord[];
   }) => Promise<void>;
+  publicUsage?: PublicUsageOptions;
 };
 
 const bodyLimit = 2_048;
@@ -81,6 +87,20 @@ export async function handleHealthApiRequest(
   );
   if (!parsed.success) {
     return errorResponse(400, "invalid-interaction-id", "Interaction identifier is invalid.");
+  }
+
+  if (expectedRelease === null && options.publicUsage !== undefined) {
+    const decision = await checkPublicUsage(options.publicUsage.mode, options.publicUsage.limiter);
+    if (!decision.allowed) {
+      return errorResponse(
+        decision.status,
+        decision.code,
+        publicUsageDenialMessage(decision, "Public metric traffic"),
+        decision.retryAfterSeconds === undefined
+          ? {}
+          : { "retry-after": String(decision.retryAfterSeconds) },
+      );
+    }
   }
 
   try {

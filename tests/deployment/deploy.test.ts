@@ -63,11 +63,15 @@ describe("Cloudflare deployment contract", () => {
     );
     expect(mise).toContain('run = "pnpm run deploy:writes:enable"');
     expect(mise).toContain('run = "pnpm run deploy:writes:disable"');
+    expect(mise).toContain('run = "pnpm run deploy:usage:enable"');
+    expect(mise).toContain('run = "pnpm run deploy:usage:disable"');
     expect(deployScript).toContain('"--secrets-file"');
     expect(deployScript).not.toContain('"secret", "put"');
     expect(deployScript).not.toContain("gh auth token");
     expect(deployScript).not.toContain('capture("wrangler", ["auth", "token"');
     expect(deployScript).toContain("process.env.CLOUDFLARE_API_TOKEN");
+    expect(deployScript).toContain('else if (action === "enable-usage")');
+    expect(deployScript).toContain('else if (action === "disable-usage")');
     expect(deployScript).not.toContain("requestWithRetry");
     expect(deployScript.match(/await ensureNamedAiGateway\(\)/g)).toHaveLength(3);
     expect(deployScript.match(/await requestDeploymentEndpointOnce/g)).toHaveLength(3);
@@ -120,11 +124,24 @@ describe("Cloudflare deployment contract", () => {
     const regression = config({ kind: "regression", gitSha: "b".repeat(40) });
 
     expect(baseline.d1_databases[0]?.database_id).toBe(databaseId);
+    expect(baseline.ratelimits).toEqual([
+      {
+        name: "PUBLIC_AI_TURN_LIMITER",
+        namespace_id: "4747001",
+        simple: { limit: 10, period: 60 },
+      },
+      {
+        name: "PUBLIC_METRIC_LIMITER",
+        namespace_id: "4747002",
+        simple: { limit: 60, period: 60 },
+      },
+    ]);
     expect(baseline.vars).toMatchObject({
       AI_GATEWAY_ID,
       GIT_SHA: "a".repeat(40),
       HEALTH_LOADING_MODE: "concurrent",
       MODEL_MODE: "workers-ai",
+      PUBLIC_USAGE_MODE: "rate-limited",
       GITHUB_WRITE_ENABLED: "false",
       SCENARIO_CONTROL_ENABLED: "false",
     });
@@ -132,6 +149,23 @@ describe("Cloudflare deployment contract", () => {
       GIT_SHA: "b".repeat(40),
       HEALTH_LOADING_MODE: "sequential",
     });
+  });
+
+  it("builds an emergency-disabled investigator without changing local posture", () => {
+    const investigator = config({
+      kind: "investigator",
+      incidentId,
+      gitSha: "c".repeat(40),
+      baselineReleaseId: baselineVersionId,
+      degradedReleaseId: degradedVersionId,
+      degradedSinceMs: 1,
+      degradedUntilMs: 2,
+      smokeKey: "deployment-smoke-key-123456",
+      githubWriteEnabled: false,
+      publicUsageMode: "disabled",
+    });
+
+    expect(investigator.vars.PUBLIC_USAGE_MODE).toBe("disabled");
   });
 
   it("scopes every measured interaction to its immutable release", () => {
