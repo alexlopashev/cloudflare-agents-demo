@@ -186,6 +186,23 @@ function lastActionPart(messages: readonly ApprovalMessage[]): object | undefine
   return undefined;
 }
 
+const boundedGitHubFailurePattern =
+  /^GitHub (?:read-base-ref|read-base-commit|read-source-file|find-draft-pr|read-remediation-branch|compare-remediation-branch|create-blob|create-tree|create-commit|create-branch|create-draft-pr) failed (?:before a response|with HTTP [1-5][0-9]{2})\. No draft PR was confirmed\. Retry requires a new approval\.$/;
+
+function boundedActionFailure(part: object): string | undefined {
+  let candidate = stringProperty(part, "errorText");
+  const output = property(part, "output");
+  if (output !== null && typeof output === "object") {
+    const error = property(output, "error");
+    if (error !== null && typeof error === "object") {
+      candidate = stringProperty(error, "message") ?? candidate;
+    }
+  }
+  return candidate !== undefined && boundedGitHubFailurePattern.test(candidate)
+    ? candidate
+    : undefined;
+}
+
 function createdPullRequestOutcome(output: object): ApprovalOutcome | undefined {
   const status = stringProperty(output, "status");
   const number = positiveIntegerProperty(output, "number");
@@ -234,10 +251,12 @@ export function buildApprovalOutcome(
 ): ApprovalOutcome | undefined {
   const part = lastActionPart(messages);
   const state = part === undefined ? undefined : stringProperty(part, "state");
+  const boundedFailure = part === undefined ? undefined : boundedActionFailure(part);
   if (state === "output-denied") {
     return { message: "Proposal rejected. No GitHub write was performed.", state: "rejected" };
   }
   if (state === "output-error") {
+    if (boundedFailure !== undefined) return { message: boundedFailure, state: "failed" };
     return { message: "Draft PR action failed safely. Retrying is safe.", state: "failed" };
   }
   if (state === "output-available" && part !== undefined) {
@@ -255,6 +274,7 @@ export function buildApprovalOutcome(
       const pullRequest = createdPullRequestOutcome(output);
       if (pullRequest !== undefined) return pullRequest;
     }
+    if (boundedFailure !== undefined) return { message: boundedFailure, state: "failed" };
     return { message: "Draft PR action stopped safely. Retrying is safe.", state: "failed" };
   }
   if (state === "approval-responded" && part !== undefined) {

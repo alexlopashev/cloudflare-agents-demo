@@ -1,7 +1,11 @@
 import { action } from "@cloudflare/think";
 import { z } from "zod";
 
-import type { RemediationProposal } from "../remediation/service";
+import {
+  remediationGitHubFailureMessage,
+  remediationGitHubFailureSchema,
+  type RemediationProposal,
+} from "../remediation/service";
 
 type RemediationExecutor = {
   execute(proposal: RemediationProposal): Promise<unknown>;
@@ -16,6 +20,7 @@ const recoverableRemediationResultSchema = z
   .object({
     status: z.literal("recoverable"),
     stage: z.enum(["branch-existing", "branch-created", "branch-write-uncertain"]),
+    failure: remediationGitHubFailureSchema.optional(),
   })
   .passthrough();
 
@@ -49,6 +54,9 @@ export function createRemediationAction(
       const result = await service.execute(resolveProposal(input.proposalFingerprint));
       const recoverable = recoverableRemediationResultSchema.safeParse(result);
       if (recoverable.success) {
+        if (recoverable.data.failure !== undefined) {
+          throw new Error(remediationGitHubFailureMessage(recoverable.data.failure));
+        }
         throw new Error(
           `Draft PR action stopped at ${recoverable.data.stage} and requires a safe retry.`,
         );

@@ -248,4 +248,33 @@ describe("GitHubDraftPrApi", () => {
       code: "malformed-response",
     });
   });
+
+  it("reports a bounded operation and HTTP status without exposing the GitHub response body", async () => {
+    const api = new GitHubDraftPrApi({
+      fetcher: vi.fn(
+        async () =>
+          new Response('{"message":"credential and repository details must stay private"}', {
+            status: 403,
+          }),
+      ),
+      repository: { owner: "example", repo: "supervised" },
+      allowedPaths: ["workers/platform/src/api/health.ts"],
+      maxResponseBytes: 1_024,
+      token: "scoped-token",
+    });
+
+    await expect(
+      api.createDraftPullRequest({
+        title: "fix: bounded concurrency",
+        body: "evidence",
+        head: "regression-surgeon/abcdef0123456789",
+        base: "main",
+      }),
+    ).rejects.toMatchObject({
+      code: "unavailable",
+      message: "GitHub create-draft-pr failed with HTTP 403.",
+      operation: "create-draft-pr",
+      httpStatus: 403,
+    });
+  });
 });

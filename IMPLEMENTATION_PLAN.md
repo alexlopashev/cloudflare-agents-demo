@@ -167,6 +167,10 @@ results, approval state, and terminal outcomes. Private model chain-of-thought a
 tokens are never exposed as product state. A recoverable GitHub result rejects the current action
 execution so Project Think releases its stable ledger key; a deterministic reconciliation retry
 then requires a new explicit approval, while successful results remain replay-safe.
+GitHub connector failures retain only a fixed operation identifier and optional bounded HTTP status
+through the service and action result. The chat renders that safe diagnostic while rejecting all
+arbitrary upstream error text, so operators can distinguish authentication, branch, and PR failures
+without exposing response bodies or credentials.
 
 The remediation service has two capability contracts:
 

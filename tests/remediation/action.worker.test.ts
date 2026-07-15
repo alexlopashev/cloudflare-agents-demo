@@ -79,4 +79,24 @@ describe("create_draft_pr Project Think action", () => {
     );
     expect(service.execute).toHaveBeenCalledTimes(2);
   });
+
+  it("preserves only a bounded GitHub operation failure for the approval result", async () => {
+    const service = {
+      execute: vi.fn(async () => ({
+        status: "recoverable" as const,
+        stage: "branch-created" as const,
+        branch: "regression-surgeon/incident",
+        failure: { operation: "create-draft-pr" as const, httpStatus: 403 },
+      })),
+    };
+    const remediation = createRemediationAction(service, {
+      idempotencyScope: "write",
+      resolveProposal: (fingerprint) =>
+        fingerprint === proposalFingerprint ? proposal : undefined,
+    });
+
+    await expect(remediation.config.execute({ proposalFingerprint }, {} as never)).rejects.toThrow(
+      "GitHub create-draft-pr failed with HTTP 403. No draft PR was confirmed. Retry requires a new approval.",
+    );
+  });
 });

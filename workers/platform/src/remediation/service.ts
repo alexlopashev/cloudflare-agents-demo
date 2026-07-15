@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 import { incidentReferenceSchema } from "../../../../packages/contracts/src/incident";
+import {
+  githubDraftPrOperations,
+  RepositoryConnectorError,
+  type GitHubDraftPrOperation,
+} from "../github/errors";
 import { isSafeRepositoryPath } from "../github/path-policy";
 
 const sha = z.string().regex(/^[0-9a-f]{40}$/);
@@ -30,6 +35,23 @@ export const remediationProposalSchema = z
   .strict();
 
 export type RemediationProposal = z.infer<typeof remediationProposalSchema>;
+
+export const remediationGitHubFailureSchema = z
+  .object({
+    operation: z.enum(githubDraftPrOperations),
+    httpStatus: z.number().int().min(100).max(599).optional(),
+  })
+  .strict();
+
+export type RemediationGitHubFailure = z.infer<typeof remediationGitHubFailureSchema>;
+
+export function remediationGitHubFailureMessage(failure: RemediationGitHubFailure): string {
+  const reason =
+    failure.httpStatus === undefined
+      ? "failed before a response"
+      : `failed with HTTP ${failure.httpStatus}`;
+  return `GitHub ${failure.operation} ${reason}. No draft PR was confirmed. Retry requires a new approval.`;
+}
 
 export type RemediationReadApi = {
   readonly repository: { owner: string; repo: string };
@@ -184,8 +206,29 @@ ${proposal.validationSteps.map((step) => `- [ ] ${step}`).join("\n")}
 `;
 }
 
-function asUnavailable(): RemediationError {
+function githubFailure(error: unknown): RemediationGitHubFailure | undefined {
+  if (!(error instanceof RepositoryConnectorError) || error.operation === undefined) {
+    return undefined;
+  }
+  const candidate: { operation: GitHubDraftPrOperation; httpStatus?: number } = {
+    operation: error.operation,
+    ...(error.httpStatus === undefined ? {} : { httpStatus: error.httpStatus }),
+  };
+  const parsed = remediationGitHubFailureSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function asUnavailable(error?: unknown): RemediationError {
+  const failure = githubFailure(error);
+  if (failure !== undefined) {
+    return new RemediationError("unavailable", remediationGitHubFailureMessage(failure));
+  }
   return new RemediationError("unavailable", "GitHub remediation is temporarily unavailable.");
+}
+
+function recoverableFailure(error: unknown): { failure?: RemediationGitHubFailure } {
+  const failure = githubFailure(error);
+  return failure === undefined ? {} : { failure };
 }
 
 export function createRemediationService(options: RemediationServiceOptions) {
@@ -221,7 +264,7 @@ export function createRemediationService(options: RemediationServiceOptions) {
       rawEvidenceFile = await options.api.getFile(proposal.expectedBaseSha, proposal.path);
     } catch (error) {
       if (error instanceof RemediationError) throw error;
-      throw asUnavailable();
+      throw asUnavailable(error);
     }
     const base = parseExternal(baseResponse, rawBase, "Base branch");
     if (options.writeEnabled && base.treeSha === undefined) {
@@ -241,7 +284,7 @@ export function createRemediationService(options: RemediationServiceOptions) {
         rawCurrentFile = await options.api.getFile(base.sha, proposal.path);
       } catch (error) {
         if (error instanceof RemediationError) throw error;
-        throw asUnavailable();
+        throw asUnavailable(error);
       }
       currentFile = parseExternal(fileResponse, rawCurrentFile, "Current base file");
       if (
@@ -298,8 +341,8 @@ export function createRemediationService(options: RemediationServiceOptions) {
         let existing: unknown;
         try {
           existing = await options.api.findOpenDraftPullRequest(branch);
-        } catch {
-          throw asUnavailable();
+        } catch (error) {
+          throw asUnavailable(error);
         }
         if (existing !== null) {
           const pullRequest = parseExternal(
@@ -356,8 +399,13 @@ export function createRemediationService(options: RemediationServiceOptions) {
             branch,
             ...created,
           };
-        } catch {
-          return { status: "recoverable" as const, branch, stage: recoveryStage };
+        } catch (error) {
+          return {
+            status: "recoverable" as const,
+            branch,
+            stage: recoveryStage,
+            ...recoverableFailure(error),
+          };
         }
       };
       const baseTreeSha = prepared.base.treeSha;
@@ -372,8 +420,8 @@ export function createRemediationService(options: RemediationServiceOptions) {
       let commitSha: string;
       try {
         rawBranch = await options.api.getBranch(branch);
-      } catch {
-        throw asUnavailable();
+      } catch (error) {
+        throw asUnavailable(error);
       }
       const existingBranch = parseExternal(branchResponse, rawBranch, "Remediation branch");
       if (existingBranch !== null) {
@@ -383,8 +431,13 @@ export function createRemediationService(options: RemediationServiceOptions) {
             prepared.base.sha,
             existingBranch.sha,
           );
-        } catch {
-          return { status: "recoverable" as const, branch, stage: "branch-existing" as const };
+        } catch (error) {
+          return {
+            status: "recoverable" as const,
+            branch,
+            stage: "branch-existing" as const,
+            ...recoverableFailure(error),
+          };
         }
         const changedPaths = parseExternal(
           z.array(z.string().min(1).max(512)).max(16),
@@ -400,8 +453,13 @@ export function createRemediationService(options: RemediationServiceOptions) {
         let branchFile: unknown;
         try {
           branchFile = await options.api.getFile(branch, proposal.path);
-        } catch {
-          return { status: "recoverable" as const, branch, stage: "branch-existing" as const };
+        } catch (error) {
+          return {
+            status: "recoverable" as const,
+            branch,
+            stage: "branch-existing" as const,
+            ...recoverableFailure(error),
+          };
         }
         const file = parseExternal(fileResponse, branchFile, "Remediation branch file");
         if (file.content !== proposal.replacementContent) {
@@ -440,15 +498,16 @@ export function createRemediationService(options: RemediationServiceOptions) {
         commitSha = commit.sha;
       } catch (error) {
         if (error instanceof RemediationError) throw error;
-        throw asUnavailable();
+        throw asUnavailable(error);
       }
       try {
         await options.api.createBranch(branch, commitSha);
-      } catch {
+      } catch (error) {
         return {
           status: "recoverable" as const,
           branch,
           stage: "branch-write-uncertain" as const,
+          ...recoverableFailure(error),
         };
       }
 

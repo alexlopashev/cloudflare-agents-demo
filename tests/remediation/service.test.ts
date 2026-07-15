@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { RepositoryConnectorError } from "../../workers/platform/src/github/errors";
 import {
   createRemediationService,
   RemediationError,
@@ -229,6 +230,39 @@ describe("guarded remediation service", () => {
     expect(resumed).toMatchObject({ status: "created", number: 21 });
     expect(api.createBranch).toHaveBeenCalledOnce();
     expect(api.createDraftPullRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains bounded GitHub failure metadata while discarding upstream response details", async () => {
+    const { api } = apiFixture();
+    vi.mocked(api.createDraftPullRequest).mockRejectedValueOnce(
+      new RepositoryConnectorError("unavailable", "GitHub create-draft-pr failed with HTTP 403.", {
+        operation: "create-draft-pr",
+        httpStatus: 403,
+      }),
+    );
+
+    await expect(service(api, true).execute(proposal())).resolves.toMatchObject({
+      status: "recoverable",
+      stage: "branch-created",
+      failure: { operation: "create-draft-pr", httpStatus: 403 },
+    });
+  });
+
+  it("reports a bounded pre-write GitHub failure instead of replacing it with a generic error", async () => {
+    const { api } = apiFixture();
+    vi.mocked(api.findOpenDraftPullRequest).mockRejectedValueOnce(
+      new RepositoryConnectorError("unavailable", "GitHub find-draft-pr failed with HTTP 401.", {
+        operation: "find-draft-pr",
+        httpStatus: 401,
+      }),
+    );
+
+    await expect(service(api, true).execute(proposal())).rejects.toMatchObject({
+      code: "unavailable",
+      message:
+        "GitHub find-draft-pr failed with HTTP 401. No draft PR was confirmed. Retry requires a new approval.",
+    });
+    expect(api.createBlob).not.toHaveBeenCalled();
   });
 
   it("tracks an uncertain branch response by deterministic name and reconciles on retry", async () => {
