@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { DraftPullRequestApi } from "../remediation/service";
 import { readBoundedResponseBytes, type BoundedResponseFailure } from "./bounded-response";
-import { RepositoryConnectorError } from "./errors";
+import { RepositoryConnectorError, type GitHubDraftPrOperation } from "./errors";
 import { isSafeRepositoryPath } from "./path-policy";
 
 type Fetcher = (request: Request) => Promise<Response>;
@@ -85,11 +85,16 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
   async getBase(branch: string) {
     const normalizedBranch = this.#requireRef(branch);
     const rawRef = await this.#request(
+      "read-base-ref",
       "GET",
       `/git/ref/heads/${encodeURIComponent(normalizedBranch)}`,
     );
     const ref = parseExternal(refResponse, rawRef, "GitHub base ref response");
-    const rawCommit = await this.#request("GET", `/git/commits/${ref.object.sha}`);
+    const rawCommit = await this.#request(
+      "read-base-commit",
+      "GET",
+      `/git/commits/${ref.object.sha}`,
+    );
     const commit = parseExternal(commitResponse, rawCommit, "GitHub base commit response");
     if (commit.sha !== ref.object.sha) throw malformed("GitHub base commit response");
     return { sha: commit.sha, treeSha: commit.tree.sha };
@@ -102,6 +107,7 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
     }
     const encodedPath = path.split("/").map(encodeURIComponent).join("/");
     const rawFile = await this.#request(
+      "read-source-file",
       "GET",
       `/contents/${encodedPath}?ref=${encodeURIComponent(normalizedRef)}`,
     );
@@ -144,6 +150,7 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
   async findOpenDraftPullRequest(branch: string) {
     const normalizedBranch = this.#requireRef(branch);
     const rawPullRequests = await this.#request(
+      "find-draft-pr",
       "GET",
       `/pulls?state=open&head=${encodeURIComponent(`${this.#owner}:${normalizedBranch}`)}&per_page=2`,
     );
@@ -165,6 +172,7 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
   async getBranch(branch: string) {
     const normalizedBranch = this.#requireRef(branch);
     const raw = await this.#request(
+      "read-remediation-branch",
       "GET",
       `/git/ref/heads/${encodeURIComponent(normalizedBranch)}`,
       undefined,
@@ -178,7 +186,11 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
   async getChangedPaths(baseSha: string, headSha: string) {
     const base = this.#requireSha(baseSha);
     const head = this.#requireSha(headSha);
-    const raw = await this.#request("GET", `/compare/${base}...${head}`);
+    const raw = await this.#request(
+      "compare-remediation-branch",
+      "GET",
+      `/compare/${base}...${head}`,
+    );
     const comparison = parseExternal(
       z
         .object({
@@ -208,7 +220,10 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
     if (new TextEncoder().encode(content).byteLength > 32_768) {
       throw new RepositoryConnectorError("limit-exceeded", "GitHub blob byte limit exceeded.");
     }
-    const raw = await this.#request("POST", "/git/blobs", { content, encoding: "utf-8" });
+    const raw = await this.#request("create-blob", "POST", "/git/blobs", {
+      content,
+      encoding: "utf-8",
+    });
     return parseExternal(objectResponse, raw, "GitHub blob response");
   }
 
@@ -218,7 +233,7 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
     if (!isSafeRepositoryPath(input.path) || !this.#allowedPaths.has(input.path)) {
       throw new RepositoryConnectorError("not-allowed", "Repository path is not allowed.");
     }
-    const raw = await this.#request("POST", "/git/trees", {
+    const raw = await this.#request("create-tree", "POST", "/git/trees", {
       base_tree: baseTreeSha,
       tree: [{ path: input.path, mode: "100644", type: "blob", sha: blobSha }],
     });
@@ -229,7 +244,7 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
     if (input.message.length < 1 || input.message.length > 120) {
       throw inputError("GitHub commit message is invalid.");
     }
-    const raw = await this.#request("POST", "/git/commits", {
+    const raw = await this.#request("create-commit", "POST", "/git/commits", {
       message: input.message,
       tree: this.#requireSha(input.treeSha),
       parents: [this.#requireSha(input.parentSha)],
@@ -240,7 +255,7 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
   async createBranch(branch: string, commitSha: string) {
     const ref = `refs/heads/${this.#requireRef(branch)}`;
     const commit = this.#requireSha(commitSha);
-    const raw = await this.#request("POST", "/git/refs", {
+    const raw = await this.#request("create-branch", "POST", "/git/refs", {
       ref,
       sha: commit,
     });
@@ -261,7 +276,7 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
     ) {
       throw new RepositoryConnectorError("limit-exceeded", "Draft pull request limit exceeded.");
     }
-    const raw = await this.#request("POST", "/pulls", {
+    const raw = await this.#request("create-draft-pr", "POST", "/pulls", {
       title: input.title,
       body: input.body,
       head: this.#requireRef(input.head),
@@ -300,6 +315,7 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
   }
 
   async #request(
+    operation: GitHubDraftPrOperation,
     method: "GET" | "POST",
     endpoint: string,
     body?: unknown,
@@ -339,13 +355,18 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
         }),
       );
     } catch {
-      throw new RepositoryConnectorError("unavailable", "GitHub request failed before a response.");
+      throw new RepositoryConnectorError(
+        "unavailable",
+        `GitHub ${operation} failed before a response.`,
+        { operation },
+      );
     }
     if (allowNotFound && response.status === 404) return null;
     if (!response.ok) {
       throw new RepositoryConnectorError(
         "unavailable",
-        `GitHub request failed with HTTP ${response.status}.`,
+        `GitHub ${operation} failed with HTTP ${response.status}.`,
+        { operation, httpStatus: response.status },
       );
     }
     const bytes = await readBoundedResponseBytes(response, this.#maxResponseBytes, (reason) =>

@@ -166,6 +166,9 @@ requested, and reports rejection, preview, or the created/reused draft PR direct
 model chain-of-thought and raw thinking tokens are never exposed.
 Recoverable GitHub outcomes release the stable action-ledger key instead of being replayed as a
 successful result, so every deterministic reconciliation retry requires a new explicit approval.
+When GitHub rejects or cannot complete a bounded operation, chat reports only the allowlisted
+operation name and HTTP status (or that no response arrived); arbitrary upstream response text and
+credentials remain hidden.
 Failed enablement automatically restores and verifies the write-disabled posture.
 
 Immediately afterward:

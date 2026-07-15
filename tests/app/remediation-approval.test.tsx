@@ -177,6 +177,42 @@ describe("remediation approval panel", () => {
     });
   });
 
+  it("shows only the bounded GitHub operation failure returned by the guarded action", () => {
+    const safeMessage =
+      "GitHub create-draft-pr failed with HTTP 403. No draft PR was confirmed. Retry requires a new approval.";
+    expect(
+      buildApprovalOutcome([
+        {
+          id: "assistant-1",
+          parts: [
+            {
+              type: "tool-create_draft_pr",
+              state: "output-available",
+              toolCallId: "tool-1",
+              output: { error: { name: "Error", message: safeMessage } },
+            },
+          ],
+        },
+      ]),
+    ).toEqual({ message: safeMessage, state: "failed" });
+
+    expect(
+      buildApprovalOutcome([
+        {
+          id: "assistant-1",
+          parts: [
+            {
+              type: "tool-create_draft_pr",
+              state: "output-available",
+              toolCallId: "tool-1",
+              output: { error: { message: "token=must-not-render" } },
+            },
+          ],
+        },
+      ]),
+    ).toEqual({ message: "Draft PR action stopped safely. Retrying is safe.", state: "failed" });
+  });
+
   it("renders a terminal action result without stale approval controls", () => {
     const markup = renderToStaticMarkup(
       <ApprovalPanel
