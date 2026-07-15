@@ -15,7 +15,7 @@ import {
   evidenceResultsFromModelMessages,
   evidenceToolNames,
   nextEvidenceTool,
-  recordEvidenceResult,
+  reconcileEvidenceResults,
   type EvidenceReceipt,
   type EvidenceToolName,
   type EvidenceToolResult,
@@ -332,10 +332,7 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
     );
     const results = [...evidenceResultsFromModelMessages(currentMessages), ...currentStepResults];
     const activeState = this.state;
-    const receipt = results.reduce(
-      (current, result) => recordEvidenceResult(current, result),
-      activeState.receipt,
-    );
+    const receipt = reconcileEvidenceResults(activeState.receipt, results);
     const preparedRemediation =
       activeState.preparedRemediation ?? (await this.prepareRemediation(receipt));
     if (

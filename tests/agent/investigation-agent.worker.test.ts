@@ -443,6 +443,138 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     });
   });
 
+  it("orders overlapping persisted and current-step evidence by the configured phase chain", async () => {
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("overlapping-step-evidence");
+    const result = await runInDurableObject<
+      RegressionSurgeonAgent,
+      {
+        policy: Awaited<ReturnType<RegressionSurgeonAgent["beforeStep"]>>;
+        receipt: InvestigationAgentState;
+      }
+    >(stub, async (instance) => {
+      instance.startConfiguredInvestigation();
+      await instance.beforeStep({
+        messages: [],
+        stepNumber: 2,
+        steps: [
+          {
+            toolResults: [
+              {
+                toolCallId: "compare-before-overlap",
+                toolName: "compare_releases",
+                input: {},
+                output: {
+                  status: "ready",
+                  windowMs: 30 * 24 * 60 * 60 * 1_000,
+                  baseline: { count: 20, p50Ms: 130, p75Ms: 130, p95Ms: 130, errorRate: 0 },
+                  candidate: { count: 20, p50Ms: 381, p75Ms: 381, p95Ms: 381, errorRate: 0 },
+                  delta: { p75Ms: 251 },
+                },
+              },
+            ],
+          },
+          {
+            toolResults: [
+              {
+                toolCallId: "slow-before-overlap",
+                toolName: "find_slow_traces",
+                input: {},
+                output: [
+                  {
+                    traceId: "regression-sequential-trace-20",
+                    interactionId: "regression-sequential-interaction-20",
+                    releaseId: "regression-sequential",
+                    startedAtMs: 1_700_086_420_000,
+                    durationMs: 381,
+                    outcome: "success",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      } as never);
+
+      const releaseResult = {
+        release: {
+          versionId: "regression-sequential",
+          commitSha: "d591869a8ef995f1835ef80152f4de085b10255b",
+        },
+        commit: {
+          sha: "d591869a8ef995f1835ef80152f4de085b10255b",
+          changes: [{ path: "workers/platform/src/api/health.ts" }],
+        },
+        pullRequest: { status: "found", number: 19 },
+      };
+      const policy = await instance.beforeStep({
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Investigate the latency regression" }],
+          },
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "tool-call",
+                toolCallId: "release-persisted-first",
+                toolName: "inspect_release",
+                input: {},
+              },
+              {
+                type: "tool-result",
+                toolCallId: "release-persisted-first",
+                toolName: "inspect_release",
+                output: releaseResult,
+              },
+            ],
+          },
+        ],
+        stepNumber: 3,
+        steps: [
+          {
+            toolResults: [
+              {
+                toolCallId: "trace-current-step-earlier",
+                toolName: "inspect_trace",
+                input: {},
+                output: {
+                  trace: {
+                    traceId: "regression-sequential-trace-20",
+                    interactionId: "regression-sequential-interaction-20",
+                    releaseId: "regression-sequential",
+                    startedAtMs: 1_700_086_420_000,
+                    durationMs: 381,
+                    outcome: "success",
+                  },
+                  criticalPath: {
+                    diagnostics: [],
+                    spanIds: ["request"],
+                    wallTimeMs: 381,
+                  },
+                  tree: [{ span: { spanId: "request" } }],
+                },
+              },
+            ],
+          },
+        ],
+      } as never);
+      return { policy, receipt: instance.state };
+    });
+
+    expect(result.policy).toMatchObject({
+      activeTools: ["read_repo_files"],
+      toolChoice: { type: "tool", toolName: "read_repo_files" },
+    });
+    expect(result.receipt.status).toBe("investigating");
+    if (result.receipt.status !== "investigating") throw new Error("Investigation state was lost.");
+    expect(result.receipt.receipt.phases[2]?.status).toBe("complete");
+    expect(result.receipt.receipt.phases[3]).toMatchObject({
+      status: "complete",
+      attempts: [expect.objectContaining({ reason: "validated" })],
+    });
+  });
+
   it("removes evidence tools after the current phase exhausts its one retry", async () => {
     const stub = env.REGRESSION_SURGEON_AGENT.getByName("evidence-retry-exhaustion");
     const result = await runInDurableObject<
