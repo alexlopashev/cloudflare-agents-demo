@@ -466,14 +466,15 @@ h1 {
   text-align: right;
 }
 .approval-panel {
-  max-height: 60%;
-  padding: 22px 28px;
+  max-height: 46%;
+  flex: 0 1 auto;
+  padding: 14px 16px;
   border-bottom: 1px solid #17232918;
   background: #fff8e8;
   overflow: auto;
 }
 .approval-panel article {
-  padding: 18px;
+  padding: 14px;
   border: 1px solid #d6b25b;
   border-radius: 14px;
   background: #fffdf7;
@@ -501,28 +502,65 @@ h1 {
 .approval-actions {
   display: flex;
   gap: 10px;
+  margin: 14px 0;
+}
+.approval-actions button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 14px;
+  background: #1d7048;
+  color: #fff;
+  font-weight: 750;
+  cursor: pointer;
+}
+.approval-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 .approval-actions button:last-child {
-  border-color: #95533f;
+  border: 1px solid #95533f;
   background: transparent;
   color: #7b3f2f;
 }
-.chat-panel:has(.approval-panel) .tool-timeline {
-  max-height: 150px;
-  flex: 0 0 auto;
-  padding-top: 12px;
+.approval-diff,
+.approval-evidence {
+  margin-top: 10px;
+}
+.approval-diff summary,
+.approval-evidence summary {
+  color: #34454a;
+  font-weight: 800;
+  cursor: pointer;
+}
+.approval-diff pre {
+  max-height: 220px;
+  margin: 10px 0 0;
   overflow: auto;
+  font-size: 0.76rem;
+  white-space: pre;
 }
-.chat-panel:has(.approval-panel) .tool-timeline ol {
-  gap: 3px;
-  margin-bottom: 10px;
+.approval-result {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #edf0ec;
+  font-weight: 750;
 }
-.chat-panel:has(.approval-panel) .tool-timeline li {
-  padding: 3px 8px;
+.approval-result.failed {
+  background: #fff2ee;
+  color: #7b3f2f;
+}
+.approval-result.created,
+.approval-result.reused,
+.approval-result.preview {
+  background: #e7f6ec;
+  color: #245f3c;
+}
+.chat-panel:has(.approval-panel) .tool-timeline {
+  display: none;
 }
 .chat-panel:has(.approval-panel) .approval-panel {
   min-height: 220px;
-  flex: 1 1 auto;
 }
 .messages {
   flex: 1;
@@ -537,9 +575,6 @@ h1 {
   border-radius: 12px;
   background: #fff2ee;
   color: #7b3f2f;
-}
-.chat-panel:has(.approval-panel) .messages {
-  display: none;
 }
 .empty-state {
   max-width: 260px;
@@ -576,6 +611,31 @@ h1 {
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
+}
+.progress-message {
+  border: 1px solid #b8c8c1;
+  background: #f4f7f4;
+}
+.progress-message ol {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.progress-message li {
+  border-left: 3px solid #b7bfbc;
+  padding-left: 10px;
+  line-height: 1.4;
+}
+.progress-message li.complete {
+  border-left-color: #3faf6e;
+}
+.progress-message li.failed {
+  border-left-color: #ce684f;
+}
+.progress-message li.active {
+  border-left-color: #d6b25b;
 }
 .message-content {
   margin: 7px 0 0;

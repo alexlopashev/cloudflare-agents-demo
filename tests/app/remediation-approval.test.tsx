@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   ApprovalPanel,
+  buildApprovalOutcome,
   buildApprovalRequests,
+  buildCompactDiff,
+  startApprovalDecision,
 } from "../../apps/web/src/investigator/ApprovalPanel";
 
 const messages = [
@@ -25,11 +28,11 @@ const messages = [
 
 const preparedRemediation = {
   fingerprint: "proposal-v1-0123456789abcdef",
-  writeEnabled: false,
+  writeEnabled: true,
   proposal: {
     title: "fix: bound health-check concurrency",
     path: "workers/platform/src/api/health.ts",
-    replacementContent: "private full source must not render",
+    replacementContent: "before context\nprivate full source must not render\nafter context",
     rationale: "Preserve downstream capacity with bounded concurrency.",
     expectedBlobSha: "3333333333333333333333333333333333333333",
     incident: {
@@ -40,8 +43,8 @@ const preparedRemediation = {
   },
   diff: {
     path: "workers/platform/src/api/health.ts",
-    currentContent: "current bounded source",
-    replacementContent: "private full source must not render",
+    currentContent: "before context\ncurrent bounded source\nafter context",
+    replacementContent: "before context\nprivate full source must not render\nafter context",
     additions: 4,
     deletions: 3,
   },
@@ -54,7 +57,7 @@ describe("remediation approval panel", () => {
         additions: 4,
         approvalId: "approval-1",
         changedLineCount: 7,
-        currentContent: "current bounded source",
+        currentContent: "before context\ncurrent bounded source\nafter context",
         deletions: 3,
         expectedBlobSha: "3333333333333333333333333333333333333333",
         fileCount: 1,
@@ -66,8 +69,8 @@ describe("remediation approval panel", () => {
         sourcePullRequestNumber: 19,
         proposalFingerprint: "proposal-v1-0123456789abcdef",
         rationale: "Preserve downstream capacity with bounded concurrency.",
-        replacementContent: "private full source must not render",
-        writePosture: "Preview only — external GitHub writes disabled",
+        replacementContent: "before context\nprivate full source must not render\nafter context",
+        writePosture: "Live draft-PR writes enabled",
       },
     ]);
     expect(JSON.stringify(buildApprovalRequests(messages, preparedRemediation))).toContain(
@@ -95,10 +98,105 @@ describe("remediation approval panel", () => {
     expect(markup).toContain("0123456789abcdef0123456789abcdef01234567");
     expect(markup).toContain("PR #19");
     expect(markup).toContain("3333333333333333333333333333333333333333");
-    expect(markup).toContain("Preview only — external GitHub writes disabled");
-    expect(markup).toContain("current bounded source");
-    expect(markup).toContain("private full source must not render");
-    expect(markup).toContain("Approve draft PR");
+    expect(markup).toContain("Live draft-PR writes enabled");
+    expect(markup).toContain("Review exact change");
+    expect(markup).toMatch(/<details(?![^>]*open)/);
+    expect(markup.match(/<pre/g)).toHaveLength(1);
+    expect(markup).toContain("-current bounded source");
+    expect(markup).toContain("+private full source must not render");
+    expect(markup).toContain("Create Draft PR");
+    expect(markup).not.toContain("Approve draft PR");
     expect(markup).toContain("Reject");
+  });
+
+  it("dispatches one decision only after showing immediate guarded-action feedback", () => {
+    const request = buildApprovalRequests(messages, preparedRemediation)[0];
+    if (request === undefined) throw new Error("Expected approval request fixture.");
+    const events: string[] = [];
+
+    startApprovalDecision({
+      approved: true,
+      dispatch: ({ id, approved }) => events.push(`dispatch:${id}:${approved}`),
+      request,
+      update: (decision) => events.push(`ui:${decision.state}:${decision.approved}`),
+    });
+
+    expect(events).toEqual(["ui:submitting:true", "dispatch:approval-1:true"]);
+  });
+
+  it("projects rejected, preview, and created outcomes without fabricating writes", () => {
+    const request = buildApprovalRequests(messages, preparedRemediation)[0];
+    if (request === undefined) throw new Error("Expected approval request fixture.");
+    const decision = { approved: false, request, state: "submitting" as const };
+
+    expect(buildApprovalOutcome(messages, decision)).toMatchObject({ state: "rejected" });
+    expect(
+      buildApprovalOutcome([
+        {
+          id: "assistant-1",
+          parts: [
+            {
+              type: "tool-create_draft_pr",
+              state: "output-available",
+              toolCallId: "tool-1",
+              output: { status: "preview", writesPerformed: false },
+            },
+          ],
+        },
+      ]),
+    ).toEqual({
+      message: "Preview complete. No GitHub write was performed.",
+      state: "preview",
+    });
+    expect(
+      buildApprovalOutcome([
+        {
+          id: "assistant-1",
+          parts: [
+            {
+              type: "tool-create_draft_pr",
+              state: "output-available",
+              toolCallId: "tool-1",
+              output: {
+                status: "created",
+                writesPerformed: true,
+                repository: "alexlopashev/cloudflare-agents-demo",
+                number: 127,
+                url: "https://github.com/alexlopashev/cloudflare-agents-demo/pull/127",
+                draft: true,
+              },
+            },
+          ],
+        },
+      ]),
+    ).toEqual({
+      message: "Draft PR #127 created.",
+      number: 127,
+      state: "created",
+      url: "https://github.com/alexlopashev/cloudflare-agents-demo/pull/127",
+    });
+  });
+
+  it("renders a terminal action result without stale approval controls", () => {
+    const markup = renderToStaticMarkup(
+      <ApprovalPanel
+        requests={[]}
+        outcome={{
+          message: "Preview complete. No GitHub write was performed.",
+          state: "preview",
+        }}
+        onDecision={vi.fn()}
+      />,
+    );
+
+    expect(markup).toContain("Draft PR action");
+    expect(markup).not.toContain("Human approval required");
+    expect(markup).not.toContain("<button");
+  });
+
+  it("builds one bounded unified diff instead of two full-source columns", () => {
+    expect(buildCompactDiff("alpha\nbeta\ngamma", "alpha\nbounded\ngamma")).toBe(
+      "@@ -1,3 +1,3 @@\n alpha\n-beta\n+bounded\n gamma",
+    );
   });
 });

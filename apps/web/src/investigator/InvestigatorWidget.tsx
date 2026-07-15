@@ -12,7 +12,14 @@ import {
 import { useAgent } from "agents/react";
 import type { InvestigationAgentState } from "../../../../workers/platform/src";
 
-import { ApprovalPanel, buildApprovalRequests } from "./ApprovalPanel";
+import {
+  ApprovalPanel,
+  buildApprovalOutcome,
+  buildApprovalRequests,
+  startApprovalDecision,
+  type ApprovalDecision,
+} from "./ApprovalPanel";
+import { InvestigationProgress } from "./InvestigationProgress";
 import { messageText } from "./messages";
 import { clearInvestigatorSession, resolveInvestigatorSession } from "./session";
 import { buildToolTimeline, ToolTimeline } from "./ToolTimeline";
@@ -165,6 +172,7 @@ export function InvestigationStarter({
 export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }) {
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const [input, setInput] = useState("");
+  const [approvalDecision, setApprovalDecision] = useState<ApprovalDecision>();
   const [unreadCount, setUnreadCount] = useState(0);
   const [session] = useState(() => resolveInvestigatorSession(window.localStorage));
   const agent = useAgent<InvestigationAgentState>({
@@ -178,6 +186,7 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
     messages,
     agent.state?.status === "investigating" ? agent.state.preparedRemediation : undefined,
   );
+  const approvalOutcome = buildApprovalOutcome(messages, approvalDecision);
   const visibleMessages = messages
     .map((message) => ({ message, text: messageText(message.parts) }))
     .filter(({ text }) => text.length > 0);
@@ -264,8 +273,16 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
       <div className="chat-panel">
         <ToolTimeline entries={toolTimeline} />
         <ApprovalPanel
-          requests={approvals}
-          onDecision={(id, approved) => addToolApprovalResponse({ id, approved })}
+          requests={approvalOutcome === undefined ? approvals : []}
+          {...(approvalOutcome === undefined ? {} : { outcome: approvalOutcome })}
+          onDecision={(request, approved) =>
+            startApprovalDecision({
+              approved,
+              dispatch: addToolApprovalResponse,
+              request,
+              update: setApprovalDecision,
+            })
+          }
         />
         <div className="messages" aria-live="polite">
           {visibleMessages.length === 0 ? (
@@ -282,6 +299,9 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
                 </Suspense>
               </article>
             ))
+          )}
+          {agent.state?.status === "investigating" && (
+            <InvestigationProgress receipt={agent.state.receipt} />
           )}
           <InvestigatorError error={error} />
         </div>

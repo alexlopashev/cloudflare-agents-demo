@@ -157,8 +157,12 @@ oversized content, disallowed paths, and mutable or malformed evidence fail clos
 ### 3.4 Remediation and GitHub writes
 
 Only a complete receipt can persist the remediation proposal and its fingerprint. The model-facing
-action carries that fingerprint alone; the server resolves the exact proposal, and the approval UI
-renders its current source, replacement, rationale, counts, evidence references, and write posture.
+action carries that fingerprint alone; the server resolves the exact proposal. The approval UI keeps
+chat visible, renders rationale, counts, evidence references, and write posture, and exposes one
+compact exact diff in a collapsed disclosure. A decision becomes visible before dispatch, duplicate
+decisions are disabled, and the persisted action result distinguishes rejection, no-write preview,
+created/reused draft PR, and failure without inferring a write. Receipt phases also produce a
+deterministic evidence-backed work log; private model reasoning is never exposed as product state.
 
 The remediation service has two capability contracts:
 
