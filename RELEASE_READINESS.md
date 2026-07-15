@@ -53,12 +53,14 @@ Issues #46 and #47 are delivered. For issue #56, deployment created and read bac
 `GITHUB_WRITE_ENABLED=false`.
 
 The first one-shot keyed smoke was not replayed. After the operator reported purchasing Workers
-Paid, one explicit follow-up smoke produced Gateway log `01KXJG1K0HA7XQXEK3042N83S5`. Both distinct
-attempts prove that `@cf/zai-org/glm-5.2` reached the named Gateway and selected Workers AI. Workers
-AI still returned HTTP 403 stating that the account was on Workers Free; both logs record zero input
-tokens, zero output tokens, and zero cost. The complete five-phase live inference therefore remains
-blocked on Cloudflare recognizing the Workers Paid subscription. Issue #57 remains natively blocked
-by #56.
+Paid, one explicit follow-up smoke produced Gateway log `01KXJG1K0HA7XQXEK3042N83S5`. Both early
+attempts proved that `@cf/zai-org/glm-5.2` reached the named Gateway and selected Workers AI, but the
+subscription had not yet activated; each recorded zero input tokens, zero output tokens, and zero
+cost. Once the same account displayed Workers Paid, one fresh smoke completed against investigator
+version `3b6eeeda-b384-41ba-a838-9a96c712989f`: both public routes, Workers AI mode, measured release
+IDs, five exact evidence phases, the structured report, fingerprint
+`proposal-v1-9da7d28fb0835aae`, and a zero-write remediation preview all passed while production
+GitHub writes remained disabled. Issue #56 is complete and #57 is unblocked.
 
 The same run exposed that the Gateway management token could otherwise override Wrangler's OAuth
 authentication in deployment child processes. A test-first fix now strips that token from every
@@ -123,9 +125,8 @@ Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its 
 - The public demo has no user authentication. Cloudflare-native approximate abuse limits bound new
   paid turns and metric writes; they are not an exact account-level billing ceiling. Its diagnostic
   smoke route is protected by an unguessable Worker secret and returns 404 without it.
-- GLM 5.2 inference requires Workers Paid. The operator reports purchasing the plan, but Workers AI
-  still identifies the account as Workers Free; Gateway routing is proven, while a complete live
-  investigation remains pending subscription activation.
+- GLM 5.2 inference requires Workers Paid. The activated account completed the named-Gateway live
+  smoke; model usage beyond Cloudflare's included allocation remains billable.
 - Without a scoped GitHub token, D1 first resolves the measured Worker version to its immutable SHA;
   the bounded production GitHub adapter then performs unauthenticated commit, PR, source, base, and
   blob reads. Deterministic fixtures remain local verification adapters only.

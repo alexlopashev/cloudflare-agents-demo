@@ -1252,12 +1252,10 @@ Acceptance criteria:
 ### Phase 14 — Post-review operational hardening
 
 Status: repository simplification is delivered in issue #46 and public usage bounds are implemented
-in issue #47. For #56, the exact named Gateway has been created and read back, the current `main`
-runtime has
-been deployed through it, and its log records the routed GLM 5.2 Workers AI request. The account's
-Workers AI status still reports Free after the operator's reported Workers Paid purchase, rejecting
-both explicit smoke attempts before token use. The complete five-phase live smoke remains pending
-subscription activation. The exact daily spend cap in #57 remains natively blocked by #56. The
+in issue #47. Issue #56 is delivered: the exact named Gateway was created and read back, the current
+`main` runtime was deployed through it, Gateway logs recorded routed GLM 5.2 Workers AI requests,
+and the activated Workers Paid plan completed the one-shot five-phase public smoke against version
+`3b6eeeda-b384-41ba-a838-9a96c712989f`. The exact daily spend cap in #57 is now unblocked. The
 optional real draft-PR proof remains #30.
 
 The public runtime has two independent Cloudflare-native limits: 10 new paid investigator turns per
