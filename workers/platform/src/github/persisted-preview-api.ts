@@ -1,11 +1,12 @@
 import {
   configuredSourceEvidencePolicy,
+  gitBlobSha,
   parseReleasePreviewEvidence,
   parseReleaseSourceEvidence,
   type ReleasePreviewEvidence,
   type ReleaseSourceEvidence,
 } from "../../../../packages/contracts/src/source-evidence";
-import type { DraftPullRequestApi } from "../remediation/service";
+import type { RemediationReadApi } from "../remediation/service";
 
 import { RepositoryConnectorError } from "./errors";
 
@@ -21,16 +22,6 @@ type PersistedPreviewApiOptions = {
   store: PersistedPreviewStore;
 };
 
-async function gitBlobSha(content: string): Promise<string> {
-  const source = new TextEncoder().encode(content);
-  const header = new TextEncoder().encode(`blob ${source.byteLength}\0`);
-  const input = new Uint8Array(header.byteLength + source.byteLength);
-  input.set(header);
-  input.set(source, header.byteLength);
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-1", input));
-  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 function malformed(): RepositoryConnectorError {
   return new RepositoryConnectorError(
     "malformed-response",
@@ -38,7 +29,7 @@ function malformed(): RepositoryConnectorError {
   );
 }
 
-export class PersistedPreviewApi implements DraftPullRequestApi {
+export class PersistedPreviewApi implements RemediationReadApi {
   readonly repository: { owner: string; repo: string };
   readonly #releaseId: string;
   readonly #baseSha: string;
@@ -117,51 +108,6 @@ export class PersistedPreviewApi implements DraftPullRequestApi {
       "not-allowed",
       "Preview source is limited to the configured immutable refs.",
     );
-  }
-
-  async findOpenDraftPullRequest(_branch: string): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async getBranch(_branch: string): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async getChangedPaths(_baseSha: string, _headSha: string): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async createBlob(_content: string): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async createTree(_input: { baseTreeSha: string; path: string; blobSha: string }): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async createCommit(_input: {
-    message: string;
-    treeSha: string;
-    parentSha: string;
-  }): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async createBranch(_branch: string, _commitSha: string): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  async createDraftPullRequest(_input: {
-    title: string;
-    body: string;
-    head: string;
-    base: string;
-  }): Promise<never> {
-    return this.#writeDisabled();
-  }
-
-  #writeDisabled(): never {
-    throw new RepositoryConnectorError("not-allowed", "Persisted preview is write-disabled.");
   }
 }
 

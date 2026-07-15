@@ -67,6 +67,16 @@ export const releasePreviewEvidenceSchema = z
 
 export type ReleasePreviewEvidence = z.infer<typeof releasePreviewEvidenceSchema>;
 
+export async function gitBlobSha(content: string): Promise<string> {
+  const source = new TextEncoder().encode(content);
+  const header = new TextEncoder().encode(`blob ${source.byteLength}\0`);
+  const input = new Uint8Array(header.byteLength + source.byteLength);
+  input.set(header);
+  input.set(source, header.byteLength);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-1", input));
+  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export function parseReleaseSourceEvidence(value: unknown): ReleaseSourceEvidence {
   const parsed = releaseSourceEvidenceSchema.safeParse(value);
   if (!parsed.success) throw new TypeError("Configured release source evidence is invalid.");

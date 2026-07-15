@@ -31,10 +31,13 @@ export const remediationProposalSchema = z
 
 export type RemediationProposal = z.infer<typeof remediationProposalSchema>;
 
-export type DraftPullRequestApi = {
+export type RemediationReadApi = {
   readonly repository: { owner: string; repo: string };
   getBase(branch: string): Promise<unknown>;
   getFile(ref: string, path: string): Promise<unknown>;
+};
+
+export type DraftPullRequestApi = RemediationReadApi & {
   findOpenDraftPullRequest(branch: string): Promise<unknown>;
   getBranch(branch: string): Promise<unknown>;
   getChangedPaths(baseSha: string, headSha: string): Promise<unknown>;
@@ -56,14 +59,18 @@ type RemediationLimits = {
   maxLines: number;
 };
 
-type RemediationServiceOptions = {
-  api: DraftPullRequestApi;
+type RemediationServicePolicy = {
   repository: { owner: string; repo: string };
   baseBranch: string;
   allowedPaths: readonly string[];
   limits: RemediationLimits;
-  writeEnabled: boolean;
 };
+
+type RemediationServiceOptions = RemediationServicePolicy &
+  (
+    | { api: RemediationReadApi; writeEnabled: false }
+    | { api: DraftPullRequestApi; writeEnabled: true }
+  );
 
 export type RemediationErrorCode =
   | "invalid-input"
@@ -327,6 +334,32 @@ export function createRemediationService(options: RemediationServiceOptions) {
         },
       };
       if (!options.writeEnabled) return preview;
+
+      const createDraftPullRequest = async (
+        recoveryStage: "branch-existing" | "branch-created",
+      ) => {
+        try {
+          const created = parseExternal(
+            pullRequestResponse,
+            await options.api.createDraftPullRequest({
+              title: proposal.title,
+              body: prepared.body,
+              head: branch,
+              base: baseBranch.data,
+            }),
+            "Draft pull request",
+          );
+          return {
+            status: "created" as const,
+            writesPerformed: true as const,
+            repository: repositoryName,
+            branch,
+            ...created,
+          };
+        } catch {
+          return { status: "recoverable" as const, branch, stage: recoveryStage };
+        }
+      };
       const baseTreeSha = prepared.base.treeSha;
       if (baseTreeSha === undefined) {
         throw new RemediationError(
@@ -377,27 +410,7 @@ export function createRemediationService(options: RemediationServiceOptions) {
             "The deterministic remediation branch contains different source.",
           );
         }
-        try {
-          const created = parseExternal(
-            pullRequestResponse,
-            await options.api.createDraftPullRequest({
-              title: proposal.title,
-              body: prepared.body,
-              head: branch,
-              base: baseBranch.data,
-            }),
-            "Draft pull request",
-          );
-          return {
-            status: "created" as const,
-            writesPerformed: true as const,
-            repository: repositoryName,
-            branch,
-            ...created,
-          };
-        } catch {
-          return { status: "recoverable" as const, branch, stage: "branch-existing" as const };
-        }
+        return createDraftPullRequest("branch-existing");
       }
 
       try {
@@ -439,27 +452,7 @@ export function createRemediationService(options: RemediationServiceOptions) {
         };
       }
 
-      try {
-        const created = parseExternal(
-          pullRequestResponse,
-          await options.api.createDraftPullRequest({
-            title: proposal.title,
-            body: prepared.body,
-            head: branch,
-            base: baseBranch.data,
-          }),
-          "Draft pull request",
-        );
-        return {
-          status: "created" as const,
-          writesPerformed: true as const,
-          repository: repositoryName,
-          branch,
-          ...created,
-        };
-      } catch {
-        return { status: "recoverable" as const, branch, stage: "branch-created" as const };
-      }
+      return createDraftPullRequest("branch-created");
     },
   };
 }

@@ -39,7 +39,7 @@ describe("GitHubPublicPreviewApi", () => {
     ).toBe(false);
   });
 
-  it("fails closed on a different branch, path, malformed feed, and every write operation", async () => {
+  it("fails closed on a different branch and path without exposing write capabilities", async () => {
     const fetcher = vi.fn(
       async () => new Response("<feed><entry><id>not-a-sha</id></entry></feed>"),
     );
@@ -55,16 +55,10 @@ describe("GitHubPublicPreviewApi", () => {
     await expect(api.getFile(commitSha, "README.md")).rejects.toMatchObject({
       code: "not-allowed",
     });
-    await expect(api.createBlob("source")).rejects.toThrow(/write-disabled/i);
-    await expect(
-      api.createTree({ baseTreeSha: commitSha, path: "x", blobSha: commitSha }),
-    ).rejects.toThrow(/write-disabled/i);
-    await expect(
-      api.createCommit({ message: "x", treeSha: commitSha, parentSha: commitSha }),
-    ).rejects.toThrow(/write-disabled/i);
-    await expect(api.createBranch("branch", commitSha)).rejects.toThrow(/write-disabled/i);
-    await expect(
-      api.createDraftPullRequest({ title: "x", body: "x", head: "x", base: "main" }),
-    ).rejects.toThrow(/write-disabled/i);
+    expect("createBlob" in api).toBe(false);
+    expect("createTree" in api).toBe(false);
+    expect("createCommit" in api).toBe(false);
+    expect("createBranch" in api).toBe(false);
+    expect("createDraftPullRequest" in api).toBe(false);
   });
 });
