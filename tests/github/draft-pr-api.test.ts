@@ -198,6 +198,11 @@ describe("GitHubDraftPrApi", () => {
         ([request]) => request.headers.get("authorization") === "Bearer scoped-token",
       ),
     ).toBe(true);
+    expect(
+      fetcher.mock.calls.every(
+        ([request]) => request.headers.get("user-agent") === "Regression-Surgeon",
+      ),
+    ).toBe(true);
     expect(Object.getOwnPropertyNames(GitHubDraftPrApi.prototype)).not.toContain("merge");
   });
 
