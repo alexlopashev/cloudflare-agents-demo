@@ -23,7 +23,10 @@ jobs:
         with:
           install: false
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes zsh fish
+        run: |
+          sudo sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true install --yes zsh fish
       - run: mise install node wrangler gh shellcheck shfmt actionlint docker-compose 'github:nushell/nushell'
       - run: mise exec node -- corepack prepare pnpm@10.34.5 --activate
       - run: mise exec node -- corepack enable pnpm
