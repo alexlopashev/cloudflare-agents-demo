@@ -153,8 +153,11 @@ ephemeral `CLOUDFLARE_API_TOKEN` with **AI Gateway Write** permission in the cur
 Wrangler's OAuth token is not accepted by that API. Never put this token in chat, a command argument,
 an environment file, or repository state. Deployment keeps the token only in the direct Gateway API
 client and removes it from every child-process environment, so Wrangler continues to use its OAuth
-session. `mise run ai:gateway:ensure`, normal deploy, and refresh all fail closed without the token
-and create or verify only the exact named gateway. Then run
+session. `mise run ai:gateway:ensure` is the only ordinary operator task that may create or repair
+the named gateway and its one enabled, unscoped `$5` cost rule over a fixed 86,400-second UTC-day
+window. It preserves the gateway's other mutable settings and verifies a fresh read after mutation.
+Normal deploy and refresh never alter that budget: they fail before build or live inference when the
+gateway or exact rule is missing, disabled, duplicated, scoped, or drifted. Then run
 `mise run deploy`. The task reuses or creates only the named D1 database, builds both Workers and the
 web app, applies remote migrations,
 uploads a concurrent baseline and sequential regression behind the current write-disabled
@@ -215,14 +218,26 @@ the internal tool loop and continuations remain part of that one turn. Public `/
 20-sample reviewer batch consumes 40 metric requests, leaving room for normal page refreshes.
 Validated deployment measurement requests bypass the public metric budget because they are pinned
 to an exact release and attempted only once. The keyed programmatic smoke likewise bypasses the
-public turn budget, while remaining one-shot and subject to the separately planned Gateway spend cap.
+public turn budget, while remaining one-shot and subject to the same Gateway spend cap.
 
 An exhausted budget returns `429` with `Retry-After: 60`; a missing or failed limiter returns `503`.
 Both paths stop before Workers AI, health-service calls, trace persistence, or UX telemetry writes.
 Cloudflare [documents these counters as local per edge location and intentionally
 approximate](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/), so they
-are an abuse bound rather than a globally exact billing control. Issue #57 owns the exact
-$5-per-UTC-day Gateway spend cap.
+are an abuse bound rather than a globally exact billing control. The independent Gateway rule tracks
+estimated billable model cost across all current and future providers and models routed through this
+gateway. Cloudflare documents spend-limit accounting as eventually consistent, so concurrent
+requests can briefly overshoot `$5`; the public turn limiter bounds that burst window. Once the
+Gateway returns `429`, Project Think permits at most one provider retry, exposes only a bounded
+model-unavailable result, and preserves the existing incident receipt without enabling remediation
+or GitHub writes.
+
+The fixed window resets on the next UTC-day boundary. Monitor cumulative model spend in the AI
+Gateway Analytics dashboard. Budget exhaustion is distinct from both Workers AI's included neuron
+allowance and the per-edge request counters above: wait for the UTC reset or emergency-disable public
+usage; do not raise or remove the rule through deploy or refresh. If readback reports configuration
+drift, rerun `mise run ai:gateway:ensure` with the short-lived management token, verify the exact
+rule, and then retry the deployment.
 
 `mise run deploy:usage:disable` redeploys the preserved evidence with public AI and metric-writing
 traffic disabled and GitHub writes off. `mise run deploy:usage:enable` restores the rate-limited

@@ -121,6 +121,13 @@ Do not assert exact natural-language output from a live model. Assert structured
   Write permission. Deployment must not use Wrangler's incompatible OAuth token or persist, echo,
   pass as a command argument, inherit into any child process, or expose the management token to the
   Worker runtime. Wrangler subprocesses must continue to use the operator's separate OAuth session.
+- The named Gateway must have exactly one enabled, unscoped $5 cost rule over a fixed 86,400-second
+  window. Only the explicit Gateway reconciliation task may create or repair that rule; deploy and
+  refresh must verify it exactly and fail before build or live inference when it is missing,
+  disabled, duplicated, scoped, or drifted.
+- A Gateway or provider 429 retries at most once and becomes a bounded model-unavailable failure;
+  it must not corrupt the persisted investigation receipt, expose provider details, make remediation
+  eligible, or perform a GitHub write.
 - Live public usage must be either rate-limited or explicitly disabled; Workers AI may never use the
   unbounded local posture. New paid turns and metric-writing requests consume independent
   Cloudflare Rate Limiting bindings before inference, dependency calls, or telemetry writes.
