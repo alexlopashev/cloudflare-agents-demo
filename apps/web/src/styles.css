@@ -433,45 +433,11 @@ h1 {
   flex-direction: column;
   overflow: hidden;
 }
-.tool-timeline {
-  padding: 22px 28px 0;
-  border-bottom: 1px solid #17232918;
-}
-.tool-timeline ol {
-  display: grid;
-  gap: 8px;
-  margin: 0 0 18px;
-  padding: 0;
-  list-style: none;
-}
-.tool-timeline li {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  border-left: 3px solid #b7bfbc;
-  padding: 7px 10px;
-}
-.tool-timeline li.completed {
-  border-left-color: #3faf6e;
-}
-.tool-timeline li.failed {
-  border-left-color: #ce684f;
-}
-.tool-timeline-label {
-  font-weight: 700;
-}
-.tool-timeline li small {
-  color: #697479;
-  text-align: right;
-}
 .approval-panel {
-  max-height: 46%;
-  flex: 0 1 auto;
-  padding: 14px 16px;
-  border-bottom: 1px solid #17232918;
+  max-width: 100%;
+  padding: 16px;
+  border: 1px solid #d6b25b;
   background: #fff8e8;
-  overflow: auto;
 }
 .approval-panel article {
   padding: 14px;
@@ -556,9 +522,6 @@ h1 {
   background: #e7f6ec;
   color: #245f3c;
 }
-.chat-panel:has(.approval-panel) .tool-timeline {
-  display: none;
-}
 .chat-panel:has(.approval-panel) .approval-panel {
   min-height: 220px;
 }
@@ -612,30 +575,40 @@ h1 {
   font-weight: 700;
   text-transform: uppercase;
 }
-.progress-message {
+.activity-message {
+  margin-bottom: 10px;
+  padding: 12px 14px;
   border: 1px solid #b8c8c1;
   background: #f4f7f4;
 }
-.progress-message ol {
-  display: grid;
-  gap: 8px;
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
+.activity-message p {
+  margin: 7px 0 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
-.progress-message li {
-  border-left: 3px solid #b7bfbc;
-  padding-left: 10px;
-  line-height: 1.4;
+.activity-message.reasoning {
+  border-style: dashed;
+  background: #f8faf8;
 }
-.progress-message li.complete {
-  border-left-color: #3faf6e;
+.activity-message.reasoning details,
+.activity-message.reasoning summary {
+  cursor: pointer;
 }
-.progress-message li.failed {
-  border-left-color: #ce684f;
+.activity-message.reasoning summary {
+  color: #53615e;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
-.progress-message li.active {
-  border-left-color: #d6b25b;
+.activity-message.tool-call {
+  border-left: 4px solid #d6b25b;
+}
+.activity-message.tool-result.complete {
+  border-left: 4px solid #3faf6e;
+}
+.activity-message.tool-result.failed {
+  border-left: 4px solid #ce684f;
+  background: #fff2ee;
 }
 .message-content {
   margin: 7px 0 0;

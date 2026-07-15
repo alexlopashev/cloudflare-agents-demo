@@ -23,7 +23,6 @@ import {
 import { InvestigationProgress } from "./InvestigationProgress";
 import { messageText } from "./messages";
 import { clearInvestigatorSession, resolveInvestigatorSession } from "./session";
-import { buildToolTimeline, ToolTimeline } from "./ToolTimeline";
 
 const InvestigatorMessage = lazy(() => import("./InvestigatorMessage"));
 
@@ -190,8 +189,6 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
   const { addToolApprovalResponse, error, messages, sendMessage, status } = useAgentChat(
     buildInvestigatorChatOptions(agent),
   );
-  const toolTimeline =
-    agent.state?.status === "investigating" ? buildToolTimeline(agent.state.receipt) : [];
   const approvals = buildApprovalRequests(
     messages,
     agent.state?.status === "investigating" ? agent.state.preparedRemediation : undefined,
@@ -281,19 +278,6 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
       unreadCount={unreadCount}
     >
       <div className="chat-panel">
-        <ToolTimeline entries={toolTimeline} />
-        <ApprovalPanel
-          requests={approvalOutcome === undefined ? approvals : []}
-          {...(approvalOutcome === undefined ? {} : { outcome: approvalOutcome })}
-          onDecision={(request, approved) =>
-            startApprovalDecision({
-              approved,
-              dispatch: addToolApprovalResponse,
-              request,
-              update: setApprovalDecision,
-            })
-          }
-        />
         <div className="messages" aria-live="polite">
           {visibleMessages.length === 0 ? (
             <InvestigationStarter
@@ -313,6 +297,18 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
           {agent.state?.status === "investigating" && (
             <InvestigationProgress receipt={agent.state.receipt} />
           )}
+          <ApprovalPanel
+            requests={approvalOutcome === undefined ? approvals : []}
+            {...(approvalOutcome === undefined ? {} : { outcome: approvalOutcome })}
+            onDecision={(request, approved) =>
+              startApprovalDecision({
+                approved,
+                dispatch: addToolApprovalResponse,
+                request,
+                update: setApprovalDecision,
+              })
+            }
+          />
           <InvestigatorError error={error} />
         </div>
         <form className="composer" onSubmit={submit}>

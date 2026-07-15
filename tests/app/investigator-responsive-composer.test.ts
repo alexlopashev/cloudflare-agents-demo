@@ -37,8 +37,10 @@ describe("investigator mobile composer", () => {
     expect(styles).not.toMatch(
       /\.chat-panel:has\(\.approval-panel\) \.messages\s*{[^}]*display:\s*none;/s,
     );
-    expect(styles).toMatch(
-      /\.chat-panel:has\(\.approval-panel\) \.tool-timeline\s*{[^}]*display:\s*none;/s,
+    expect(widgetSource).not.toContain("ToolTimeline");
+    expect(styles).not.toContain(".tool-timeline");
+    expect(widgetSource.indexOf("<ApprovalPanel")).toBeGreaterThan(
+      widgetSource.indexOf('className="messages"'),
     );
   });
 });
