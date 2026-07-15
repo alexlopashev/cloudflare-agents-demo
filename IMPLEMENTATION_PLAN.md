@@ -162,7 +162,9 @@ chat visible, renders rationale, counts, evidence references, and write posture,
 compact exact diff in a collapsed disclosure. A decision becomes visible before dispatch, duplicate
 decisions are disabled, and the persisted action result distinguishes rejection, no-write preview,
 created/reused draft PR, and failure without inferring a write. Receipt phases also produce a
-deterministic evidence-backed work log; private model reasoning is never exposed as product state.
+deterministic evidence-backed chat log with collapsed reasoning summaries, tool calls, bounded tool
+results, approval state, and terminal outcomes. Private model chain-of-thought and raw thinking
+tokens are never exposed as product state.
 
 The remediation service has two capability contracts:
 

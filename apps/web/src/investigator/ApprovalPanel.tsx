@@ -330,7 +330,7 @@ export function ApprovalPanel({
 }) {
   if (requests.length === 0 && outcome === undefined) return null;
   return (
-    <section className="approval-panel" aria-label="Draft pull request approval">
+    <section className="message assistant approval-panel" aria-label="Draft pull request approval">
       <p className="eyebrow">
         {requests.length === 0 ? "Draft PR action" : "Human approval required"}
       </p>
