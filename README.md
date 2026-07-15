@@ -40,7 +40,9 @@ The initial product supports one controlled repository, one supervised applicati
 - sh, Bash, Zsh, Fish, and Nu
 
 Bootstrap is repository-local and shell-neutral. It never edits a shell profile, installs tools into
-a system path, or inherits tools from a user's global mise configuration. Activation opens a
+a system path, or inherits tools from a user's global mise configuration. It fixes mise discovery to
+this project's configuration and installs only the explicitly named locked tool set, so a successful
+bootstrap does not rewrite `mise.lock`. Activation opens a
 project-scoped child shell, so leaving that shell removes its environment changes.
 Repository automation uses `scripts/*.ts`, executed directly through Node 24.18's stable type
 stripping with `erasableSyntaxOnly`; `tsc --noEmit` remains the separate strict type-checking gate.
@@ -263,7 +265,7 @@ Read [AGENTS.md](AGENTS.md) before changing code. It defines the required TDD wo
 ## Project documentation
 
 - [Implementation plan](IMPLEMENTATION_PLAN.md)
-- [Historical v1/v1.1 release evidence](RELEASE_READINESS.md)
+- [Dated v1–v1.2 release-readiness evidence](RELEASE_READINESS.md)
 - [GitHub wiki](https://github.com/alexlopashev/cloudflare-agents-demo/wiki)
 - [v1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/1)
 - [v1.1 interactive-demo milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/2)
@@ -318,12 +320,10 @@ preview receipts without satisfying write enablement or making a GitHub request.
 Git SHA, and deployment timestamp are validated before health telemetry or runtime identity can be
 emitted. The deterministic and live paths both prepare the same complete-file bounded-concurrency edit.
 
-The active [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
-hardens that slice rather than expanding it. Work now makes evidence incident-scoped, binds
-remediation mechanically to the same receipt, repairs telemetry semantics, strengthens smoke and
-developer commands, keeps test scaffolding out of live composition, and makes the first reviewer
-interaction truthful. Until [issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48)
-closes, treat the public deployment as a working implementation under review hardening.
+The [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3) hardens that
+slice rather than expanding it. Its implementation and reviewer-readiness gates are complete; the
+remaining [issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48) reconciles and
+closes the delivery tracker.
 
 Mutable deployment snapshots and incident history live in issue comments and the dated
 [release record](RELEASE_READINESS.md). A real GitHub draft PR remains the optional operator proof in

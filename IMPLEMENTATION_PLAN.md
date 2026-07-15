@@ -246,9 +246,14 @@ MISE_CACHE_DIR=.local/cache/mise
 MISE_STATE_DIR=.local/state/mise
 MISE_GLOBAL_CONFIG_FILE=.local/mise-global.toml
 MISE_CONFIG_DIR=.local/config/mise
+MISE_CONFIG_FILE=mise.toml
+MISE_CEILING_PATHS=<parent-of-repository-root>
 ```
 
-The entrypoints also add the user's normal global mise config to `MISE_IGNORED_CONFIG_PATHS`. This prevents unrelated personal tools or aliases from leaking into a repository bootstrap.
+The explicit project file and discovery ceiling prevent mise from loading configuration above the
+repository, while `MISE_IGNORED_CONFIG_PATHS` also rejects the user's normal global configuration.
+Bootstrap installs only the ten named tools declared in `mise.toml` with locked resolution; it does
+not implicitly select tools from any other configuration or update `mise.lock`.
 
 When the project shell or command exits, activation and environment changes disappear. Downloaded repository-local tools remain cached until teardown.
 
@@ -1016,11 +1021,13 @@ Acceptance criteria:
 
 ### Phase 9 — Release readiness
 
-Status: historically complete for v1 in issue #12. A clean macOS ARM64 worktree installed the repository-local toolchain
-through the documented shell-neutral bootstrap, applied migrations, regenerated measured evidence, and
-passed aggregate checks, build, and full local E2E. The public no-login routes and deployed keyed
-smoke were reverified. README, wiki, plan, milestone dependencies, instructions, skills, limitations,
-and evidence were reconciled.
+Status: complete for v1 in issue #12 and reverified for v1.2 in issue #45. A fresh macOS ARM64
+worktree with an isolated home installed only the explicit locked repository tool set, applied
+migrations, regenerated measured evidence, and passed aggregate checks, build, and full local E2E
+without tracked lockfile drift. The public no-login reviewer journey was reverified with all five
+evidence phases, exact remediation preview, zero external writes, and writes disabled. README, wiki,
+plan, milestone dependencies, instructions, skills, limitations, metadata, and evidence were
+reconciled.
 
 - Re-run a native clean-room bootstrap and the public reviewer walkthrough.
 - Reconcile README, wiki, implementation plan, issues, blockers, instructions, and skills.
@@ -1145,7 +1152,7 @@ Acceptance criteria:
 
 ### Phase 13 — Reviewer-ready evidence contract and simplification
 
-Status: in progress in the
+Status: implementation and review-readiness gates complete in the
 [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3), coordinated by
 [issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48). Completion means a
 credential-free measured investigation and validated write-disabled remediation preview. Live
@@ -1202,7 +1209,7 @@ Work packages:
   (#105, implementation complete pending the public smoke).
 - Remove all tools from the same turn's final step after its evidence receipt completes (#107,
   implementation complete pending the public smoke).
-- Complete clean-room release verification and project-system alignment (#45).
+- Complete clean-room release verification and project-system alignment (#45, complete).
 
 Acceptance criteria:
 

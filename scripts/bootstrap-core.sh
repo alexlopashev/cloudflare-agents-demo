@@ -40,12 +40,14 @@ fi
 : "${MISE_CACHE_DIR:=$root/.local/cache/mise}"
 : "${MISE_STATE_DIR:=$root/.local/state/mise}"
 : "${MISE_GLOBAL_CONFIG_FILE:=$root/.local/mise-global.toml}"
+MISE_CONFIG_FILE="$root/mise.toml"
+MISE_CEILING_PATHS=$(dirname "$root")
 MISE_CONFIG_DIR="$root/.local/config/mise"
 case ":${MISE_IGNORED_CONFIG_PATHS:-}:" in
   *":$REGRESSION_SURGEON_USER_MISE_CONFIG:"*) ;;
   *) MISE_IGNORED_CONFIG_PATHS="$REGRESSION_SURGEON_USER_MISE_CONFIG${MISE_IGNORED_CONFIG_PATHS:+:$MISE_IGNORED_CONFIG_PATHS}" ;;
 esac
-export MISE_INSTALL_PATH MISE_DATA_DIR MISE_CACHE_DIR MISE_STATE_DIR MISE_GLOBAL_CONFIG_FILE
+export MISE_INSTALL_PATH MISE_DATA_DIR MISE_CACHE_DIR MISE_STATE_DIR MISE_GLOBAL_CONFIG_FILE MISE_CONFIG_FILE MISE_CEILING_PATHS
 export MISE_CONFIG_DIR MISE_IGNORED_CONFIG_PATHS
 
 confirm() {
@@ -100,7 +102,7 @@ else
 fi
 
 if confirm "Install the pinned development tools?"; then
-  "$MISE_INSTALL_PATH" install
+  "$MISE_INSTALL_PATH" install --locked node wrangler gh shellcheck shfmt actionlint github:nushell/nushell colima docker-cli docker-compose
   "$MISE_INSTALL_PATH" exec node -- corepack prepare pnpm@10.34.5 --activate
   "$MISE_INSTALL_PATH" exec node -- corepack enable pnpm
 else
