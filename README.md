@@ -269,7 +269,7 @@ Read [AGENTS.md](AGENTS.md) before changing code. It defines the required TDD wo
 - [GitHub wiki](https://github.com/alexlopashev/cloudflare-agents-demo/wiki)
 - [v1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/1)
 - [v1.1 interactive-demo milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/2)
-- [Active v1.2 review-readiness milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
+- [Delivered v1.2 review-readiness milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
 - [Next-session handoff and delivery tracker](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48)
 - [Interactive demo UX issue](https://github.com/alexlopashev/cloudflare-agents-demo/issues/25)
 - [Delivery tracking issue](https://github.com/alexlopashev/cloudflare-agents-demo/issues/1)
@@ -320,10 +320,10 @@ preview receipts without satisfying write enablement or making a GitHub request.
 Git SHA, and deployment timestamp are validated before health telemetry or runtime identity can be
 emitted. The deterministic and live paths both prepare the same complete-file bounded-concurrency edit.
 
-The [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3) hardens that
-slice rather than expanding it. Its implementation and reviewer-readiness gates are complete; the
-remaining [issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48) reconciles and
-closes the delivery tracker.
+The delivered [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
+hardens that slice rather than expanding it. Its implementation, public reviewer journey,
+clean-room verification, and project-system alignment are complete. Post-review extensions remain
+separately scoped and do not change the take-home completion contract.
 
 Mutable deployment snapshots and incident history live in issue comments and the dated
 [release record](RELEASE_READINESS.md). A real GitHub draft PR remains the optional operator proof in

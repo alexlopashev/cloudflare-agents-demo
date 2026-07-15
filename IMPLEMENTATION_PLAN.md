@@ -1152,10 +1152,10 @@ Acceptance criteria:
 
 ### Phase 13 — Reviewer-ready evidence contract and simplification
 
-Status: implementation and review-readiness gates complete in the
-[v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3), coordinated by
-[issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48). Completion means a
-credential-free measured investigation and validated write-disabled remediation preview. Live
+Status: delivered in the
+[v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3) and reconciled by
+[issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48). The completed contract
+is a credential-free measured investigation and validated write-disabled remediation preview. Live
 GitHub write proof remains the optional operator workflow in issue #30.
 
 Work packages:
@@ -1294,9 +1294,10 @@ After every meaningful change:
 
 Every delivery issue contains this alignment checklist and cannot close until it is satisfied. The repository-local `align-project-system` skill is the procedural source for the assessment.
 
-Historical delivery is recorded in the
-[v1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/1). Active hardening is
-tracked in the [v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3)
-under [issue #48](https://github.com/alexlopashev/cloudflare-agents-demo/issues/48). The optional live
-GitHub write remains in [issue #30](https://github.com/alexlopashev/cloudflare-agents-demo/issues/30).
-Native GitHub blocked-by relations, not checklist ordering alone, define the actionable graph.
+Delivered work is recorded in the
+[v1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/1),
+[v1.1 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/2), and
+[v1.2 milestone](https://github.com/alexlopashev/cloudflare-agents-demo/milestone/3). The optional
+live GitHub write remains in
+[issue #30](https://github.com/alexlopashev/cloudflare-agents-demo/issues/30). Native GitHub blocked-by
+relations, not checklist ordering alone, define any follow-up graph.
