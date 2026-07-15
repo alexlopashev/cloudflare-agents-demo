@@ -242,7 +242,8 @@ export class RepositoryConnector {
     if (commit.files.length > this.#limits.maxChangedFiles) {
       throw new RepositoryConnectorError("limit-exceeded", "Commit changed-file limit exceeded.");
     }
-    const patchBytes = commit.files.reduce(
+    const allowedFiles = commit.files.filter((file) => this.#isAllowedPath(file.filename));
+    const patchBytes = allowedFiles.reduce(
       (total, file) => total + byteLength("patch" in file ? (file.patch ?? "") : ""),
       0,
     );
@@ -289,16 +290,14 @@ export class RepositoryConnector {
         authorLogin: "commit" in commit ? (commit.author?.login ?? null) : null,
         url: commit.html_url,
         ...("metadata" in commit ? { metadata: commit.metadata } : {}),
-        changes: commit.files
-          .filter((file) => this.#isAllowedPath(file.filename))
-          .map((file) => ({
-            path: file.filename,
-            status: file.status,
-            additions: file.additions,
-            deletions: file.deletions,
-            ...("metadata" in file ? { metadata: file.metadata } : {}),
-            ...("patch" in file && file.patch !== undefined ? { patch: file.patch } : {}),
-          })),
+        changes: allowedFiles.map((file) => ({
+          path: file.filename,
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+          ...("metadata" in file ? { metadata: file.metadata } : {}),
+          ...("patch" in file && file.patch !== undefined ? { patch: file.patch } : {}),
+        })),
       },
       pullRequest,
     };
