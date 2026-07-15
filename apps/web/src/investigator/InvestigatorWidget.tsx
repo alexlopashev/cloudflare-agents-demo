@@ -1,4 +1,5 @@
 import { useAgentChat } from "@cloudflare/ai-chat/react";
+import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 import {
   lazy,
   Suspense,
@@ -139,6 +140,13 @@ export function InvestigatorWidgetChrome({
 export const configuredInvestigationPrompt =
   "Investigate the seeded latency regression and prepare the guarded remediation preview.";
 
+export function buildInvestigatorChatOptions<T>(agent: T) {
+  return {
+    agent,
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+  };
+}
+
 export function InvestigatorError({ error }: { error: Error | undefined }) {
   if (error === undefined) return null;
   const message = /^Public investigator (?:limit reached|is temporarily)/.test(error.message)
@@ -179,7 +187,9 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
     agent: "RegressionSurgeonAgent",
     name: session,
   });
-  const { addToolApprovalResponse, error, messages, sendMessage, status } = useAgentChat({ agent });
+  const { addToolApprovalResponse, error, messages, sendMessage, status } = useAgentChat(
+    buildInvestigatorChatOptions(agent),
+  );
   const toolTimeline =
     agent.state?.status === "investigating" ? buildToolTimeline(agent.state.receipt) : [];
   const approvals = buildApprovalRequests(
