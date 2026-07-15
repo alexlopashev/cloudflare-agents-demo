@@ -85,6 +85,15 @@ test("foundation exposes the committed developer entrypoints", () => {
   }
 });
 
+test("workspace metadata declares the honest single-package boundary", () => {
+  const workspace = readRepo("pnpm-workspace.yaml");
+  assert.match(workspace, /^packages:\n {2}- "\."$/m);
+  assert.doesNotMatch(workspace, /(?:apps|packages|workers)\/\*/);
+  for (const directory of ["apps", "packages", "workers"]) {
+    assert.equal(existsSync(join(repoRoot, directory, "package.json")), false);
+  }
+});
+
 test("repository Node automation uses native TypeScript entrypoints", () => {
   const scriptFiles = readdirSync(join(repoRoot, "scripts"));
   assert.deepEqual(

@@ -7,6 +7,10 @@ const integrityMigrationPath = new URL(
   "../../migrations/telemetry/0003_telemetry_integrity.sql",
   import.meta.url,
 );
+const cleanupMigrationPath = new URL(
+  "../../migrations/telemetry/0006_remove_platform_metadata.sql",
+  import.meta.url,
+);
 
 describe("telemetry migration", () => {
   it("defines normalized release, interaction, trace, and span evidence", async () => {
@@ -39,5 +43,11 @@ describe("telemetry migration", () => {
     expect(sql).toContain("reject_conflicting_ux_event");
     expect(sql).toContain("validate_ux_event_trace_insert");
     expect(sql).toContain("RAISE(ABORT");
+  });
+
+  it("removes the unused platform metadata table without touching evidence tables", async () => {
+    const sql = await readFile(cleanupMigrationPath, "utf8");
+
+    expect(sql.trim()).toBe("DROP TABLE IF EXISTS platform_metadata;");
   });
 });

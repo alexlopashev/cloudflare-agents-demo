@@ -1,4 +1,5 @@
 import { evidenceIdSchema } from "../../../../packages/contracts/src/health";
+import { readBoundedRequestText } from "../http/bounded-request";
 import { createHealthAggregator, type HealthLoadingMode } from "./health";
 import type { SpanRecord, TraceRecord } from "../telemetry/store";
 
@@ -27,40 +28,6 @@ function errorResponse(status: number, code: string, message: string, headers: H
     { error: { code, message } },
     { status, headers: { "cache-control": "no-store", ...headers } },
   );
-}
-
-async function readBoundedBody(request: Request): Promise<string | null> {
-  const declaredLength = request.headers.get("content-length");
-  if (declaredLength !== null) {
-    if (!/^(?:0|[1-9]\d*)$/.test(declaredLength)) return null;
-    if (Number.parseInt(declaredLength, 10) > bodyLimit) throw new RangeError("body too large");
-  }
-  if (request.body === null) return "";
-
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let byteLength = 0;
-  while (true) {
-    const result = await reader.read();
-    if (result.done) break;
-    byteLength += result.value.byteLength;
-    if (byteLength > bodyLimit) {
-      await reader.cancel();
-      throw new RangeError("body too large");
-    }
-    chunks.push(result.value);
-  }
-  const bytes = new Uint8Array(byteLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    return null;
-  }
 }
 
 export async function handleHealthApiRequest(
@@ -92,19 +59,15 @@ export async function handleHealthApiRequest(
     }
   }
 
-  let text: string | null;
+  let text: string;
   try {
-    text = await readBoundedBody(request);
+    text = await readBoundedRequestText(request, bodyLimit);
   } catch (error) {
     if (error instanceof RangeError) {
       return errorResponse(413, "request-too-large", "Health refresh request is too large.");
     }
     return errorResponse(400, "invalid-request", "Health refresh request is invalid.");
   }
-  if (text === null) {
-    return errorResponse(400, "invalid-request", "Health refresh request is invalid.");
-  }
-
   let payload: unknown;
   try {
     payload = JSON.parse(text) as unknown;

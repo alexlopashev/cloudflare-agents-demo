@@ -33,6 +33,10 @@ does not select or modify the seeded incident investigated by the agent.
 
 The initial product supports one controlled repository, one supervised application, one latency-regression scenario, and one guarded remediation path. It is intentionally not a general-purpose coding agent.
 
+This is one TypeScript package with domain directories, not a multi-package monorepo. `apps/`,
+`workers/`, and `packages/` organize one deployment and share the root manifest, lockfile, compiler,
+and quality gates.
+
 ## Supported development environments
 
 - macOS ARM64 and x64
@@ -132,7 +136,8 @@ changed-line limits while proving that local mode performs no GitHub writes.
 compatible test layer. `mise run test:watch` loads named ordinary and Worker Vitest projects so
 either behavior can be selected during TDD. `mise run check` is the single non-deployment CI gate:
 doctor, container contract, formatting, linting, type checking, all test layers, deterministic E2E,
-and the production build/bundle assertion run once in a fixed order.
+and the production build/bundle assertion run once in a fixed order. The build rejects a live Worker
+above 7 MiB of JavaScript or client output above 768 KiB, in addition to scanning for test-only code.
 
 ### Public Cloudflare deployment
 
@@ -323,7 +328,8 @@ Live Worker composition now imports only Workers AI and production GitHub adapte
 gateway ID are validated before construction, every live inference is sent through the
 `regression-surgeon` Gateway, and parallel tool calls remain disabled. Vite and Worker tests
 explicitly substitute a deterministic demo adapter; the production build dry-runs and scans
-the live bundle to reject test-provider, fixture, and mock-model markers. Missing, empty, and
+the live bundle to reject test-provider, fixture, and mock-model markers and enforce the Worker and
+client byte budgets. Missing, empty, and
 whitespace-only GitHub tokens normalize once as absent, selecting the persisted D1 release/source and
 preview receipts without satisfying write enablement or making a GitHub request. Runtime version,
 Git SHA, and deployment timestamp are validated before health telemetry or runtime identity can be

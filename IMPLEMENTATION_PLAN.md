@@ -126,6 +126,10 @@ References:
 └── wrangler.jsonc
 ```
 
+These are domain directories inside one root TypeScript package. There are no nested package
+manifests or independently versioned workspaces; `pnpm-workspace.yaml` selects only the repository
+root so its catalog can remain the single dependency policy.
+
 The platform Worker serves both experiences:
 
 - `/app` — supervised Deployboard application
@@ -335,7 +339,7 @@ which Node can type-strip without a loader; `tsc --noEmit` remains the separate 
 | --- | --- |
 | `mise run doctor` | Verify versions, ports, configuration, credentials, and bindings |
 | `mise run install` | Install pnpm dependencies |
-| `mise run build` | Build the implemented web and Worker components |
+| `mise run build` | Build the web and Workers, reject test-only production code, and enforce 7 MiB Worker / 768 KiB client budgets |
 | `mise run format` | Apply canonical formatting |
 | `mise run format:check` | Verify formatting without modifying files |
 | `mise run lint` | Run code, configuration, and shell linting with zero warnings |

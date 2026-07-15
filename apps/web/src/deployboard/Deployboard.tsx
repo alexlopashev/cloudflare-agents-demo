@@ -5,7 +5,6 @@ import {
   metricSampleCounts,
   runDeployboardMetricBatch,
   runDeployboardRefresh,
-  type DeployboardCompletion,
   type MetricSampleCount,
 } from "./client";
 
@@ -190,14 +189,6 @@ export function DeployboardView({
   );
 }
 
-function emitCompletion(completion: DeployboardCompletion) {
-  window.dispatchEvent(
-    new CustomEvent<DeployboardCompletion>("deployboard:interaction-complete", {
-      detail: completion,
-    }),
-  );
-}
-
 export function Deployboard() {
   const [state, setState] = useState<DeployboardViewState>({ status: "idle" });
   const [metrics, setMetrics] = useState<MetricGenerationState>({ status: "idle" });
@@ -212,7 +203,7 @@ export function Deployboard() {
       const report = await runDeployboardRefresh({
         interactionId: crypto.randomUUID(),
         fetcher: (request) => fetch(request),
-        emitCompletion,
+        emitCompletion: () => undefined,
       });
       setState({ status: "ready", report });
     } catch {
@@ -232,7 +223,7 @@ export function Deployboard() {
         sampleCount,
         createInteractionId: () => `metric-${crypto.randomUUID()}`,
         fetcher: (request) => fetch(request),
-        emitCompletion,
+        emitCompletion: () => undefined,
         onProgress: (progress) => {
           completed = progress.completed;
           setState({ status: "ready", report: progress.latestReport });
