@@ -154,12 +154,13 @@ test("mise teardown task invokes the shared shell-neutral entrypoint", () => {
   assert.match(readRepo("mise.toml"), /\[tasks\.teardown\][\s\S]*run = "\.\/scripts\/teardown"/);
 });
 
-test("CI covers every supported operating-system and architecture pair", () => {
+test("CI covers both Linux architectures without macOS runners", () => {
   const workflow = readRepo(".github/workflows/ci.yml");
 
-  for (const runner of ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-15", "macos-15-intel"]) {
+  for (const runner of ["ubuntu-24.04", "ubuntu-24.04-arm"]) {
     assert.match(workflow, new RegExp(`- ${runner.replaceAll(".", "\\.")}`));
   }
+  assert.doesNotMatch(workflow, /macos-/);
   assert.match(workflow, /actions\/checkout@v7/);
   assert.match(workflow, /jdx\/mise-action@v4/);
   assert.match(workflow, /mise exec node -- pnpm install --frozen-lockfile/);

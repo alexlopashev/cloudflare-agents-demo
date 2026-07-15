@@ -763,8 +763,9 @@ The root `AGENTS.md` is the authoritative contributor contract for TDD, quality 
 ### Phase 1 — Foundation
 
 Status: complete in issue #2. The real repository-local bootstrap, doctor, build, aggregate checks,
-and foundation E2E suite pass on macOS ARM64. The macOS/Linux CI matrix supplies cross-platform
-evidence that every supported shell launches the shared POSIX lifecycle entrypoints.
+and foundation E2E suite pass on macOS ARM64. Hosted CI runs the complete gate on Linux ARM64 and
+x64, including every supported shell. macOS remains supported through local development and dated
+clean-room evidence rather than hosted CI.
 
 - Initialize the pnpm workspace.
 - Add mise configuration and lockfile.
@@ -905,8 +906,8 @@ Acceptance criteria:
 Status: complete in issue #10. Bootstrap now offers consented D1 migration, deterministic fixture,
 build, and full credential-free verification stages. The native `mise run dev` and `mise run e2e`
 paths remain canonical. The optional Compose model runs the same dev task in one Linux service, uses
-named volumes for every platform-specific or generated path, and is validated on all four CI host
-pairs. A dedicated Colima profile is addressed without changing Docker context; runtime and ownership
+named volumes for every platform-specific or generated path, and is validated by both Linux CI
+architectures. A dedicated Colima profile is addressed without changing Docker context; runtime and ownership
 markers make repeated down, full teardown, pre-existing-profile preservation, and partial-start
 recovery deterministic.
 
