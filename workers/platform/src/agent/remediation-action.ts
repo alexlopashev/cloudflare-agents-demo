@@ -12,6 +12,12 @@ const remediationActionInputSchema = z
     proposalFingerprint: z.string().regex(/^proposal-v1-[0-9a-f]{16}$/),
   })
   .strict();
+const recoverableRemediationResultSchema = z
+  .object({
+    status: z.literal("recoverable"),
+    stage: z.enum(["branch-existing", "branch-created", "branch-write-uncertain"]),
+  })
+  .passthrough();
 
 export function createRemediationAction(
   service: RemediationExecutor,
@@ -40,7 +46,14 @@ export function createRemediationAction(
       `${options.idempotencyScope}:${resolveProposal(input.proposalFingerprint).incident.incidentId}`,
     execute: async (rawInput) => {
       const input = remediationActionInputSchema.parse(rawInput);
-      return service.execute(resolveProposal(input.proposalFingerprint));
+      const result = await service.execute(resolveProposal(input.proposalFingerprint));
+      const recoverable = recoverableRemediationResultSchema.safeParse(result);
+      if (recoverable.success) {
+        throw new Error(
+          `Draft PR action stopped at ${recoverable.data.stage} and requires a safe retry.`,
+        );
+      }
+      return result;
     },
   });
 }

@@ -164,6 +164,8 @@ capability. The review keeps a chronological chat log of bounded reasoning summa
 tool results, and approval state; it collapses reasoning summaries and the exact bounded diff until
 requested, and reports rejection, preview, or the created/reused draft PR directly in chat. Private
 model chain-of-thought and raw thinking tokens are never exposed.
+Recoverable GitHub outcomes release the stable action-ledger key instead of being replayed as a
+successful result, so every deterministic reconciliation retry requires a new explicit approval.
 Failed enablement automatically restores and verifies the write-disabled posture.
 
 Immediately afterward:

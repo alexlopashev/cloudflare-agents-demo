@@ -55,4 +55,28 @@ describe("create_draft_pr Project Think action", () => {
       remediation.config.execute({ proposalFingerprint: "proposal-v1-fedcba9876543210" }, context),
     ).rejects.toThrow(/fingerprint is not authorized/i);
   });
+
+  it("rejects recoverable service results so the stable action ledger releases the retry key", async () => {
+    const service = {
+      execute: vi.fn(async () => ({
+        status: "recoverable" as const,
+        stage: "branch-write-uncertain" as const,
+        branch: "regression-surgeon/incident",
+      })),
+    };
+    const remediation = createRemediationAction(service, {
+      idempotencyScope: "write",
+      resolveProposal: (fingerprint) =>
+        fingerprint === proposalFingerprint ? proposal : undefined,
+    });
+    const context = {} as never;
+
+    await expect(remediation.config.execute({ proposalFingerprint }, context)).rejects.toThrow(
+      /branch-write-uncertain.*retry/i,
+    );
+    await expect(remediation.config.execute({ proposalFingerprint }, context)).rejects.toThrow(
+      /branch-write-uncertain.*retry/i,
+    );
+    expect(service.execute).toHaveBeenCalledTimes(2);
+  });
 });
