@@ -65,9 +65,15 @@ describe("GitHubDraftPrApi", () => {
           files: [{ filename: "workers/platform/src/api/health.ts" }],
         });
       }
-      if (url.pathname.endsWith("/git/blobs")) return Response.json({ sha: blobSha });
-      if (url.pathname.endsWith("/git/trees")) return Response.json({ sha: treeSha });
-      if (url.pathname.endsWith("/git/commits")) return Response.json({ sha: commitSha });
+      if (url.pathname.endsWith("/git/blobs")) {
+        return Response.json({ sha: blobSha, url: "https://api.github.com/blob" });
+      }
+      if (url.pathname.endsWith("/git/trees")) {
+        return Response.json({ sha: treeSha, url: "https://api.github.com/tree" });
+      }
+      if (url.pathname.endsWith("/git/commits")) {
+        return Response.json({ sha: commitSha, url: "https://api.github.com/commit" });
+      }
       if (url.pathname.endsWith("/git/refs")) {
         const ref = body as { ref: string; sha: string };
         return Response.json({ ref: ref.ref, object: { sha: ref.sha } });

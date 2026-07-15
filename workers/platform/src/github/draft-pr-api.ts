@@ -224,7 +224,8 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
       content,
       encoding: "utf-8",
     });
-    return parseExternal(objectResponse, raw, "GitHub blob response");
+    const blob = parseExternal(objectResponse, raw, "GitHub blob response");
+    return { sha: blob.sha };
   }
 
   async createTree(input: { baseTreeSha: string; path: string; blobSha: string }) {
@@ -237,7 +238,8 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
       base_tree: baseTreeSha,
       tree: [{ path: input.path, mode: "100644", type: "blob", sha: blobSha }],
     });
-    return parseExternal(objectResponse, raw, "GitHub tree response");
+    const tree = parseExternal(objectResponse, raw, "GitHub tree response");
+    return { sha: tree.sha };
   }
 
   async createCommit(input: { message: string; treeSha: string; parentSha: string }) {
@@ -249,7 +251,8 @@ export class GitHubDraftPrApi implements DraftPullRequestApi {
       tree: this.#requireSha(input.treeSha),
       parents: [this.#requireSha(input.parentSha)],
     });
-    return parseExternal(objectResponse, raw, "GitHub commit response");
+    const commit = parseExternal(objectResponse, raw, "GitHub commit response");
+    return { sha: commit.sha };
   }
 
   async createBranch(branch: string, commitSha: string) {
