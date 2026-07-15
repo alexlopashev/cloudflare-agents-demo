@@ -84,7 +84,7 @@ description = "Authenticate Wrangler for remote Cloudflare operations"
 run = "wrangler login"
 
 [tasks."ai:gateway:ensure"]
-description = "Create or verify the named Regression Surgeon AI Gateway"
+description = "Reconcile the named AI Gateway and its fixed $5 daily spend limit"
 run = "pnpm run ai:gateway:ensure"
 
 [tasks."github:writes:secret"]

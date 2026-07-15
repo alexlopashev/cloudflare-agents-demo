@@ -350,7 +350,7 @@ which Node can type-strip without a loader; `tsc --noEmit` remains the separate 
 | `mise run db:migrate` | Apply local D1 migrations |
 | `mise run dev` | Run the complete native stack with a fake local model |
 | `mise run dev:live` | Run locally with remote Workers AI |
-| `mise run ai:gateway:ensure` | Create or verify the named AI Gateway using a dedicated API token |
+| `mise run ai:gateway:ensure` | Reconcile the named AI Gateway and its fixed $5 daily spend rule using a dedicated API token |
 | `mise run e2e` | Run credential-free deterministic end-to-end verification |
 | `mise run container:up` | Start the optional Colima/Compose lane |
 | `mise run container:down` | Stop project container resources |
@@ -1255,8 +1255,8 @@ Status: repository simplification is delivered in issue #46 and public usage bou
 in issue #47. Issue #56 is delivered: the exact named Gateway was created and read back, the current
 `main` runtime was deployed through it, Gateway logs recorded routed GLM 5.2 Workers AI requests,
 and the activated Workers Paid plan completed the one-shot five-phase public smoke against version
-`3b6eeeda-b384-41ba-a838-9a96c712989f`. The exact daily spend cap in #57 is now unblocked. The
-optional real draft-PR proof remains #30.
+`3b6eeeda-b384-41ba-a838-9a96c712989f`. Issue #57 adds one enabled, unscoped `$5` cost rule over a
+fixed 86,400-second UTC-day window to that gateway. The optional real draft-PR proof remains #30.
 
 The public runtime has two independent Cloudflare-native limits: 10 new paid investigator turns per
 60 seconds and 60 metric-writing requests per 60 seconds. A denied investigator turn stops before
@@ -1268,8 +1268,23 @@ exact account-level billing ceiling.
 
 The persisted deployment posture is either `rate-limited` or emergency `disabled`. Dedicated mise
 tasks redeploy either posture, preserve measured evidence, force GitHub writes off, rotate the smoke
-key, and verify runtime attribution. Limiter binding failure fails closed. The future #57 control is
-still required for a globally exact $5 fixed UTC-day Gateway spend ceiling.
+key, and verify runtime attribution. Limiter binding failure fails closed.
+
+Only `mise run ai:gateway:ensure` may create or reconcile the Gateway spend rule. It preserves all
+other mutable Gateway settings and performs an exact fresh read. Normal deployment and refresh are
+read-only at this boundary and fail before build or inference if the rule is missing, disabled,
+duplicated, scoped by model/provider/metadata, or differs from `$5`, cost accounting, 86,400 seconds,
+or fixed-window enforcement. Ordinary deployment therefore cannot raise or remove the limit.
+
+Spend accounting applies across all models and providers routed through the named Gateway and blocks
+with HTTP 429 rather than falling back. Project Think retries a provider failure at most once, maps
+an exhausted 429 to bounded model-unavailable evidence, and leaves its persisted receipt and
+remediation eligibility unchanged. The fixed window resets at the UTC-day boundary. Operators
+monitor the Gateway Analytics view, wait for reset or emergency-disable public use on exhaustion,
+and rerun the explicit reconciliation task on configuration drift. Cloudflare's cost accounting is
+eventually consistent, so a concurrent burst may briefly overshoot; the independent public turn
+limiter bounds that exposure. This paid-cost ceiling is distinct from Workers AI's included neuron
+allowance and from per-edge request-rate limiting.
 
 Acceptance evidence:
 
@@ -1278,6 +1293,8 @@ Acceptance evidence:
 - One complete 20-sample reviewer batch fits within the metric budget, while one multi-step Project
   Think investigation consumes a single public turn.
 - Rate-limit responses are explicit and retry-safe without exposing unrelated provider exceptions.
+- Gateway budget creation, idempotent reconciliation, exact readback, drift rejection, deployment
+  preflight, and bounded 429 handling are covered test-first in issue #57.
 - README, wiki, issue, plan, AGENTS.md, and repository-local skills are assessed before closure.
 
 ## 17. Scope gates

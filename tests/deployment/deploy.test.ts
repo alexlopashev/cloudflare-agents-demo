@@ -32,7 +32,9 @@ import {
   waitForDeploymentVersion,
   waitForDeploymentEvidenceReady,
   ensureCloudflareAiGateway,
+  verifyCloudflareAiGatewayBudget,
   AI_GATEWAY_ID,
+  AI_GATEWAY_DAILY_BUDGET,
   type DeploymentStage,
 } from "../../scripts/deploy-lib.ts";
 
@@ -88,7 +90,11 @@ describe("Cloudflare deployment contract", () => {
     expect(deployScript).toContain('else if (action === "enable-usage")');
     expect(deployScript).toContain('else if (action === "disable-usage")');
     expect(deployScript).not.toContain("requestWithRetry");
-    expect(deployScript.match(/await ensureNamedAiGateway\(\)/g)).toHaveLength(3);
+    expect(deployScript.match(/await ensureNamedAiGateway\(\)/g)).toHaveLength(2);
+    expect(deployScript).toContain("await ensureNamedAiGateway(true)");
+    expect(deployScript).toMatch(
+      /const manageGateway = reconcile\s+\? ensureCloudflareAiGateway\s+: verifyCloudflareAiGatewayBudget/,
+    );
     expect(deployScript.match(/await requestDeploymentEndpointOnce/g)).toHaveLength(3);
     expect(deployScript).toMatch(/"versions",\s*"upload"/);
     expect(deployScript).toMatch(/"versions",\s*"deploy"/);
@@ -234,7 +240,7 @@ describe("Cloudflare deployment contract", () => {
     expect(deployed.d1_databases[0]?.migrations_dir).toBe(`${root}/migrations/telemetry`);
   });
 
-  it("creates or verifies one explicit named AI Gateway", async () => {
+  it("verifies one exact gateway-wide fixed daily budget without mutation", async () => {
     const accountId = "0123456789abcdef0123456789abcdef";
     expect(
       parseCloudflareAccountId(
@@ -244,19 +250,52 @@ describe("Cloudflare deployment contract", () => {
     expect(() => parseCloudflareAccountId(JSON.stringify({ accounts: [] }))).toThrow(/account/i);
 
     const existingRequest = vi.fn(async (_input: string, _init?: RequestInit) =>
-      Response.json({ success: true, result: { id: AI_GATEWAY_ID, collect_logs: true } }),
+      Response.json({
+        success: true,
+        result: {
+          id: AI_GATEWAY_ID,
+          cache_invalidate_on_update: true,
+          cache_ttl: 0,
+          collect_logs: true,
+          rate_limiting_interval: 0,
+          rate_limiting_limit: 0,
+          spend_limits: {
+            enabled: true,
+            rules: [{ id: "server-rule-id", enabled: true, ...AI_GATEWAY_DAILY_BUDGET }],
+          },
+        },
+      }),
     );
-    await expect(ensureCloudflareAiGateway(existingRequest, accountId)).resolves.toEqual({
+    await expect(verifyCloudflareAiGatewayBudget(existingRequest, accountId)).resolves.toEqual({
       id: AI_GATEWAY_ID,
     });
     expect(existingRequest).toHaveBeenCalledOnce();
     expect(existingRequest.mock.calls[0]?.[0]).toContain(
       `/accounts/${accountId}/ai-gateway/gateways/${AI_GATEWAY_ID}`,
     );
+  });
 
+  it("creates the named gateway with its budget and verifies a fresh read", async () => {
+    const accountId = "0123456789abcdef0123456789abcdef";
+    const exactGateway = {
+      success: true,
+      result: {
+        id: AI_GATEWAY_ID,
+        cache_invalidate_on_update: true,
+        cache_ttl: 0,
+        collect_logs: true,
+        rate_limiting_interval: 0,
+        rate_limiting_limit: 0,
+        spend_limits: {
+          enabled: true,
+          rules: [{ id: "server-rule-id", enabled: true, ...AI_GATEWAY_DAILY_BUDGET }],
+        },
+      },
+    };
     const responses = [
       new Response(null, { status: 404 }),
-      Response.json({ success: true, result: { id: AI_GATEWAY_ID, collect_logs: true } }),
+      Response.json(exactGateway),
+      Response.json(exactGateway),
     ];
     const createRequest = vi.fn(
       async (_input: string, _init?: RequestInit) =>
@@ -265,12 +304,155 @@ describe("Cloudflare deployment contract", () => {
     await expect(ensureCloudflareAiGateway(createRequest, accountId)).resolves.toEqual({
       id: AI_GATEWAY_ID,
     });
-    expect(createRequest).toHaveBeenCalledTimes(2);
+    expect(createRequest).toHaveBeenCalledTimes(3);
     expect(createRequest.mock.calls[1]?.[1]).toMatchObject({ method: "POST" });
-    expect(JSON.parse(String(createRequest.mock.calls[1]?.[1]?.body))).toMatchObject({
+    expect(JSON.parse(String(createRequest.mock.calls[1]?.[1]?.body))).toEqual({
       id: AI_GATEWAY_ID,
+      cache_invalidate_on_update: true,
+      cache_ttl: 0,
       collect_logs: true,
+      rate_limiting_interval: 0,
+      rate_limiting_limit: 0,
+      spend_limits: {
+        enabled: true,
+        rules: [{ enabled: true, ...AI_GATEWAY_DAILY_BUDGET }],
+      },
     });
+  });
+
+  it("reconciles budget drift once and verifies the exact readback", async () => {
+    const accountId = "0123456789abcdef0123456789abcdef";
+    const gateway = {
+      id: AI_GATEWAY_ID,
+      authentication: false,
+      cache_invalidate_on_update: true,
+      cache_ttl: 0,
+      collect_logs: true,
+      log_management: 100_000,
+      log_management_strategy: "DELETE_OLDEST",
+      logpush: false,
+      logpush_public_key: null,
+      rate_limiting_interval: 0,
+      rate_limiting_limit: 0,
+      rate_limiting_technique: null,
+      retry_backoff: null,
+      retry_delay: null,
+      retry_max_attempts: null,
+      store_id: "",
+      workers_ai_billing_mode: "postpaid",
+      zdr: false,
+    };
+    const responses = [
+      Response.json({ success: true, result: gateway }),
+      Response.json({
+        success: true,
+        result: {
+          ...gateway,
+          spend_limits: {
+            enabled: true,
+            rules: [{ id: "server-rule-id", enabled: true, ...AI_GATEWAY_DAILY_BUDGET }],
+          },
+        },
+      }),
+      Response.json({
+        success: true,
+        result: {
+          ...gateway,
+          spend_limits: {
+            enabled: true,
+            rules: [{ id: "server-rule-id", enabled: true, ...AI_GATEWAY_DAILY_BUDGET }],
+          },
+        },
+      }),
+    ];
+    const request = vi.fn(
+      async (_input: string, _init?: RequestInit) =>
+        responses.shift() ?? new Response(null, { status: 500 }),
+    );
+
+    await expect(ensureCloudflareAiGateway(request, accountId)).resolves.toEqual({
+      id: AI_GATEWAY_ID,
+    });
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(request.mock.calls[1]?.[1]).toMatchObject({ method: "PUT" });
+    expect(JSON.parse(String(request.mock.calls[1]?.[1]?.body))).toEqual({
+      authentication: false,
+      cache_invalidate_on_update: true,
+      cache_ttl: 0,
+      collect_logs: true,
+      log_management: 100_000,
+      log_management_strategy: "DELETE_OLDEST",
+      logpush: false,
+      logpush_public_key: null,
+      rate_limiting_interval: 0,
+      rate_limiting_limit: 0,
+      rate_limiting_technique: null,
+      retry_backoff: null,
+      retry_delay: null,
+      retry_max_attempts: null,
+      spend_limits: {
+        enabled: true,
+        rules: [{ enabled: true, ...AI_GATEWAY_DAILY_BUDGET }],
+      },
+      store_id: "",
+      workers_ai_billing_mode: "postpaid",
+      zdr: false,
+    });
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["disabled", { enabled: false, rules: [{ enabled: true, ...AI_GATEWAY_DAILY_BUDGET }] }],
+    [
+      "duplicate",
+      {
+        enabled: true,
+        rules: [
+          { enabled: true, ...AI_GATEWAY_DAILY_BUDGET },
+          { enabled: true, ...AI_GATEWAY_DAILY_BUDGET },
+        ],
+      },
+    ],
+    [
+      "drifted",
+      {
+        enabled: true,
+        rules: [{ enabled: true, ...AI_GATEWAY_DAILY_BUDGET, limit: 6 }],
+      },
+    ],
+    [
+      "scoped",
+      {
+        enabled: true,
+        rules: [
+          {
+            enabled: true,
+            ...AI_GATEWAY_DAILY_BUDGET,
+            model: { mode: "filter", values: ["@cf/zai-org/glm-5.2"] },
+          },
+        ],
+      },
+    ],
+  ])("fails closed when the gateway budget is %s", async (_label, spendLimits) => {
+    const accountId = "0123456789abcdef0123456789abcdef";
+    await expect(
+      verifyCloudflareAiGatewayBudget(
+        async () =>
+          Response.json({
+            success: true,
+            result: {
+              id: AI_GATEWAY_ID,
+              cache_invalidate_on_update: true,
+              cache_ttl: 0,
+              collect_logs: true,
+              rate_limiting_interval: 0,
+              rate_limiting_limit: 0,
+              ...(spendLimits === undefined ? {} : { spend_limits: spendLimits }),
+            },
+          }),
+        accountId,
+      ),
+    ).rejects.toThrow(/budget/i);
   });
 
   it("requires a bounded dedicated API token for AI Gateway management", () => {

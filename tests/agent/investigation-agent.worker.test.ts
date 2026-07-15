@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
 import { evictDurableObject, runInDurableObject, SELF } from "cloudflare:test";
+import { APICallError } from "@ai-sdk/provider";
+import { RetryError } from "ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -98,6 +100,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
         actionApproval: unknown;
         actions: string[];
         activeTools: unknown;
+        maxRetries: unknown;
         maxSteps: number;
         prompt: string;
         tools: string[];
@@ -111,6 +114,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
         actionApproval: actions.create_draft_pr?.config.approval,
         actions: Object.keys(actions),
         activeTools: turn?.activeTools,
+        maxRetries: turn?.maxRetries,
         maxSteps: instance.maxSteps,
         prompt: instance.getSystemPrompt(),
         tools: Object.keys(instance.getTools()),
@@ -128,6 +132,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
         "inspect_release",
         "read_repo_files",
       ],
+      maxRetries: 1,
       maxSteps: 16,
       prompt: expect.stringMatching(/evidence[\s\S]+inference[\s\S]+confidence[\s\S]+unknowns/i),
       tools: [
@@ -146,6 +151,42 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     expect(policy.prompt).not.toMatch(
       /Never claim\s+that a write, deployment, rollback, or pull-request creation occurred\./,
     );
+  });
+
+  it("bounds a gateway budget 429 without changing persisted evidence or enabling remediation", async () => {
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("gateway-budget-exhausted");
+    const result = await runInDurableObject<
+      RegressionSurgeonAgent,
+      { error: string; stateAfter: InvestigationAgentState; stateBefore: InvestigationAgentState }
+    >(stub, async (instance) => {
+      const stateBefore = instance.startConfiguredInvestigation();
+      const providerFailure = () =>
+        new APICallError({
+          message: "private provider message",
+          url: "https://private.example/provider",
+          requestBodyValues: { secret: "must-not-leak" },
+          statusCode: 429,
+          responseBody: "daily spend limit exceeded with private identifiers",
+        });
+      const bounded = instance.onChatError(
+        new RetryError({
+          message: "two private provider attempts failed",
+          reason: "maxRetriesExceeded",
+          errors: [providerFailure(), providerFailure()],
+        }),
+      );
+      return {
+        error: bounded instanceof Error ? bounded.message : String(bounded),
+        stateAfter: instance.state,
+        stateBefore,
+      };
+    });
+
+    expect(result.error).toMatch(/model.*temporarily unavailable/i);
+    expect(result.error).toMatch(/UTC/i);
+    expect(result.error).not.toMatch(/private|secret|provider\.example/i);
+    expect(result.stateAfter).toEqual(result.stateBefore);
+    expect(result.stateAfter).not.toHaveProperty("preparedRemediation");
   });
 
   it("rejects an exhausted paid turn before starting investigation state or a continuation", async () => {

@@ -1,7 +1,8 @@
 import type { PrepareStepContext, TurnConfig, TurnContext } from "@cloudflare/think";
 import { Think } from "@cloudflare/think";
+import { APICallError } from "@ai-sdk/provider";
 import { routeAgentRequest } from "agents";
-import { hasToolCall, type LanguageModel, type ToolSet } from "ai";
+import { hasToolCall, type LanguageModel, RetryError, type ToolSet } from "ai";
 import {
   configuredIncidentReference,
   parseIncidentReference,
@@ -78,6 +79,14 @@ export type InvestigationAgentState =
       receipt: EvidenceReceipt;
       startedAtMs: number;
     };
+
+function isGatewayBudgetRejection(error: unknown): boolean {
+  if (APICallError.isInstance(error)) return error.statusCode === 429;
+  if (RetryError.isInstance(error)) {
+    return error.errors.some((attempt) => isGatewayBudgetRejection(attempt));
+  }
+  return false;
+}
 
 export class RegressionSurgeonAgent extends Think<PlatformEnvironment, InvestigationAgentState> {
   #agentConfiguration: AgentConfiguration | undefined;
@@ -174,6 +183,15 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
   override getActions() {
     const writeEnabled = agentComposition.writeEnabled(this.agentConfiguration());
     return { create_draft_pr: this.createRemediationAction(writeEnabled) };
+  }
+
+  override onChatError(error: unknown): unknown {
+    if (isGatewayBudgetRejection(error)) {
+      return new Error(
+        "The AI model is temporarily unavailable because its bounded Gateway budget was reached. Retry after the fixed UTC-day window resets; no remediation or external write was performed.",
+      );
+    }
+    return super.onChatError(error);
   }
 
   createRemediationAction(writeEnabled: boolean) {
@@ -292,6 +310,7 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
       this.state.status === "investigating" && this.state.preparedRemediation !== undefined;
     return {
       activeTools: [...evidenceToolNames, ...(remediationEligible ? ["create_draft_pr"] : [])],
+      maxRetries: 1,
       stopWhen: hasToolCall("create_draft_pr"),
     };
   }

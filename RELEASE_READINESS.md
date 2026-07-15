@@ -66,6 +66,14 @@ The same run exposed that the Gateway management token could otherwise override 
 authentication in deployment child processes. A test-first fix now strips that token from every
 subprocess environment while retaining it only for the bounded direct Gateway API client.
 
+Issue #57 then added exact spend-limit reconciliation and verification. The aggregate repository
+gate passed 28 foundation contracts with one documented host-only Fish skip, 283 ordinary tests, 33
+Worker integration tests, deterministic E2E, container validation, strict formatting/lint/types,
+and the production bundle budgets. The operator task updated only the existing Gateway configuration
+and its fresh read returned exactly one enabled, unscoped rule: `$5`, `cost`, `86400`, and `fixed`.
+A second operator run was idempotent and returned the same readback. No Worker deployment, model
+inference, telemetry write, or GitHub write occurred during this configuration proof.
+
 Post-review CI now runs the complete repository gate on `ubuntu-24.04` and `ubuntu-24.04-arm` only.
 The macOS ARM64 and x64 hosted runners were removed to reduce redundant CI usage; macOS remains a
 supported local host, with its historical release proof retained above.
@@ -126,7 +134,8 @@ Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its 
   paid turns and metric writes; they are not an exact account-level billing ceiling. Its diagnostic
   smoke route is protected by an unguessable Worker secret and returns 404 without it.
 - GLM 5.2 inference requires Workers Paid. The activated account completed the named-Gateway live
-  smoke; model usage beyond Cloudflare's included allocation remains billable.
+  smoke. The named Gateway now has an independent fixed $5-per-UTC-day spend ceiling; eventual
+  consistency can permit a bounded concurrent overshoot before subsequent requests return 429.
 - Without a scoped GitHub token, D1 first resolves the measured Worker version to its immutable SHA;
   the bounded production GitHub adapter then performs unauthenticated commit, PR, source, base, and
   blob reads. Deterministic fixtures remain local verification adapters only.

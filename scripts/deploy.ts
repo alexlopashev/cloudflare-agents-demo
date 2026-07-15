@@ -38,6 +38,7 @@ import {
   runtimeAttributionRetryPolicy,
   runWithFailClosedRollback,
   ensureCloudflareAiGateway,
+  verifyCloudflareAiGatewayBudget,
   waitForDeploymentVersion,
   waitForDeploymentEvidenceReady,
 } from "./deploy-lib.ts";
@@ -114,10 +115,11 @@ function findOrCreateDatabase(): string {
   }
 }
 
-async function ensureNamedAiGateway() {
+async function ensureNamedAiGateway(reconcile = false) {
   const accountId = parseCloudflareAccountId(capture("wrangler", ["whoami", "--json"]));
   const token = parseCloudflareAiGatewayApiToken(process.env.CLOUDFLARE_API_TOKEN);
-  await ensureCloudflareAiGateway(
+  const manageGateway = reconcile ? ensureCloudflareAiGateway : verifyCloudflareAiGatewayBudget;
+  await manageGateway(
     (input, init) =>
       fetch(input, {
         ...init,
@@ -734,8 +736,8 @@ else if (action === "disable-usage") await refreshInvestigator(false, "disabled"
 else if (action === "reset") resetRemoteEvidence();
 else if (action === "gateway") {
   run("wrangler", ["whoami"]);
-  await ensureNamedAiGateway();
-  console.log(`AI Gateway ${AI_GATEWAY_ID} is ready.`);
+  await ensureNamedAiGateway(true);
+  console.log(`AI Gateway ${AI_GATEWAY_ID} is ready with its exact daily budget.`);
 } else if (action === "smoke")
   await smoke(stateSchema.parse(JSON.parse(readFileSync(statePath, "utf8"))));
 else

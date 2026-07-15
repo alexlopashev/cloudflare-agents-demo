@@ -23,6 +23,13 @@ const platformWorkerName = "regression-surgeon-platform";
 
 export { AI_GATEWAY_ID } from "../packages/contracts/src/ai-gateway.ts";
 
+export const AI_GATEWAY_DAILY_BUDGET = Object.freeze({
+  limit: 5,
+  limitType: "cost" as const,
+  window: 24 * 60 * 60,
+  technique: "fixed" as const,
+});
+
 export const runtimeAttributionRetryPolicy = Object.freeze({
   maxAttempts: 80,
   delayMs: 750,
@@ -313,11 +320,55 @@ export function buildPlatformDeploymentConfig(options: DeploymentConfigOptions) 
 }
 
 const accountIdSchema = z.string().regex(/^[a-f0-9]{32}$/);
+const aiGatewaySpendLimitSchema = z
+  .object({
+    id: z.string().min(1).optional(),
+    enabled: z.literal(true),
+    limit: z.literal(AI_GATEWAY_DAILY_BUDGET.limit),
+    limitType: z.literal(AI_GATEWAY_DAILY_BUDGET.limitType),
+    window: z.literal(AI_GATEWAY_DAILY_BUDGET.window),
+    technique: z.literal(AI_GATEWAY_DAILY_BUDGET.technique),
+  })
+  .strict();
+
+const aiGatewayConfigurationSchema = z
+  .object({
+    id: z.literal(AI_GATEWAY_ID),
+    authentication: z.boolean().optional(),
+    cache_invalidate_on_update: z.boolean(),
+    cache_ttl: z.number().int().nonnegative(),
+    collect_logs: z.literal(true),
+    log_management: z.number().int().nonnegative().optional(),
+    log_management_strategy: z.enum(["STOP_INSERTING", "DELETE_OLDEST"]).optional(),
+    logpush: z.boolean().optional(),
+    logpush_public_key: z.string().nullable().optional(),
+    rate_limiting_interval: z.number().int().nonnegative(),
+    rate_limiting_limit: z.number().int().nonnegative(),
+    rate_limiting_technique: z.enum(["fixed", "sliding"]).nullable().optional(),
+    retry_backoff: z.enum(["constant", "linear", "exponential"]).nullable().optional(),
+    retry_delay: z.number().int().min(0).max(5_000).nullable().optional(),
+    retry_max_attempts: z.number().int().min(1).max(5).nullable().optional(),
+    spend_limits: z.unknown().optional(),
+    store_id: z.string().optional(),
+    workers_ai_billing_mode: z.literal("postpaid").optional(),
+    zdr: z.boolean().optional(),
+  })
+  .passthrough();
+
 const aiGatewayEnvelopeSchema = z.object({
   success: z.literal(true),
-  result: z.object({
-    id: z.literal(AI_GATEWAY_ID),
-    collect_logs: z.literal(true),
+  result: aiGatewayConfigurationSchema,
+});
+
+const exactAiGatewayEnvelopeSchema = z.object({
+  success: z.literal(true),
+  result: aiGatewayConfigurationSchema.extend({
+    spend_limits: z
+      .object({
+        enabled: z.literal(true),
+        rules: z.array(aiGatewaySpendLimitSchema).length(1),
+      })
+      .strict(),
   }),
 });
 
@@ -349,29 +400,67 @@ export function parseCloudflareAiGatewayApiToken(value: string | undefined): str
 
 type CloudflareApiRequest = (input: string, init?: RequestInit) => Promise<Response>;
 
-export async function ensureCloudflareAiGateway(
-  request: CloudflareApiRequest,
-  accountId: string,
-): Promise<{ id: string }> {
-  const account = accountIdSchema.parse(accountId);
-  const gatewayId = parseAiGatewayId(AI_GATEWAY_ID);
-  const collection = `https://api.cloudflare.com/client/v4/accounts/${account}/ai-gateway/gateways`;
-  let response = await request(`${collection}/${gatewayId}`);
-  if (response.status === 404) {
-    response = await request(collection, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        id: gatewayId,
-        cache_invalidate_on_update: true,
-        cache_ttl: 0,
-        collect_logs: true,
-        rate_limiting_interval: 0,
-        rate_limiting_limit: 0,
-      }),
-    });
-  }
-  if (!response.ok) throw new Error(`AI Gateway verification returned HTTP ${response.status}.`);
+function expectedAiGatewaySpendLimits() {
+  return {
+    enabled: true,
+    rules: [{ enabled: true, ...AI_GATEWAY_DAILY_BUDGET }],
+  } as const;
+}
+
+function initialAiGatewayConfiguration(gatewayId: string) {
+  return {
+    id: gatewayId,
+    cache_invalidate_on_update: true,
+    cache_ttl: 0,
+    collect_logs: true,
+    rate_limiting_interval: 0,
+    rate_limiting_limit: 0,
+    spend_limits: expectedAiGatewaySpendLimits(),
+  } as const;
+}
+
+function reconciledAiGatewayConfiguration(
+  configuration: z.infer<typeof aiGatewayConfigurationSchema>,
+) {
+  return {
+    ...(configuration.authentication === undefined
+      ? {}
+      : { authentication: configuration.authentication }),
+    cache_invalidate_on_update: configuration.cache_invalidate_on_update,
+    cache_ttl: configuration.cache_ttl,
+    collect_logs: configuration.collect_logs,
+    ...(configuration.log_management === undefined
+      ? {}
+      : { log_management: configuration.log_management }),
+    ...(configuration.log_management_strategy === undefined
+      ? {}
+      : { log_management_strategy: configuration.log_management_strategy }),
+    ...(configuration.logpush === undefined ? {} : { logpush: configuration.logpush }),
+    ...(configuration.logpush_public_key === undefined
+      ? {}
+      : { logpush_public_key: configuration.logpush_public_key }),
+    rate_limiting_interval: configuration.rate_limiting_interval,
+    rate_limiting_limit: configuration.rate_limiting_limit,
+    ...(configuration.rate_limiting_technique === undefined
+      ? {}
+      : { rate_limiting_technique: configuration.rate_limiting_technique }),
+    ...(configuration.retry_backoff === undefined
+      ? {}
+      : { retry_backoff: configuration.retry_backoff }),
+    ...(configuration.retry_delay === undefined ? {} : { retry_delay: configuration.retry_delay }),
+    ...(configuration.retry_max_attempts === undefined
+      ? {}
+      : { retry_max_attempts: configuration.retry_max_attempts }),
+    spend_limits: expectedAiGatewaySpendLimits(),
+    ...(configuration.store_id === undefined ? {} : { store_id: configuration.store_id }),
+    ...(configuration.workers_ai_billing_mode === undefined
+      ? {}
+      : { workers_ai_billing_mode: configuration.workers_ai_billing_mode }),
+    ...(configuration.zdr === undefined ? {} : { zdr: configuration.zdr }),
+  } as const;
+}
+
+async function parseAiGatewayResponse(response: Response) {
   let value: unknown;
   try {
     value = await response.json();
@@ -380,7 +469,65 @@ export async function ensureCloudflareAiGateway(
   }
   const parsed = aiGatewayEnvelopeSchema.safeParse(value);
   if (!parsed.success) throw new Error("AI Gateway verification did not match the named gateway.");
+  return parsed.data.result;
+}
+
+export async function verifyCloudflareAiGatewayBudget(
+  request: CloudflareApiRequest,
+  accountId: string,
+): Promise<{ id: string }> {
+  const account = accountIdSchema.parse(accountId);
+  const gatewayId = parseAiGatewayId(AI_GATEWAY_ID);
+  const url = `https://api.cloudflare.com/client/v4/accounts/${account}/ai-gateway/gateways/${gatewayId}`;
+  const response = await request(url);
+  if (!response.ok) {
+    throw new Error(`AI Gateway budget verification returned HTTP ${response.status}.`);
+  }
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    throw new Error("AI Gateway budget verification returned invalid evidence.");
+  }
+  const parsed = exactAiGatewayEnvelopeSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error("AI Gateway budget is missing, disabled, duplicated, scoped, or drifted.");
+  }
   return { id: parsed.data.result.id };
+}
+
+export async function ensureCloudflareAiGateway(
+  request: CloudflareApiRequest,
+  accountId: string,
+): Promise<{ id: string }> {
+  const account = accountIdSchema.parse(accountId);
+  const gatewayId = parseAiGatewayId(AI_GATEWAY_ID);
+  const collection = `https://api.cloudflare.com/client/v4/accounts/${account}/ai-gateway/gateways`;
+  const gatewayUrl = `${collection}/${gatewayId}`;
+  let response = await request(gatewayUrl);
+  if (response.status === 404) {
+    response = await request(collection, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(initialAiGatewayConfiguration(gatewayId)),
+    });
+    if (!response.ok) throw new Error(`AI Gateway creation returned HTTP ${response.status}.`);
+    return verifyCloudflareAiGatewayBudget(request, accountId);
+  }
+  if (!response.ok) throw new Error(`AI Gateway verification returned HTTP ${response.status}.`);
+  const configuration = await parseAiGatewayResponse(response);
+  if (exactAiGatewayEnvelopeSchema.safeParse({ success: true, result: configuration }).success) {
+    return { id: configuration.id };
+  }
+  response = await request(gatewayUrl, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(reconciledAiGatewayConfiguration(configuration)),
+  });
+  if (!response.ok) {
+    throw new Error(`AI Gateway budget reconciliation returned HTTP ${response.status}.`);
+  }
+  return verifyCloudflareAiGatewayBudget(request, accountId);
 }
 
 function parseVersionId(value: string): string {
