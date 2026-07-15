@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { composeExternalConfiguration } from "../../workers/platform/src/config";
 
 const validInput = {
+  aiGatewayId: "regression-surgeon",
   versionMetadata: { id: "worker-version-1", timestamp: "2026-07-14T12:00:00.000Z" },
   gitSha: "0123456789abcdef0123456789abcdef01234567",
   githubOwner: "alexlopashev",
@@ -12,6 +13,31 @@ const validInput = {
 };
 
 describe("external runtime composition", () => {
+  it.each([
+    undefined,
+    "",
+    "   ",
+    "Invalid Gateway",
+    "a".repeat(65),
+  ])("requires one valid named gateway in live mode (%s)", (aiGatewayId) => {
+    expect(() =>
+      composeExternalConfiguration({
+        ...validInput,
+        ...(aiGatewayId === undefined ? { aiGatewayId: undefined } : { aiGatewayId }),
+      }),
+    ).toThrow(/gateway/i);
+  });
+
+  it("keeps deterministic mode independent of AI Gateway", () => {
+    const configuration = composeExternalConfiguration({
+      ...validInput,
+      aiGatewayId: undefined,
+      modelMode: "fake",
+    });
+
+    expect(configuration.aiGatewayId).toBeUndefined();
+  });
+
   it.each([undefined, "", "   "])("normalizes an absent GitHub token once (%s)", (token) => {
     const configuration = composeExternalConfiguration({
       ...validInput,

@@ -83,6 +83,10 @@ run = "pnpm dev:live"
 description = "Authenticate Wrangler for remote Cloudflare operations"
 run = "wrangler login"
 
+[tasks."ai:gateway:ensure"]
+description = "Create or verify the named Regression Surgeon AI Gateway"
+run = "pnpm run ai:gateway:ensure"
+
 [tasks."github:writes:secret"]
 description = "Enter the scoped GitHub token directly into Cloudflare's secret prompt"
 run = "wrangler secret put GITHUB_TOKEN --name regression-surgeon-platform"

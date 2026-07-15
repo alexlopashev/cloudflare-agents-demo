@@ -18,6 +18,7 @@ function createBindings() {
   const telemetryStoreFactory = vi.fn(() => ({ recordTrace, recordUxEvent }));
   const bindings = {
     AI: {},
+    AI_GATEWAY_ID: "",
     ASSETS: { fetch: assetFetch },
     CF_VERSION_METADATA: {
       id: "version-good",
@@ -462,6 +463,24 @@ Run gates.`,
       githubWriteEnabled: false,
       mode: "fake",
       versionId: "version-good",
+    });
+  });
+
+  it("reports the exact named gateway for live inference", async () => {
+    const { bindings } = createBindings();
+    bindings.MODEL_MODE = "workers-ai";
+    bindings.AI_GATEWAY_ID = "regression-surgeon";
+
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/api/runtime"),
+      bindings,
+      async () => null,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      aiGatewayId: "regression-surgeon",
+      mode: "workers-ai",
     });
   });
 
