@@ -407,7 +407,8 @@ preview, while rendered-browser verification covers the native approval request 
 `mise run dev:live` uses Workers AI and requires Cloudflare authentication plus the pre-existing
 named Gateway. Gateway creation and deployment preflight require an ephemeral
 `CLOUDFLARE_API_TOKEN` with AI Gateway Write permission; Wrangler's OAuth token cannot manage this
-API. The token is never persisted, passed as an argument, or exposed to the Worker runtime.
+API. The token is never persisted, passed as an argument, inherited by child processes, or exposed
+to the Worker runtime. Wrangler subprocesses retain their separate OAuth authentication.
 
 ### 10.3 Optional Colima lane
 
@@ -1249,9 +1250,14 @@ Acceptance criteria:
 
 ### Phase 14 — Post-review operational hardening
 
-Status: repository simplification is delivered in #46. Public usage bounds are implemented in #47;
-remote AI Gateway proof in #56 still requires the dedicated operator token, and the exact daily
-spend cap in #57 remains natively blocked by #56. The optional real draft-PR proof remains #30.
+Status: repository simplification is delivered in issue #46 and public usage bounds are implemented
+in issue #47. For #56, the exact named Gateway has been created and read back, the current `main`
+runtime has
+been deployed through it, and its log records the routed GLM 5.2 Workers AI request. The account's
+Workers AI status still reports Free after the operator's reported Workers Paid purchase, rejecting
+both explicit smoke attempts before token use. The complete five-phase live smoke remains pending
+subscription activation. The exact daily spend cap in #57 remains natively blocked by #56. The
+optional real draft-PR proof remains #30.
 
 The public runtime has two independent Cloudflare-native limits: 10 new paid investigator turns per
 60 seconds and 60 metric-writing requests per 60 seconds. A denied investigator turn stops before

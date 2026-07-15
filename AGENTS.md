@@ -119,7 +119,8 @@ Do not assert exact natural-language output from a live model. Assert structured
   AI Gateway; deterministic fake mode must not require or contact that gateway.
 - Gateway creation and readback require a bounded, non-empty `CLOUDFLARE_API_TOKEN` with AI Gateway
   Write permission. Deployment must not use Wrangler's incompatible OAuth token or persist, echo,
-  pass as a command argument, or expose the management token to the Worker runtime.
+  pass as a command argument, inherit into any child process, or expose the management token to the
+  Worker runtime. Wrangler subprocesses must continue to use the operator's separate OAuth session.
 - Live public usage must be either rate-limited or explicitly disabled; Workers AI may never use the
   unbounded local posture. New paid turns and metric-writing requests consume independent
   Cloudflare Rate Limiting bindings before inference, dependency calls, or telemetry writes.

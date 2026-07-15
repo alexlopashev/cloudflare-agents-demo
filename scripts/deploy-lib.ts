@@ -48,6 +48,14 @@ export const deploymentEvidenceReadinessPolicy = Object.freeze({
   delayMs: 750,
 });
 
+export function buildOperatorSubprocessEnvironment(
+  environment: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  const subprocessEnvironment: NodeJS.ProcessEnv = { ...environment, CI: "1" };
+  delete subprocessEnvironment.CLOUDFLARE_API_TOKEN;
+  return subprocessEnvironment;
+}
+
 export function deploymentSmokeFailureMessage(status: number, body: unknown): string {
   const parsed = smokeEvidenceDiagnosticSchema.safeParse(body);
   if (!parsed.success) {

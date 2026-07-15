@@ -12,6 +12,7 @@ import {
   buildExactVersionHeaders,
   buildDeploymentInteractionId,
   buildMeasuredVersionDeploymentSpecs,
+  buildOperatorSubprocessEnvironment,
   buildPlatformDeploymentConfig,
   buildConfiguredPreviewEvidence,
   buildConfiguredSourceEvidence,
@@ -71,7 +72,7 @@ function run(command: string, args: string[]): string {
   const result = spawnSync(command, args, {
     cwd: repositoryRoot,
     encoding: "utf8",
-    env: { ...process.env, CI: "1" },
+    env: buildOperatorSubprocessEnvironment(process.env),
   });
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
   if (output.trim()) process.stdout.write(output);
@@ -87,7 +88,7 @@ function capture(command: string, args: string[]): string {
   const result = spawnSync(command, args, {
     cwd: repositoryRoot,
     encoding: "utf8",
-    env: { ...process.env, CI: "1" },
+    env: buildOperatorSubprocessEnvironment(process.env),
   });
   if (result.status !== 0) {
     throw new Error(

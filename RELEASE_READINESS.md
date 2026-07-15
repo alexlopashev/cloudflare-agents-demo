@@ -41,6 +41,27 @@ closed; automatic rollback restored and verified the prior write-disabled invest
 depending on Workers AI. Mutable version IDs and detailed run diagnostics remain in the issue
 evidence rather than the durable architecture contract.
 
+## Post-review Gateway and public-bound evidence — 2026-07-15
+
+Issues #46 and #47 are delivered. For issue #56, deployment created and read back the exact
+`regression-surgeon` AI Gateway, then published investigator version
+`3b6eeeda-b384-41ba-a838-9a96c712989f` from merged `main` commit
+`8810e07a72b4f81b06067e52cbd4c2ff56ea7389`. Runtime metadata verified the named Gateway, independent
+10-per-60-second paid-turn and 60-per-60-second metric limits, `PUBLIC_USAGE_MODE=rate-limited`, and
+`GITHUB_WRITE_ENABLED=false`.
+
+The first one-shot keyed smoke was not replayed. After the operator reported purchasing Workers
+Paid, one explicit follow-up smoke produced Gateway log `01KXJG1K0HA7XQXEK3042N83S5`. Both distinct
+attempts prove that `@cf/zai-org/glm-5.2` reached the named Gateway and selected Workers AI. Workers
+AI still returned HTTP 403 stating that the account was on Workers Free; both logs record zero input
+tokens, zero output tokens, and zero cost. The complete five-phase live inference therefore remains
+blocked on Cloudflare recognizing the Workers Paid subscription. Issue #57 remains natively blocked
+by #56.
+
+The same run exposed that the Gateway management token could otherwise override Wrangler's OAuth
+authentication in deployment child processes. A test-first fix now strips that token from every
+subprocess environment while retaining it only for the bounded direct Gateway API client.
+
 ## Historical v1 and v1.1 evidence
 
 The v1 clean-room release was verified on 2026-07-12 from a macOS ARM64 worktree at merged commit
@@ -93,8 +114,12 @@ Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its 
 
 - v1 supports one public repository, one supervised application, one metric, and one controlled
   regression. Repository onboarding and arbitrary incidents are deferred.
-- The public demo has no user authentication or general rate limiting. Its diagnostic smoke route is
-  protected by an unguessable Worker secret and returns 404 without it.
+- The public demo has no user authentication. Cloudflare-native approximate abuse limits bound new
+  paid turns and metric writes; they are not an exact account-level billing ceiling. Its diagnostic
+  smoke route is protected by an unguessable Worker secret and returns 404 without it.
+- GLM 5.2 inference requires Workers Paid. The operator reports purchasing the plan, but Workers AI
+  still identifies the account as Workers Free; Gateway routing is proven, while a complete live
+  investigation remains pending subscription activation.
 - Without a scoped GitHub token, D1 first resolves the measured Worker version to its immutable SHA;
   the bounded production GitHub adapter then performs unauthenticated commit, PR, source, base, and
   blob reads. Deterministic fixtures remain local verification adapters only.

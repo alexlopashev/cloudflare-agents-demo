@@ -8,6 +8,7 @@ import {
   buildDeploymentInteractionId,
   buildMeasuredVersionDeploymentSpecs,
   buildPlatformDeploymentConfig,
+  buildOperatorSubprocessEnvironment,
   buildEvidenceResetSql,
   buildConfiguredSourceEvidence,
   buildConfiguredPreviewEvidence,
@@ -46,6 +47,19 @@ function config(stage: DeploymentStage) {
 }
 
 describe("Cloudflare deployment contract", () => {
+  it("keeps the Gateway management token out of every child process", () => {
+    const source = {
+      CLOUDFLARE_API_TOKEN: "gateway-management-token-must-not-leak",
+      HOME: "/tmp/operator-home",
+    };
+
+    expect(buildOperatorSubprocessEnvironment(source)).toEqual({
+      CI: "1",
+      HOME: "/tmp/operator-home",
+    });
+    expect(source.CLOUDFLARE_API_TOKEN).toBe("gateway-management-token-must-not-leak");
+  });
+
   it("exposes unambiguous mise deployment entrypoints", () => {
     const mise = readFileSync(resolve(import.meta.dirname, "../../mise.toml"), "utf8");
     const deployScript = readFileSync(
@@ -70,6 +84,7 @@ describe("Cloudflare deployment contract", () => {
     expect(deployScript).not.toContain("gh auth token");
     expect(deployScript).not.toContain('capture("wrangler", ["auth", "token"');
     expect(deployScript).toContain("process.env.CLOUDFLARE_API_TOKEN");
+    expect(deployScript).toContain("buildOperatorSubprocessEnvironment(process.env)");
     expect(deployScript).toContain('else if (action === "enable-usage")');
     expect(deployScript).toContain('else if (action === "disable-usage")');
     expect(deployScript).not.toContain("requestWithRetry");
