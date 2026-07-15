@@ -17,6 +17,7 @@ import {
 
 const shaSchema = z.string().regex(/^[0-9a-f]{40}$/);
 const uuidSchema = z.string().uuid();
+const platformWorkerName = "regression-surgeon-platform";
 
 export const runtimeAttributionRetryPolicy = Object.freeze({
   maxAttempts: 80,
@@ -27,6 +28,10 @@ export const deploymentVersionPropagationPolicy = Object.freeze({
   maxAttempts: 80,
   delayMs: 750,
   consecutiveMatches: 3,
+});
+
+export const deploymentVersionOverrideSettlePolicy = Object.freeze({
+  delayMs: 10_000,
 });
 
 export const deploymentSmokeRetryPolicy = Object.freeze({
@@ -79,6 +84,26 @@ export function buildDeploymentInteractionId(
     throw new RangeError("Deployment sample number must be between 1 and 20.");
   }
   return `${label}-${release.data}-${String(sampleNumber).padStart(2, "0")}`;
+}
+
+export function buildExactVersionHeaders(versionId: string): Record<string, string> {
+  const version = uuidSchema.safeParse(versionId);
+  if (!version.success) throw new TypeError("Deployment version identifier is invalid.");
+  return {
+    "Cloudflare-Workers-Version-Overrides": `${platformWorkerName}="${version.data}"`,
+  };
+}
+
+export function buildMeasuredVersionDeploymentSpecs(
+  stableVersionId: string,
+  measuredVersionId: string,
+): [string, string] {
+  const stable = uuidSchema.safeParse(stableVersionId);
+  const measured = uuidSchema.safeParse(measuredVersionId);
+  if (!stable.success || !measured.success || stable.data === measured.data) {
+    throw new TypeError("Worker version identifier is invalid for measured deployment.");
+  }
+  return [`${stable.data}@100%`, `${measured.data}@0%`];
 }
 
 export async function requestDeploymentEndpointOnce(
@@ -292,6 +317,98 @@ export function parseDeploymentResult(output: string): { url: string; versionId:
   return { url, versionId };
 }
 
+export function parseUploadedVersionId(output: string): string {
+  const versionId = /(?:Worker )?Version ID:\s*([0-9a-f-]+)/i.exec(output)?.[1];
+  if (versionId === undefined || !uuidSchema.safeParse(versionId).success) {
+    throw new Error("Cloudflare uploaded Worker version evidence is unavailable.");
+  }
+  return versionId;
+}
+
+export function parseCurrentDeploymentVersion(output: string): string {
+  let value: unknown;
+  try {
+    value = JSON.parse(output) as unknown;
+  } catch {
+    throw new Error("The current write-disabled investigator deployment is invalid.");
+  }
+  const parsed = z
+    .object({
+      versions: z
+        .array(
+          z.object({
+            version_id: z.string().uuid(),
+            percentage: z.number().finite().min(0).max(100),
+          }),
+        )
+        .max(2),
+    })
+    .safeParse(value);
+  if (
+    !parsed.success ||
+    parsed.data.versions.length !== 1 ||
+    parsed.data.versions[0]?.percentage !== 100
+  ) {
+    throw new Error("The current write-disabled investigator deployment is unavailable.");
+  }
+  return parsed.data.versions[0].version_id;
+}
+
+export function parseWriteDisabledInvestigatorVersion(
+  deploymentOutput: string,
+  versionOutput: string,
+): string {
+  const activeVersionId = parseCurrentDeploymentVersion(deploymentOutput);
+  let value: unknown;
+  try {
+    value = JSON.parse(versionOutput) as unknown;
+  } catch {
+    throw new Error("The current write-disabled investigator version is invalid.");
+  }
+  const parsed = z
+    .object({
+      id: z.string().uuid(),
+      resources: z.object({
+        bindings: z
+          .array(
+            z
+              .object({
+                name: z.string().min(1).max(128),
+                type: z.string().min(1).max(64),
+                text: z.string().max(512).optional(),
+              })
+              .passthrough(),
+          )
+          .max(64),
+      }),
+    })
+    .safeParse(value);
+  if (!parsed.success || parsed.data.id !== activeVersionId) {
+    throw new Error("The current write-disabled investigator version is unavailable.");
+  }
+  const bindings = parsed.data.resources.bindings;
+  const textBinding = (name: string, expected: string) =>
+    bindings.some(
+      (binding) =>
+        binding.type === "plain_text" && binding.name === name && binding.text === expected,
+    );
+  const hasIncident = bindings.some(
+    (binding) =>
+      binding.type === "plain_text" &&
+      binding.name === "EVIDENCE_INCIDENT_ID" &&
+      binding.text !== undefined &&
+      binding.text.length > 0,
+  );
+  if (
+    !textBinding("MODEL_MODE", "workers-ai") ||
+    !textBinding("GITHUB_WRITE_ENABLED", "false") ||
+    !hasIncident
+  ) {
+    throw new Error("The current Worker is not a write-disabled investigator version.");
+  }
+  return activeVersionId;
+}
+
 export function parseGitHubWriteSecretInventory(output: string): boolean {
   let value: unknown;
   try {
@@ -318,6 +435,7 @@ export async function runWithFailClosedRollback<T>(
   enable: () => Promise<T>,
   verify: (enabled: T) => Promise<void>,
   rollback: () => Promise<void>,
+  aggregateFailureMessage = "GitHub write enablement failed and the write-disabled rollback could not be verified.",
 ): Promise<T> {
   try {
     const enabled = await enable();
@@ -327,10 +445,7 @@ export async function runWithFailClosedRollback<T>(
     try {
       await rollback();
     } catch (rollbackError) {
-      throw new AggregateError(
-        [enableError, rollbackError],
-        "GitHub write enablement failed and the write-disabled rollback could not be verified.",
-      );
+      throw new AggregateError([enableError, rollbackError], aggregateFailureMessage);
     }
     throw enableError;
   }

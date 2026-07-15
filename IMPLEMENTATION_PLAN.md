@@ -987,15 +987,24 @@ inspect section prose and still rejects missing, duplicate, reordered, embedded,
 Issue #107 makes the complete-receipt transition explicit: the same Project Think turn receives no
 active tools on its final step and must produce the required report. This prevents redundant evidence
 calls or an empty report without adding a second turn, retry, or server-authored prose.
+Issue #110 removes the remaining public-edge measurement race. Baseline and degraded versions are
+uploaded into separate active deployments at 0% while the validated write-disabled investigator
+continues serving 100% of ordinary traffic. Side-effect-free readiness and every one-shot measured
+request use Cloudflare's exact-version override header, with a bounded global-settle interval after
+readiness. A normal deployment failure uses Cloudflare's rollback flow to restore and verify the
+preserved investigator version across smoke-secret rotation without invoking Workers AI; an
+unverifiable rollback surfaces both failures.
 
 - Create the remote D1 database.
-- Deploy the good version and generate baseline traffic.
-- Deploy the regression and generate incident traffic.
+- Upload the good version at 0% and generate exact-version baseline traffic.
+- Upload the regression at 0% and generate exact-version incident traffic.
 - Keep GitHub writes off by default; select live reads only when a scoped token is supplied.
 - Attempt each measured health and telemetry POST exactly once and fail visibly on any error.
 - Scope each deployment interaction identifier to its immutable Worker version and sample ordinal.
-- Poll exact public edge version/Git readiness before starting either measured sequence.
+- Keep the write-disabled investigator at 100%, and pin readiness plus measured traffic to each 0%
+  version through an exact-version override.
 - Reject stale deployment health before dependencies or trace persistence without retrying it.
+- Restore and verify the prior write-disabled investigator after a failed normal deployment.
 - Deploy the public investigator.
 - Perform the complete reviewer walkthrough.
 

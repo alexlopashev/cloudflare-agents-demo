@@ -136,10 +136,11 @@ The current no-login demo is
 [regression-surgeon-platform.alexlopashev.workers.dev](https://regression-surgeon-platform.alexlopashev.workers.dev/app).
 Authenticate once with `mise run auth:cloudflare`, then run `mise run deploy`. The task reuses or
 creates only the named D1 database, builds both Workers and the web app, applies remote migrations,
-deploys a concurrent baseline and measures 20 interactions, deploys the sequential regression and
-measures 20 interactions, then deploys the public GLM 4.7 Flash investigator with those exact
-Cloudflare version IDs and trace timestamps. It finishes with a keyed smoke that verifies the two
-public routes, runtime metadata, five exact incident-scoped evidence phases, their trace, release,
+uploads a concurrent baseline and sequential regression behind the current write-disabled
+investigator, measures 20 interactions against each exact version, then deploys the public GLM 4.7
+Flash investigator with those exact Cloudflare version IDs and trace timestamps. It finishes with a
+keyed smoke that verifies the two public routes, runtime metadata, five exact incident-scoped
+evidence phases, their trace, release,
 commit, PR, source, and blob cross-references, all four report sections, the remediation fingerprint
 and change counts, a validated zero-write preview, and the expected GitHub write posture.
 Machine cross-references come from the validated persisted receipt; live report prose proves the
@@ -152,11 +153,15 @@ non-success response stops the deployment with the failing stage and sample iden
 automation never replays an endpoint that may already have recorded telemetry or another effect.
 Each interaction identifier includes its immutable Worker version, so a later deployment cannot
 collide with or rewrite historical evidence for the same sample ordinal.
-Before either measured sequence begins, deployment polls a side-effect-free readiness route until
-the public edge reports the exact Wrangler version three consecutive times. The route exposes only
-immutable version and Git attribution and cannot execute health, telemetry, agent, or write behavior.
-Measured health then carries the expected release through a deployment-only media type; an older or
-stale edge rejects it before dependency calls or trace persistence, and the one-shot deploy stops.
+Before either measured sequence begins, deployment keeps the validated write-disabled investigator
+at 100% traffic, adds the measured version to the active deployment at 0%, and polls a
+side-effect-free readiness route with Cloudflare's exact-version override until that version answers
+three consecutive times, then allows a bounded global-settle interval before executable traffic.
+The same override pins every one-shot health and telemetry request; the route and pre-execution
+release check still reject an unavailable or mismatched version before dependency calls or trace
+persistence. A failed normal deployment uses Cloudflare's rollback flow to restore and verify the
+prior write-disabled investigator even when the smoke secret rotated, or reports both the deployment
+and bounded rollback failures.
 Every keyed smoke applies the same consecutive exact-version gate to the recorded secret-bearing
 investigator before it checks public routes or submits executable verification.
 It then polls a smoke-key-protected, GET-only evidence-readiness route until the configured D1
