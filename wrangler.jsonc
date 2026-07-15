@@ -53,6 +53,7 @@
     "GITHUB_WRITE_ENABLED": "false",
     "HEALTH_LOADING_MODE": "sequential",
     "MODEL_MODE": "fake",
+    "PUBLIC_USAGE_MODE": "local",
     "SCENARIO_CONTROL_ENABLED": "true"
   },
   "observability": { "enabled": true }

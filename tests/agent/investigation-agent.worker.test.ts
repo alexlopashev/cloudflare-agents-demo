@@ -148,6 +148,49 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     );
   });
 
+  it("rejects an exhausted paid turn before starting investigation state or a continuation", async () => {
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("public-turn-limit");
+    const result = await runInDurableObject<
+      RegressionSurgeonAgent,
+      { calls: number; error: string; state: InvestigationAgentState }
+    >(stub, async (instance) => {
+      const instanceEnvironment = Reflect.get(instance, "env") as PlatformEnvironment;
+      const limit = vi.fn(async () => ({ success: false }));
+      const originalMode = instanceEnvironment.MODEL_MODE;
+      const originalGateway = instanceEnvironment.AI_GATEWAY_ID;
+      const originalUsageMode = instanceEnvironment.PUBLIC_USAGE_MODE;
+      const originalLimiter = instanceEnvironment.PUBLIC_AI_TURN_LIMITER;
+      let error = "";
+      try {
+        instanceEnvironment.MODEL_MODE = "workers-ai";
+        instanceEnvironment.AI_GATEWAY_ID = "regression-surgeon";
+        instanceEnvironment.PUBLIC_USAGE_MODE = "rate-limited";
+        instanceEnvironment.PUBLIC_AI_TURN_LIMITER = { limit } as RateLimit;
+        await instance.beforeTurn({
+          continuation: false,
+          messages: [{ role: "user", content: "Investigate the latency regression." }],
+        } as never);
+      } catch (cause) {
+        error = cause instanceof Error ? cause.message : String(cause);
+      } finally {
+        instanceEnvironment.MODEL_MODE = originalMode;
+        instanceEnvironment.PUBLIC_USAGE_MODE = originalUsageMode;
+        if (originalGateway === undefined) delete instanceEnvironment.AI_GATEWAY_ID;
+        else instanceEnvironment.AI_GATEWAY_ID = originalGateway;
+        if (originalLimiter === undefined) delete instanceEnvironment.PUBLIC_AI_TURN_LIMITER;
+        else instanceEnvironment.PUBLIC_AI_TURN_LIMITER = originalLimiter;
+      }
+      await instance.beforeTurn({ continuation: true, messages: [] } as never);
+      return { calls: limit.mock.calls.length, error, state: instance.state };
+    });
+
+    expect(result).toEqual({
+      calls: 1,
+      error: expect.stringMatching(/public investigator limit reached.*60 seconds/i),
+      state: { status: "idle" },
+    });
+  });
+
   it("makes every evidence operation explicit in the programmatic investigation request", async () => {
     const stub = env.REGRESSION_SURGEON_AGENT.getByName(
       "programmatic-investigation-contract",

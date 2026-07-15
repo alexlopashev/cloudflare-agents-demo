@@ -6,6 +6,7 @@ const gitShaSchema = z.string().regex(/^[0-9a-f]{40}$/, "Git SHA is invalid.");
 const repositoryNameSchema = z.string().regex(/^[A-Za-z0-9_.-]+$/);
 const versionIdSchema = z.string().min(1, "Worker version is required.").max(128);
 const modelModeSchema = z.enum(["fake", "workers-ai"]);
+const publicUsageModeSchema = z.enum(["disabled", "local", "rate-limited"]);
 
 export type ExternalConfigurationInput = {
   aiGatewayId?: string | undefined;
@@ -15,6 +16,7 @@ export type ExternalConfigurationInput = {
   githubToken?: string;
   githubWriteEnabled: string;
   modelMode: string;
+  publicUsageMode: string;
   versionMetadata: { id: string; timestamp?: string };
 };
 
@@ -22,6 +24,7 @@ export type ExternalConfiguration = {
   aiGatewayId?: string;
   github: AgentConfiguration["github"];
   modelMode: AgentConfiguration["modelMode"];
+  publicUsageMode: AgentConfiguration["publicUsageMode"];
   runtime: RuntimeIdentity;
 };
 
@@ -34,6 +37,7 @@ export type AgentConfiguration = {
     writeEnabled: boolean;
   };
   modelMode: z.infer<typeof modelModeSchema>;
+  publicUsageMode: z.infer<typeof publicUsageModeSchema>;
 };
 
 export type RuntimeIdentity = {
@@ -48,6 +52,10 @@ export function composeAgentConfiguration(
   const owner = repositoryNameSchema.parse(input.githubOwner);
   const repo = repositoryNameSchema.parse(input.githubRepo);
   const modelMode = modelModeSchema.parse(input.modelMode);
+  const publicUsageMode = publicUsageModeSchema.parse(input.publicUsageMode);
+  if (modelMode === "workers-ai" && publicUsageMode === "local") {
+    throw new TypeError("Workers AI cannot use the unbounded local public-usage posture.");
+  }
   const aiGatewayId = modelMode === "workers-ai" ? parseAiGatewayId(input.aiGatewayId) : undefined;
   if (input.githubWriteEnabled !== "true" && input.githubWriteEnabled !== "false") {
     throw new TypeError("GitHub write posture is invalid.");
@@ -67,6 +75,7 @@ export function composeAgentConfiguration(
       writeEnabled,
     },
     modelMode,
+    publicUsageMode,
   };
 }
 

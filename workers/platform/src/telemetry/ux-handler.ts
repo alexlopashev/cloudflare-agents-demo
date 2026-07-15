@@ -2,11 +2,17 @@ import { z } from "zod";
 
 import { evidenceIdSchema } from "../../../../packages/contracts/src/health";
 import { readBoundedRequestText } from "../http/bounded-request";
+import {
+  checkPublicUsage,
+  publicUsageDenialMessage,
+  type PublicUsageOptions,
+} from "../public-usage";
 import type { UxEventRecord } from "./store";
 
 type UxTelemetryOptions = {
   now: () => number;
   recordUxEvent: (event: UxEventRecord) => Promise<void>;
+  publicUsage?: PublicUsageOptions;
 };
 
 const requestSchema = z
@@ -60,6 +66,29 @@ export async function handleUxTelemetryRequest(
   const recordedAtMs = options.now();
   if (!parsed.success || !Number.isFinite(recordedAtMs) || recordedAtMs < 0) {
     return errorResponse(400, "invalid-request");
+  }
+
+  if (options.publicUsage !== undefined) {
+    const decision = await checkPublicUsage(options.publicUsage.mode, options.publicUsage.limiter);
+    if (!decision.allowed) {
+      return Response.json(
+        {
+          error: {
+            code: decision.code,
+            message: publicUsageDenialMessage(decision, "Public metric traffic"),
+          },
+        },
+        {
+          status: decision.status,
+          headers: {
+            "cache-control": "no-store",
+            ...(decision.retryAfterSeconds === undefined
+              ? {}
+              : { "retry-after": String(decision.retryAfterSeconds) }),
+          },
+        },
+      );
+    }
   }
 
   try {

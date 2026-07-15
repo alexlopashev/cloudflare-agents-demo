@@ -37,6 +37,7 @@ import {
 import { handlePlatformRequest, type PlatformBindings } from "./routing";
 import { createTelemetryStore } from "./telemetry/store";
 import { assertConfiguredEvidenceReady } from "./verification/evidence-readiness";
+import { checkPublicUsage, publicUsageDenialMessage } from "./public-usage";
 
 export interface PlatformEnvironment extends PlatformBindings {
   REGRESSION_SURGEON_AGENT: DurableObjectNamespace<RegressionSurgeonAgent>;
@@ -80,6 +81,7 @@ export type InvestigationAgentState =
 
 export class RegressionSurgeonAgent extends Think<PlatformEnvironment, InvestigationAgentState> {
   #agentConfiguration: AgentConfiguration | undefined;
+  #trustedProgrammaticTurn = false;
 
   override initialState: InvestigationAgentState = { status: "idle" };
   override maxSteps = 16;
@@ -93,6 +95,7 @@ export class RegressionSurgeonAgent extends Think<PlatformEnvironment, Investiga
       ...(this.env.GITHUB_TOKEN === undefined ? {} : { githubToken: this.env.GITHUB_TOKEN }),
       githubWriteEnabled: this.env.GITHUB_WRITE_ENABLED,
       modelMode: this.env.MODEL_MODE,
+      publicUsageMode: this.env.PUBLIC_USAGE_MODE,
     });
     return this.#agentConfiguration;
   }
@@ -270,8 +273,18 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
     return persisted;
   }
 
-  override beforeTurn(context: TurnContext): TurnConfig {
+  override async beforeTurn(context: TurnContext): Promise<TurnConfig> {
     const messages = Array.isArray(context.messages) ? context.messages : [];
+    if (!context.continuation && !this.#trustedProgrammaticTurn) {
+      const configuration = this.agentConfiguration();
+      const decision = await checkPublicUsage(
+        configuration.publicUsageMode,
+        this.env.PUBLIC_AI_TURN_LIMITER,
+      );
+      if (!decision.allowed) {
+        throw new Error(publicUsageDenialMessage(decision, "Public investigator"));
+      }
+    }
     if (!context.continuation && evidenceInvestigationRequested(messages)) {
       this.startConfiguredInvestigation();
     }
@@ -347,10 +360,15 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
     await this.onStart();
     await this.clearMessages();
     this.startConfiguredInvestigation();
-    await this.runTurn({
-      input:
-        "Investigate the measured latency regression. Before the final report, compare releases, find slow traces, inspect one representative trace, inspect the degraded release, and read the relevant allowlisted source at that commit.",
-    });
+    this.#trustedProgrammaticTurn = true;
+    try {
+      await this.runTurn({
+        input:
+          "Investigate the measured latency regression. Before the final report, compare releases, find slow traces, inspect one representative trace, inspect the degraded release, and read the relevant allowlisted source at that commit.",
+      });
+    } finally {
+      this.#trustedProgrammaticTurn = false;
+    }
     const messages = await this.getMessages();
     const toolTypes = messages.flatMap((message) =>
       message.parts.map((part) => part.type).filter((type) => type.startsWith("tool-")),

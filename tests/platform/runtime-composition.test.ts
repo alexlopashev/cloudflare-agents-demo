@@ -10,6 +10,7 @@ const validInput = {
   githubRepo: "cloudflare-agents-demo",
   githubWriteEnabled: "false",
   modelMode: "workers-ai",
+  publicUsageMode: "rate-limited",
 };
 
 describe("external runtime composition", () => {
@@ -33,9 +34,16 @@ describe("external runtime composition", () => {
       ...validInput,
       aiGatewayId: undefined,
       modelMode: "fake",
+      publicUsageMode: "local",
     });
 
     expect(configuration.aiGatewayId).toBeUndefined();
+  });
+
+  it("rejects an unbounded local posture for live Workers AI", () => {
+    expect(() => composeExternalConfiguration({ ...validInput, publicUsageMode: "local" })).toThrow(
+      /unbounded local/i,
+    );
   });
 
   it.each([undefined, "", "   "])("normalizes an absent GitHub token once (%s)", (token) => {

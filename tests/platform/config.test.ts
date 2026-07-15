@@ -45,6 +45,7 @@ describe("Cloudflare configuration", () => {
         service: "regression-surgeon-health-service",
       },
     ]);
+    expect(config.ratelimits).toBeUndefined();
     expect(config.vars).toEqual({
       AI_GATEWAY_ID: "",
       DEPLOY_SMOKE_KEY: "",
@@ -59,6 +60,7 @@ describe("Cloudflare configuration", () => {
       GITHUB_WRITE_ENABLED: "false",
       HEALTH_LOADING_MODE: "sequential",
       MODEL_MODE: "fake",
+      PUBLIC_USAGE_MODE: "local",
       SCENARIO_CONTROL_ENABLED: "true",
     });
   });
@@ -67,6 +69,18 @@ describe("Cloudflare configuration", () => {
     const config = readJson("wrangler.live.jsonc");
 
     expect(config.ai).toEqual({ binding: "AI" });
+    expect(config.ratelimits).toEqual([
+      {
+        name: "PUBLIC_AI_TURN_LIMITER",
+        namespace_id: "4747001",
+        simple: { limit: 10, period: 60 },
+      },
+      {
+        name: "PUBLIC_METRIC_LIMITER",
+        namespace_id: "4747002",
+        simple: { limit: 60, period: 60 },
+      },
+    ]);
     expect(config.vars).toEqual({
       AI_GATEWAY_ID: "regression-surgeon",
       DEPLOY_SMOKE_KEY: "",
@@ -81,6 +95,7 @@ describe("Cloudflare configuration", () => {
       GITHUB_WRITE_ENABLED: "false",
       HEALTH_LOADING_MODE: "sequential",
       MODEL_MODE: "workers-ai",
+      PUBLIC_USAGE_MODE: "rate-limited",
       SCENARIO_CONTROL_ENABLED: "false",
     });
   });

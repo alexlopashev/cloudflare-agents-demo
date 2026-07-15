@@ -361,6 +361,8 @@ which Node can type-strip without a loader; `tsc --noEmit` remains the separate 
 | `mise run deploy` | Apply remote migrations and deploy |
 | `mise run deploy:refresh` | Redeploy only the investigator while preserving measured evidence |
 | `mise run deploy:smoke` | Verify public routes, runtime, agent evidence, preview, and write posture |
+| `mise run deploy:usage:enable` | Restore the bounded public paid-AI and metric posture |
+| `mise run deploy:usage:disable` | Emergency-disable public paid-AI and metric-writing traffic |
 | `mise run deploy:writes:enable` | Explicitly enable the guarded optional live-write posture |
 | `mise run deploy:writes:disable` | Return the public runtime to write-disabled posture |
 | `mise run deploy:reset` | Remove only the last measured release pair from remote D1 |
@@ -1244,6 +1246,34 @@ Acceptance criteria:
 - The production Worker contains no test model or test-fixture implementation.
 - README, wiki, release record, plan, issues, dependencies, instructions, and repository metadata
   describe the same reviewer journey.
+
+### Phase 14 — Post-review operational hardening
+
+Status: repository simplification is delivered in #46. Public usage bounds are implemented in #47;
+remote AI Gateway proof in #56 still requires the dedicated operator token, and the exact daily
+spend cap in #57 remains natively blocked by #56. The optional real draft-PR proof remains #30.
+
+The public runtime has two independent Cloudflare-native limits: 10 new paid investigator turns per
+60 seconds and 60 metric-writing requests per 60 seconds. A denied investigator turn stops before
+Workers AI; denied health and UX telemetry requests stop before dependency calls or D1 writes.
+Local fake mode does not read either limiter. Keyed programmatic deployment evidence remains
+one-shot and bypasses the public-abuse counters so operator verification cannot be starved by public
+traffic. Cloudflare edge counters are deliberately treated as approximate abuse protection, not an
+exact account-level billing ceiling.
+
+The persisted deployment posture is either `rate-limited` or emergency `disabled`. Dedicated mise
+tasks redeploy either posture, preserve measured evidence, force GitHub writes off, rotate the smoke
+key, and verify runtime attribution. Limiter binding failure fails closed. The future #57 control is
+still required for a globally exact $5 fixed UTC-day Gateway spend ceiling.
+
+Acceptance evidence:
+
+- Tests first demonstrated missing bindings, unbounded handlers, paid-turn exhaustion, reset-window
+  recovery, independent budgets, deployment bypass, emergency shutdown, and safe UI messaging.
+- One complete 20-sample reviewer batch fits within the metric budget, while one multi-step Project
+  Think investigation consumes a single public turn.
+- Rate-limit responses are explicit and retry-safe without exposing unrelated provider exceptions.
+- README, wiki, issue, plan, AGENTS.md, and repository-local skills are assessed before closure.
 
 ## 17. Scope gates
 

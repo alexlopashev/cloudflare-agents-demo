@@ -151,4 +151,60 @@ describe("health API", () => {
     expect(matching.status).toBe(200);
     expect(matchingFetcher).toHaveBeenCalledTimes(3);
   });
+
+  it("rejects exhausted public metric traffic before dependency or trace effects", async () => {
+    const fetcher = vi.fn(async () => new Response());
+    const recordTrace = vi.fn(async () => undefined);
+    const limit = vi.fn(async () => ({ success: false }));
+    const response = await handleHealthApiRequest(
+      new Request("https://example.test/api/health", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ interactionId: "metric-limited" }),
+      }),
+      {
+        fetcher,
+        releaseId: "release-good",
+        createTraceId: () => "trace-must-not-exist",
+        recordTrace,
+        publicUsage: { mode: "rate-limited", limiter: { limit } },
+      },
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("60");
+    expect(await response.json()).toMatchObject({
+      error: { code: "public-usage-rate-limited" },
+    });
+    expect(limit).toHaveBeenCalledOnce();
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(recordTrace).not.toHaveBeenCalled();
+  });
+
+  it("does not charge deployment evidence traffic to the public metric budget", async () => {
+    const fetcher = vi.fn(async (request: Request) =>
+      Response.json({ serviceId: request.headers.get("x-service-id"), status: "healthy" }),
+    );
+    const limit = vi.fn(async () => ({ success: false }));
+    const response = await handleHealthApiRequest(
+      new Request("https://example.test/api/health", {
+        method: "POST",
+        headers: {
+          "content-type": "application/vnd.regression-surgeon.deployment-health+json",
+          "x-deployment-expected-release": "release-good",
+        },
+        body: JSON.stringify({ interactionId: "deployment-sample" }),
+      }),
+      {
+        fetcher,
+        releaseId: "release-good",
+        createTraceId: () => "trace-deployment",
+        publicUsage: { mode: "rate-limited", limiter: { limit } },
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(limit).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
 });

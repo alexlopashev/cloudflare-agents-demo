@@ -39,6 +39,18 @@
       "service": "regression-surgeon-health-service"
     }
   ],
+  "ratelimits": [
+    {
+      "name": "PUBLIC_AI_TURN_LIMITER",
+      "namespace_id": "4747001",
+      "simple": { "limit": 10, "period": 60 }
+    },
+    {
+      "name": "PUBLIC_METRIC_LIMITER",
+      "namespace_id": "4747002",
+      "simple": { "limit": 60, "period": 60 }
+    }
+  ],
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "vars": {
     "AI_GATEWAY_ID": "regression-surgeon",
@@ -54,6 +66,7 @@
     "GITHUB_WRITE_ENABLED": "false",
     "HEALTH_LOADING_MODE": "sequential",
     "MODEL_MODE": "workers-ai",
+    "PUBLIC_USAGE_MODE": "rate-limited",
     "SCENARIO_CONTROL_ENABLED": "false"
   },
   "observability": { "enabled": true }

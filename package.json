@@ -33,6 +33,8 @@
     "deploy:refresh": "node scripts/deploy.ts refresh",
     "deploy:reset": "node scripts/deploy.ts reset",
     "deploy:smoke": "node scripts/deploy.ts smoke",
+    "deploy:usage:disable": "node scripts/deploy.ts disable-usage",
+    "deploy:usage:enable": "node scripts/deploy.ts enable-usage",
     "deploy:writes:disable": "node scripts/deploy.ts disable-writes",
     "deploy:writes:enable": "node scripts/deploy.ts enable-writes",
     "doctor": "node scripts/doctor.ts",

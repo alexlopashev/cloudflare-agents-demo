@@ -15,6 +15,7 @@ import {
   smokeEvidenceDiagnosticSchema,
   smokePostEvidenceDiagnosticSchema,
 } from "../workers/platform/src/verification/smoke-contract.ts";
+import type { PublicUsageMode } from "../workers/platform/src/public-usage.ts";
 
 const shaSchema = z.string().regex(/^[0-9a-f]{40}$/);
 const uuidSchema = z.string().uuid();
@@ -197,6 +198,7 @@ export type DeploymentStage =
       degradedUntilMs: number;
       smokeKey: string;
       githubWriteEnabled: boolean;
+      publicUsageMode?: Extract<PublicUsageMode, "disabled" | "rate-limited">;
     };
 
 type DeploymentConfigOptions = {
@@ -236,6 +238,10 @@ export function buildPlatformDeploymentConfig(options: DeploymentConfigOptions) 
           EVIDENCE_DEGRADED_UNTIL_MS: "",
         };
   const loadingMode = options.stage.kind === "baseline" ? "concurrent" : "sequential";
+  const publicUsageMode =
+    options.stage.kind === "investigator"
+      ? (options.stage.publicUsageMode ?? "rate-limited")
+      : "rate-limited";
   if (options.stage.kind === "investigator") {
     z.string().min(20).max(128).parse(options.stage.smokeKey);
   }
@@ -266,6 +272,18 @@ export function buildPlatformDeploymentConfig(options: DeploymentConfigOptions) 
       },
     ],
     services: [{ binding: "HEALTH_SERVICE", service: "regression-surgeon-health-service" }],
+    ratelimits: [
+      {
+        name: "PUBLIC_AI_TURN_LIMITER",
+        namespace_id: "4747001",
+        simple: { limit: 10, period: 60 },
+      },
+      {
+        name: "PUBLIC_METRIC_LIMITER",
+        namespace_id: "4747002",
+        simple: { limit: 60, period: 60 },
+      },
+    ],
     version_metadata: { binding: "CF_VERSION_METADATA" },
     vars: {
       ...evidence,
@@ -279,6 +297,7 @@ export function buildPlatformDeploymentConfig(options: DeploymentConfigOptions) 
           : "false",
       HEALTH_LOADING_MODE: loadingMode,
       MODEL_MODE: "workers-ai",
+      PUBLIC_USAGE_MODE: publicUsageMode,
       SCENARIO_CONTROL_ENABLED: "false",
     },
     observability: { enabled: true },
