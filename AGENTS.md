@@ -117,6 +117,10 @@ Do not assert exact natural-language output from a live model. Assert structured
 
 - `mise run deploy` must preserve distinct baseline, degraded, and investigator Worker version IDs.
 - Remote evidence must come from measured requests and retain immutable version-to-SHA attribution.
+- Baseline and degraded versions must remain at 0% ordinary traffic while each readiness, health, and
+  telemetry request is pinned by exact Worker-version override; executable requests stay one-shot.
+- A failed normal deployment must restore and verify the preserved write-disabled investigator route
+  without Workers AI, or expose both the deployment and rollback failures.
 - Normal public deployment keeps GitHub writes disabled and never copies a local `gh` credential.
 - Explicit write enablement must preserve measured evidence, record the expected posture, and leave
   keyed smoke preview-only with zero external writes.

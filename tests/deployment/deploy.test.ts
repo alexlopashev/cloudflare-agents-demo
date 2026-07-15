@@ -4,7 +4,9 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildExactVersionHeaders,
   buildDeploymentInteractionId,
+  buildMeasuredVersionDeploymentSpecs,
   buildPlatformDeploymentConfig,
   buildEvidenceResetSql,
   buildConfiguredSourceEvidence,
@@ -12,10 +14,13 @@ import {
   buildReleaseSourceEvidenceSql,
   buildReleasePreviewEvidenceSql,
   deploymentSmokeRetryPolicy,
+  deploymentVersionOverrideSettlePolicy,
   deploymentVersionPropagationPolicy,
   deploymentSmokeFailureMessage,
   parseD1DatabaseId,
   parseDeploymentResult,
+  parseUploadedVersionId,
+  parseWriteDisabledInvestigatorVersion,
   parseGitHubWriteSecretInventory,
   requestDeploymentEndpointOnce,
   requestDeploymentSmokeWithRetry,
@@ -58,11 +63,21 @@ describe("Cloudflare deployment contract", () => {
     expect(deployScript).not.toContain("gh auth token");
     expect(deployScript).not.toContain("requestWithRetry");
     expect(deployScript.match(/await requestDeploymentEndpointOnce/g)).toHaveLength(3);
+    expect(deployScript).toMatch(/"versions",\s*"upload"/);
+    expect(deployScript).toMatch(/"versions",\s*"deploy"/);
+    expect(deployScript).toContain("buildExactVersionHeaders(expectedReleaseId)");
+    expect(deployScript).toContain("restoreWriteDisabledInvestigator");
+    expect(deployScript).toContain('run("wrangler", [\n    "rollback",');
+    expect(deployScript.match(/await waitForVersionOverrideSettle\(\)/g)).toHaveLength(2);
     expect(deployScript).toContain(
       "buildDeploymentInteractionId(label, expectedReleaseId, sample + 1)",
     );
-    expect(deployScript).toContain("await assertDeployedVersion(baseline.url, baseline.versionId)");
-    expect(deployScript).toContain("await assertDeployedVersion(degraded.url, degraded.versionId)");
+    expect(deployScript).not.toContain(
+      "await assertDeployedVersion(baseline.url, baseline.versionId)",
+    );
+    expect(deployScript).not.toContain(
+      "await assertDeployedVersion(degraded.url, degraded.versionId)",
+    );
     expect(deployScript).toContain(
       "await assertDeployedVersion(state.publicUrl, state.investigatorReleaseId)",
     );
@@ -350,6 +365,78 @@ describe("Cloudflare deployment contract", () => {
     expect(rejectedRequest).toHaveBeenCalledOnce();
   });
 
+  it("pins one-shot measured traffic after a public readiness race", async () => {
+    const publicRoute = vi.fn(async () =>
+      Response.json({ error: "release-not-ready" }, { status: 409 }),
+    );
+    await expect(requestDeploymentEndpointOnce(publicRoute, "baseline health")).rejects.toThrow(
+      /HTTP 409/,
+    );
+    expect(publicRoute).toHaveBeenCalledOnce();
+
+    const exactVersion = vi.fn(async (headers: HeadersInit) => {
+      expect(new Headers(headers).get("Cloudflare-Workers-Version-Overrides")).toBe(
+        `regression-surgeon-platform="${baselineVersionId}"`,
+      );
+      return new Response(null, { status: 204 });
+    });
+    await expect(
+      requestDeploymentEndpointOnce(
+        () => exactVersion(buildExactVersionHeaders(baselineVersionId)),
+        "baseline health",
+      ),
+    ).resolves.toMatchObject({ status: 204 });
+    expect(exactVersion).toHaveBeenCalledOnce();
+  });
+
+  it("builds a zero-traffic measured deployment behind a verified reviewer version", () => {
+    expect(buildMeasuredVersionDeploymentSpecs(baselineVersionId, degradedVersionId)).toEqual([
+      `${baselineVersionId}@100%`,
+      `${degradedVersionId}@0%`,
+    ]);
+    expect(() => buildMeasuredVersionDeploymentSpecs("not-a-version", degradedVersionId)).toThrow(
+      /version identifier/i,
+    );
+    expect(parseUploadedVersionId(`Uploaded Worker\nWorker Version ID: ${degradedVersionId}`)).toBe(
+      degradedVersionId,
+    );
+  });
+
+  it("accepts rollback targets only for a single write-disabled investigator", () => {
+    const status = JSON.stringify({
+      versions: [{ version_id: baselineVersionId, percentage: 100 }],
+    });
+    const version = JSON.stringify({
+      id: baselineVersionId,
+      resources: {
+        bindings: [
+          { name: "MODEL_MODE", type: "plain_text", text: "workers-ai" },
+          { name: "GITHUB_WRITE_ENABLED", type: "plain_text", text: "false" },
+          { name: "EVIDENCE_INCIDENT_ID", type: "plain_text", text: incidentId },
+        ],
+      },
+    });
+    expect(parseWriteDisabledInvestigatorVersion(status, version)).toBe(baselineVersionId);
+
+    expect(() =>
+      parseWriteDisabledInvestigatorVersion(
+        status,
+        version.replace('"text":"false"', '"text":"true"'),
+      ),
+    ).toThrow(/write-disabled investigator/i);
+    expect(() =>
+      parseWriteDisabledInvestigatorVersion(
+        JSON.stringify({
+          versions: [
+            { version_id: baselineVersionId, percentage: 50 },
+            { version_id: degradedVersionId, percentage: 50 },
+          ],
+        }),
+        version,
+      ),
+    ).toThrow(/write-disabled investigator/i);
+  });
+
   it("polls only immutable version identity before measured traffic", async () => {
     const versions = [
       baselineVersionId,
@@ -375,6 +462,7 @@ describe("Cloudflare deployment contract", () => {
     ).rejects.toThrow(/did not reach the public edge/i);
     expect(staleVersion).toHaveBeenCalledTimes(deploymentVersionPropagationPolicy.maxAttempts);
     expect(boundedWait).toHaveBeenCalledTimes(deploymentVersionPropagationPolicy.maxAttempts - 1);
+    expect(deploymentVersionOverrideSettlePolicy.delayMs).toBeGreaterThanOrEqual(10_000);
   });
 
   it("bounds repeated propagation-only smoke responses", async () => {

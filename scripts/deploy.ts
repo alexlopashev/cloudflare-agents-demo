@@ -9,7 +9,9 @@ import { smokeVerificationReceiptSchema } from "../workers/platform/src/verifica
 import { configuredSourceEvidencePolicy } from "../packages/contracts/src/source-evidence.ts";
 
 import {
+  buildExactVersionHeaders,
   buildDeploymentInteractionId,
+  buildMeasuredVersionDeploymentSpecs,
   buildPlatformDeploymentConfig,
   buildConfiguredPreviewEvidence,
   buildConfiguredSourceEvidence,
@@ -19,10 +21,14 @@ import {
   deploymentSmokeRetryPolicy,
   deploymentSmokeFailureMessage,
   deploymentEvidenceReadinessPolicy,
+  deploymentVersionOverrideSettlePolicy,
   deploymentVersionPropagationPolicy,
   parseD1DatabaseId,
   parseDeploymentResult,
+  parseCurrentDeploymentVersion,
   parseGitHubWriteSecretInventory,
+  parseUploadedVersionId,
+  parseWriteDisabledInvestigatorVersion,
   requestDeploymentEndpointOnce,
   requestDeploymentSmokeWithRetry,
   runtimeAttributionRetryPolicy,
@@ -37,6 +43,8 @@ const configPath = resolve(deploymentDirectory, "wrangler.json");
 const statePath = resolve(deploymentDirectory, "state.json");
 const baselineGitSha = "cf25e5253b106b1e7514340abe94bd42fd748725";
 const regressionGitSha = "d591869a8ef995f1835ef80152f4de085b10255b";
+const platformWorkerName = "regression-surgeon-platform";
+const platformPublicUrl = "https://regression-surgeon-platform.alexlopashev.workers.dev";
 
 const stateSchema = z.object({
   databaseId: z.string().uuid(),
@@ -208,6 +216,44 @@ function deployPlatform(
   );
 }
 
+function readWriteDisabledInvestigatorVersion() {
+  const deployment = capture("wrangler", [
+    "deployments",
+    "status",
+    "--name",
+    platformWorkerName,
+    "--json",
+  ]);
+  const versionId = parseCurrentDeploymentVersion(deployment);
+  const version = capture("wrangler", [
+    "versions",
+    "view",
+    versionId,
+    "--name",
+    platformWorkerName,
+    "--json",
+  ]);
+  return parseWriteDisabledInvestigatorVersion(deployment, version);
+}
+
+function uploadPlatformVersion(config: ReturnType<typeof buildPlatformDeploymentConfig>) {
+  writeConfig(config);
+  return parseUploadedVersionId(
+    run("wrangler", ["versions", "upload", "--config", configPath, "--strict"]),
+  );
+}
+
+function deployMeasuredVersion(stableVersionId: string, measuredVersionId: string) {
+  run("wrangler", [
+    "versions",
+    "deploy",
+    ...buildMeasuredVersionDeploymentSpecs(stableVersionId, measuredVersionId),
+    "--yes",
+    "--config",
+    configPath,
+  ]);
+}
+
 function deployPlatformWithSmokeSecret(
   config: ReturnType<typeof buildPlatformDeploymentConfig>,
   smokeKey: string,
@@ -235,10 +281,17 @@ const deploymentReadinessSchema = z.object({
   gitSha: z.string().regex(/^[0-9a-f]{40}$/),
 });
 
-async function assertDeployedVersion(url: string, expectedVersion: string) {
+async function assertDeployedVersion(
+  url: string,
+  expectedVersion: string,
+  headers?: Record<string, string>,
+) {
   await waitForDeploymentVersion(
     async () => {
-      const response = await fetch(`${url}/api/deployment-readiness`);
+      const response = await fetch(
+        `${url}/api/deployment-readiness`,
+        headers === undefined ? undefined : { headers },
+      );
       if (!response.ok) return undefined;
       const readiness = deploymentReadinessSchema.safeParse(await response.json());
       return readiness.success ? readiness.data.versionId : undefined;
@@ -248,6 +301,26 @@ async function assertDeployedVersion(url: string, expectedVersion: string) {
       new Promise<void>((resolveDelay) =>
         setTimeout(resolveDelay, deploymentVersionPropagationPolicy.delayMs),
       ),
+  );
+}
+
+async function restoreWriteDisabledInvestigator(stableVersionId: string) {
+  run("wrangler", [
+    "rollback",
+    stableVersionId,
+    "--yes",
+    "--name",
+    platformWorkerName,
+    "--message",
+    "Restore write-disabled investigator after failed normal deployment",
+  ]);
+  await assertDeployedVersion(platformPublicUrl, stableVersionId);
+  console.error("Normal deployment failed; restored the write-disabled investigator route.");
+}
+
+async function waitForVersionOverrideSettle() {
+  await new Promise<void>((resolveDelay) =>
+    setTimeout(resolveDelay, deploymentVersionOverrideSettlePolicy.delayMs),
   );
 }
 
@@ -289,6 +362,7 @@ async function seedMeasuredTraffic(
   expectedReleaseId: string,
   label: "baseline" | "degraded",
 ) {
+  const exactVersionHeaders = buildExactVersionHeaders(expectedReleaseId);
   const startedAtMs = Date.now();
   const durations: number[] = [];
   for (let sample = 0; sample < 20; sample += 1) {
@@ -299,6 +373,7 @@ async function seedMeasuredTraffic(
         fetch(`${url}/api/health`, {
           method: "POST",
           headers: {
+            ...exactVersionHeaders,
             "content-type": "application/vnd.regression-surgeon.deployment-health+json",
             "x-deployment-expected-release": expectedReleaseId,
           },
@@ -315,7 +390,7 @@ async function seedMeasuredTraffic(
       async () =>
         fetch(`${url}/api/telemetry/ux`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { ...exactVersionHeaders, "content-type": "application/json" },
           body: JSON.stringify({
             interactionId,
             traceId: health.traceId,
@@ -412,6 +487,7 @@ async function smoke(state: z.infer<typeof stateSchema>) {
 async function deploy() {
   run("wrangler", ["whoami"]);
   run("pnpm", ["build"]);
+  const stableVersionId = readWriteDisabledInvestigatorVersion();
   const databaseId = findOrCreateDatabase();
   run("wrangler", [
     "deploy",
@@ -437,59 +513,81 @@ async function deploy() {
     configPath,
   ]);
 
-  const baseline = deployPlatform(
-    buildPlatformDeploymentConfig({
-      databaseId,
-      repositoryRoot,
-      stage: { kind: "baseline", gitSha: baselineGitSha },
-    }),
-  );
-  await assertDeployedVersion(baseline.url, baseline.versionId);
-  await seedMeasuredTraffic(baseline.url, baseline.versionId, "baseline");
+  const state = await runWithFailClosedRollback(
+    async () => {
+      const baselineVersionId = uploadPlatformVersion(
+        buildPlatformDeploymentConfig({
+          databaseId,
+          repositoryRoot,
+          stage: { kind: "baseline", gitSha: baselineGitSha },
+        }),
+      );
+      deployMeasuredVersion(stableVersionId, baselineVersionId);
+      await assertDeployedVersion(
+        platformPublicUrl,
+        baselineVersionId,
+        buildExactVersionHeaders(baselineVersionId),
+      );
+      await waitForVersionOverrideSettle();
+      await seedMeasuredTraffic(platformPublicUrl, baselineVersionId, "baseline");
 
-  const degraded = deployPlatform(
-    buildPlatformDeploymentConfig({
-      databaseId,
-      repositoryRoot,
-      stage: { kind: "regression", gitSha: regressionGitSha },
-    }),
-  );
-  await assertDeployedVersion(degraded.url, degraded.versionId);
-  const degradedWindow = await seedMeasuredTraffic(degraded.url, degraded.versionId, "degraded");
-  const deployedGitSha = capture("git", ["rev-parse", "HEAD"]).trim();
-  prepareRemoteSourceEvidence(databaseId, degraded.versionId, deployedGitSha);
-  const smokeKey = crypto.randomUUID();
-  const investigatorConfig = buildPlatformDeploymentConfig({
-    databaseId,
-    repositoryRoot,
-    stage: {
-      kind: "investigator",
-      incidentId: `review-${degraded.versionId}`,
-      gitSha: deployedGitSha,
-      baselineReleaseId: baseline.versionId,
-      degradedReleaseId: degraded.versionId,
-      degradedSinceMs: degradedWindow.sinceMs,
-      degradedUntilMs: degradedWindow.untilMs,
-      smokeKey,
-      githubWriteEnabled: false,
+      const degradedVersionId = uploadPlatformVersion(
+        buildPlatformDeploymentConfig({
+          databaseId,
+          repositoryRoot,
+          stage: { kind: "regression", gitSha: regressionGitSha },
+        }),
+      );
+      deployMeasuredVersion(stableVersionId, degradedVersionId);
+      await assertDeployedVersion(
+        platformPublicUrl,
+        degradedVersionId,
+        buildExactVersionHeaders(degradedVersionId),
+      );
+      await waitForVersionOverrideSettle();
+      const degradedWindow = await seedMeasuredTraffic(
+        platformPublicUrl,
+        degradedVersionId,
+        "degraded",
+      );
+      const deployedGitSha = capture("git", ["rev-parse", "HEAD"]).trim();
+      prepareRemoteSourceEvidence(databaseId, degradedVersionId, deployedGitSha);
+      const smokeKey = crypto.randomUUID();
+      const investigatorConfig = buildPlatformDeploymentConfig({
+        databaseId,
+        repositoryRoot,
+        stage: {
+          kind: "investigator",
+          incidentId: `review-${degradedVersionId}`,
+          gitSha: deployedGitSha,
+          baselineReleaseId: baselineVersionId,
+          degradedReleaseId: degradedVersionId,
+          degradedSinceMs: degradedWindow.sinceMs,
+          degradedUntilMs: degradedWindow.untilMs,
+          smokeKey,
+          githubWriteEnabled: false,
+        },
+      });
+      const investigator = deployPlatformWithSmokeSecret(investigatorConfig, smokeKey);
+      return stateSchema.parse({
+        databaseId,
+        publicUrl: investigator.url,
+        incidentId: `review-${degradedVersionId}`,
+        baselineReleaseId: baselineVersionId,
+        degradedReleaseId: degradedVersionId,
+        degradedSinceMs: degradedWindow.sinceMs,
+        degradedUntilMs: degradedWindow.untilMs,
+        investigatorReleaseId: investigator.versionId,
+        deployedGitSha,
+        githubWriteEnabled: false,
+        smokeKey,
+      });
     },
-  });
-  const investigator = deployPlatformWithSmokeSecret(investigatorConfig, smokeKey);
-  const state = stateSchema.parse({
-    databaseId,
-    publicUrl: investigator.url,
-    incidentId: `review-${degraded.versionId}`,
-    baselineReleaseId: baseline.versionId,
-    degradedReleaseId: degraded.versionId,
-    degradedSinceMs: degradedWindow.sinceMs,
-    degradedUntilMs: degradedWindow.untilMs,
-    investigatorReleaseId: investigator.versionId,
-    deployedGitSha,
-    githubWriteEnabled: false,
-    smokeKey,
-  });
+    smoke,
+    async () => restoreWriteDisabledInvestigator(stableVersionId),
+    "Normal deployment failed and the write-disabled investigator rollback could not be verified.",
+  );
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
-  await smoke(state);
 }
 
 function deployRefreshedInvestigator(
