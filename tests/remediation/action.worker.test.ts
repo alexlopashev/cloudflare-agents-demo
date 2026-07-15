@@ -27,7 +27,11 @@ const proposalFingerprint = "proposal-v1-0123456789abcdef";
 describe("create_draft_pr Project Think action", () => {
   it("requires explicit approval, a narrow permission, and stable incident idempotency", async () => {
     const service = { execute: vi.fn(async () => ({ status: "preview" as const })) };
-    const remediation = createRemediationAction(service, { idempotencyScope: "preview" });
+    const remediation = createRemediationAction(service, {
+      idempotencyScope: "preview",
+      resolveProposal: (fingerprint) =>
+        fingerprint === proposalFingerprint ? proposal : undefined,
+    });
 
     expect(remediation.config.kind).toBe("approval-gated");
     expect(remediation.config.approval).toBe(true);
@@ -38,21 +42,17 @@ describe("create_draft_pr Project Think action", () => {
     const idempotency = remediation.config.idempotencyKey;
     if (typeof idempotency !== "function") throw new Error("Expected idempotency function");
     const context = {} as never;
-    expect(await idempotency({ input: { ...proposal, proposalFingerprint }, ctx: context })).toBe(
+    expect(await idempotency({ input: { proposalFingerprint }, ctx: context })).toBe(
       "preview:configured-latency-regression",
     );
-    expect(
-      await idempotency({
-        input: { ...proposal, proposalFingerprint, replacementContent: "a revised proposal" },
-        ctx: context,
-      }),
-    ).toBe("preview:configured-latency-regression");
 
-    await expect(
-      remediation.config.execute({ ...proposal, proposalFingerprint }, context),
-    ).resolves.toEqual({
+    await expect(remediation.config.execute({ proposalFingerprint }, context)).resolves.toEqual({
       status: "preview",
     });
     expect(service.execute).toHaveBeenCalledExactlyOnceWith(proposal);
+
+    await expect(
+      remediation.config.execute({ proposalFingerprint: "proposal-v1-fedcba9876543210" }, context),
+    ).rejects.toThrow(/fingerprint is not authorized/i);
   });
 });

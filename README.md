@@ -57,8 +57,9 @@ The investigator remains mounted as a collapsible support-style dialog with a fl
 availability status, safe GitHub-flavored Markdown, and literal user requests. A first-time reviewer
 can start the one configured incident with a single action, and no unread badge appears before an
 assistant result exists. Evidence progress comes from the persisted five-phase receipt. Before
-approval, the panel shows the current evidenced source, exact replacement, rationale, one-file and
-changed-line counts, immutable evidence references, proposal fingerprint, and current write posture.
+approval, the action carries only the persisted proposal fingerprint; the panel resolves that
+fingerprint against agent state and shows the current evidenced source, exact replacement, rationale,
+one-file and changed-line counts, immutable evidence references, and current write posture.
 The desktop panel is bounded, while the mobile panel fills the viewport with a full-width 44px send
 action. `/investigator` opens the same Deployboard experience with the widget expanded.
 
@@ -290,8 +291,9 @@ window, degraded trace window, trace limit, and degraded release lookup. Validat
 has to match that incident. A failed phase gets one retry; after its second failed attempt, receipt
 persistence rejects additional attempts and the step policy exposes no evidence tools, allowing only
 a low-confidence report. The final report cites the receipt. Only a complete receipt can persist
-the exact one-file replacement and proposal fingerprint; approval shows that replacement and rejects
-a changed payload, while preview and write retries keep one branch identity per incident.
+the exact one-file replacement and proposal fingerprint. The model can submit only that fingerprint;
+the server resolves the stored proposal, approval shows its exact replacement, and an unprepared
+fingerprint fails closed. Preview and write retries keep one branch identity per incident.
 
 Telemetry ingestion is retry-safe at its D1 boundary. Exact release, trace, span, and UX-event
 replays remain idempotent; conflicting identifier reuse aborts the whole write before related rows

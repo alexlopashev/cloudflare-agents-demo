@@ -17,16 +17,6 @@ const messages = [
         approval: { id: "approval-1" },
         input: {
           proposalFingerprint: "proposal-v1-0123456789abcdef",
-          title: "fix: bound health-check concurrency",
-          path: "workers/platform/src/api/health.ts",
-          replacementContent: "private full source must not render",
-          rationale: "Preserve downstream capacity with bounded concurrency.",
-          expectedBlobSha: "3333333333333333333333333333333333333333",
-          incident: {
-            traceId: "scenario-trace-34",
-            regressionCommitSha: "0123456789abcdef0123456789abcdef01234567",
-            sourcePullRequestNumber: 19,
-          },
         },
       },
     ],
@@ -36,6 +26,18 @@ const messages = [
 const preparedRemediation = {
   fingerprint: "proposal-v1-0123456789abcdef",
   writeEnabled: false,
+  proposal: {
+    title: "fix: bound health-check concurrency",
+    path: "workers/platform/src/api/health.ts",
+    replacementContent: "private full source must not render",
+    rationale: "Preserve downstream capacity with bounded concurrency.",
+    expectedBlobSha: "3333333333333333333333333333333333333333",
+    incident: {
+      traceId: "scenario-trace-34",
+      regressionCommitSha: "0123456789abcdef0123456789abcdef01234567",
+      sourcePullRequestNumber: 19,
+    },
+  },
   diff: {
     path: "workers/platform/src/api/health.ts",
     currentContent: "current bounded source",
