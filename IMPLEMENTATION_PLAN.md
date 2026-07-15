@@ -27,7 +27,7 @@ separate operator-enabled extension; it is not required for the credential-free 
 | --- | --- |
 | Hosting | Cloudflare Workers only |
 | Agent harness | Project Think |
-| Model | Workers AI through `workers-ai-provider` |
+| Model | `@cf/zai-org/glm-5.2` through `workers-ai-provider` and named AI Gateway `regression-surgeon` |
 | Frontend | React SPA built with Vite |
 | Server | Cloudflare Worker API |
 | Agent state | Project Think's SQLite-backed Durable Object |
@@ -346,6 +346,7 @@ which Node can type-strip without a loader; `tsc --noEmit` remains the separate 
 | `mise run db:migrate` | Apply local D1 migrations |
 | `mise run dev` | Run the complete native stack with a fake local model |
 | `mise run dev:live` | Run locally with remote Workers AI |
+| `mise run ai:gateway:ensure` | Create or verify the named AI Gateway using a dedicated API token |
 | `mise run e2e` | Run credential-free deterministic end-to-end verification |
 | `mise run container:up` | Start the optional Colima/Compose lane |
 | `mise run container:down` | Stop project container resources |
@@ -383,7 +384,8 @@ Reference: [Cloudflare local development](https://developers.cloudflare.com/work
 Workers AI bindings execute remotely even when Worker code runs locally. The project therefore supports two model modes:
 
 - `fake` — deterministic AI SDK model for tests and credential-free E2E
-- `workers-ai` — real Workers AI binding for interactive development and production
+- `workers-ai` — real GLM 5.2 Workers AI binding routed through the validated
+  `regression-surgeon` AI Gateway for interactive development and production
 
 `mise run e2e` uses the fake model and GitHub fixtures. It exercises:
 
@@ -396,7 +398,10 @@ Workers AI bindings execute remotely even when Worker code runs locally. The pro
 It never calls a live model or writes to GitHub. The same E2E now validates an evidence-rich draft-PR
 preview, while rendered-browser verification covers the native approval request and continuation.
 
-`mise run dev:live` uses Workers AI and requires Cloudflare authentication.
+`mise run dev:live` uses Workers AI and requires Cloudflare authentication plus the pre-existing
+named Gateway. Gateway creation and deployment preflight require an ephemeral
+`CLOUDFLARE_API_TOKEN` with AI Gateway Write permission; Wrangler's OAuth token cannot manage this
+API. The token is never persisted, passed as an argument, or exposed to the Worker runtime.
 
 ### 10.3 Optional Colima lane
 
@@ -519,7 +524,7 @@ It does not infer completion from prose or undifferentiated history.
 
 Configure:
 
-- Workers AI model through `workers-ai-provider`
+- GLM 5.2 Workers AI model through `workers-ai-provider` and one validated named AI Gateway
 - Maximum 16 tool steps per turn
 - Evidence-oriented system prompt
 - Tool result size limits
@@ -912,9 +917,11 @@ Acceptance criteria:
 
 ### Phase 8 — Deployment and evidence
 
-Status: historically delivered in issue #11. The deployment task creates or reuses the named D1 database, applies
+Status: historically delivered in issue #11 and extended by issue #56. The deployment task creates
+or reuses the named D1 database, applies
 remote migrations, measures 20 concurrent and 20 sequential interactions under distinct Cloudflare
-version IDs, and deploys the public GLM 4.7 Flash Project Think investigator. The final configuration
+version IDs, creates or verifies the `regression-surgeon` AI Gateway, and deploys the public GLM 5.2
+Project Think investigator through that gateway. The final configuration
 injects the exact evidence IDs and bounded degraded trace window. A keyed smoke invokes the real
 Durable Object and Workers AI model, checks evidence events and a structured report, validates a
 remediation preview, and proves GitHub writes remain disabled. Issue #42 replaces name/count checks
@@ -1010,6 +1017,8 @@ unverifiable rollback surfaces both failures.
   version through an exact-version override.
 - Reject stale deployment health before dependencies or trace persistence without retrying it.
 - Restore and verify the prior write-disabled investigator after a failed normal deployment.
+- Fail before deployment when the named AI Gateway cannot be created or verified with a dedicated
+  AI Gateway Write API token.
 - Deploy the public investigator.
 - Perform the complete reviewer walkthrough.
 

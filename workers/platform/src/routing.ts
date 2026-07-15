@@ -23,6 +23,7 @@ export interface FetchBinding {
 
 export interface PlatformBindings extends IncidentEnvironment {
   AI?: Ai;
+  AI_GATEWAY_ID?: string;
   ASSETS: FetchBinding;
   CF_VERSION_METADATA: { id: string; timestamp?: string };
   DEPLOY_SMOKE_KEY?: string;
@@ -61,6 +62,7 @@ export async function handlePlatformRequest(
   let externalConfiguration: ReturnType<typeof composeExternalConfiguration>;
   try {
     externalConfiguration = composeExternalConfiguration({
+      aiGatewayId: bindings.AI_GATEWAY_ID,
       versionMetadata: bindings.CF_VERSION_METADATA,
       gitSha: bindings.GIT_SHA,
       githubOwner: bindings.GITHUB_OWNER,
@@ -165,6 +167,9 @@ export async function handlePlatformRequest(
       return Response.json({ error: { code: "invalid-incident-configuration" } }, { status: 503 });
     }
     return Response.json({
+      ...(externalConfiguration.aiGatewayId === undefined
+        ? {}
+        : { aiGatewayId: externalConfiguration.aiGatewayId }),
       mode: externalConfiguration.modelMode,
       versionId: externalConfiguration.runtime.versionId,
       gitSha: externalConfiguration.runtime.gitSha,

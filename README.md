@@ -23,7 +23,7 @@ does not select or modify the seeded incident investigated by the agent.
 ## Architecture
 
 - Cloudflare Workers and the Cloudflare Vite plugin
-- Project Think with Workers AI
+- Project Think with GLM 5.2 through one named Cloudflare AI Gateway
 - SQLite-backed Durable Object state for conversations
 - D1 for measured UX events, traces, spans, and releases
 - An auxiliary health-service Worker reached through a service binding
@@ -98,6 +98,7 @@ mise run dev
 mise run dev:live
 mise run e2e
 mise run auth:cloudflare
+mise run ai:gateway:ensure
 mise run github:writes:secret
 mise run github:writes:secret:delete
 mise run deploy
@@ -119,7 +120,8 @@ platform APIs from one URL. The current release intentionally serializes the thr
 checks to create the controlled regression. `mise run scenario:reseed` regenerates 20 measured
 concurrent and 20 measured sequential interactions in local D1; `mise run scenario:reset` removes
 only those two releases. `mise run dev:live` builds the app and starts the same Worker with the
-explicit Workers AI configuration; Cloudflare authentication and remote usage apply. `mise run e2e`
+explicit Workers AI configuration. Live inference uses `@cf/zai-org/glm-5.2` through the named
+`regression-surgeon` AI Gateway; Cloudflare authentication and remote usage apply. `mise run e2e`
 verifies both public routes, runtime metadata, the auxiliary service binding, trace persistence,
 correlated browser telemetry, statistically distinguishable scenario evidence, and a credential-free
 five-operation Project Think investigation that cites the measured trace, immutable commit, and source PR.
@@ -136,11 +138,16 @@ and the production build/bundle assertion run once in a fixed order.
 
 The current no-login demo is
 [regression-surgeon-platform.alexlopashev.workers.dev](https://regression-surgeon-platform.alexlopashev.workers.dev/app).
-Authenticate once with `mise run auth:cloudflare`, then run `mise run deploy`. The task reuses or
-creates only the named D1 database, builds both Workers and the web app, applies remote migrations,
+Authenticate once with `mise run auth:cloudflare`. Gateway management additionally requires an
+ephemeral `CLOUDFLARE_API_TOKEN` with **AI Gateway Write** permission in the current process;
+Wrangler's OAuth token is not accepted by that API. Never put this token in chat, a command argument,
+an environment file, or repository state. `mise run ai:gateway:ensure`, normal deploy, and refresh
+all fail closed without it and create or verify only the exact named gateway. Then run
+`mise run deploy`. The task reuses or creates only the named D1 database, builds both Workers and the
+web app, applies remote migrations,
 uploads a concurrent baseline and sequential regression behind the current write-disabled
-investigator, measures 20 interactions against each exact version, then deploys the public GLM 4.7
-Flash investigator with those exact Cloudflare version IDs and trace timestamps. It finishes with a
+investigator, measures 20 interactions against each exact version, then deploys the public GLM 5.2
+investigator through that gateway with those exact Cloudflare version IDs and trace timestamps. It finishes with a
 keyed smoke that verifies the two public routes, runtime metadata, five exact incident-scoped
 evidence phases, their trace, release,
 commit, PR, source, and blob cross-references, all four report sections, the remediation fingerprint
@@ -312,8 +319,10 @@ flattened into one path; sequential spans, nesting, gaps, and fork/join ties fol
 contract. Missing or cyclic parentage is excluded from the selected path and returned as bounded
 diagnostics instead of silently fabricating causality.
 
-Live Worker composition now imports only Workers AI and production GitHub adapters. Vite and Worker
-tests explicitly substitute a deterministic demo adapter; the production build dry-runs and scans
+Live Worker composition now imports only Workers AI and production GitHub adapters. Its model ID and
+gateway ID are validated before construction, every live inference is sent through the
+`regression-surgeon` Gateway, and parallel tool calls remain disabled. Vite and Worker tests
+explicitly substitute a deterministic demo adapter; the production build dry-runs and scans
 the live bundle to reject test-provider, fixture, and mock-model markers. Missing, empty, and
 whitespace-only GitHub tokens normalize once as absent, selecting the persisted D1 release/source and
 preview receipts without satisfying write enablement or making a GitHub request. Runtime version,

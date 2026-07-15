@@ -18,12 +18,15 @@ import {
   buildEvidenceResetSql,
   buildReleasePreviewEvidenceSql,
   buildReleaseSourceEvidenceSql,
+  AI_GATEWAY_ID,
   deploymentSmokeRetryPolicy,
   deploymentSmokeFailureMessage,
   deploymentEvidenceReadinessPolicy,
   deploymentVersionOverrideSettlePolicy,
   deploymentVersionPropagationPolicy,
   parseD1DatabaseId,
+  parseCloudflareAccountId,
+  parseCloudflareAiGatewayApiToken,
   parseDeploymentResult,
   parseCurrentDeploymentVersion,
   parseGitHubWriteSecretInventory,
@@ -33,6 +36,7 @@ import {
   requestDeploymentSmokeWithRetry,
   runtimeAttributionRetryPolicy,
   runWithFailClosedRollback,
+  ensureCloudflareAiGateway,
   waitForDeploymentVersion,
   waitForDeploymentEvidenceReady,
 } from "./deploy-lib.ts";
@@ -47,6 +51,7 @@ const platformWorkerName = "regression-surgeon-platform";
 const platformPublicUrl = "https://regression-surgeon-platform.alexlopashev.workers.dev";
 
 const stateSchema = z.object({
+  aiGatewayId: z.literal(AI_GATEWAY_ID).default(AI_GATEWAY_ID),
   databaseId: z.string().uuid(),
   publicUrl: z.string().url(),
   incidentId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/),
@@ -105,6 +110,22 @@ function findOrCreateDatabase(): string {
       run("wrangler", ["d1", "create", "regression-surgeon-telemetry", "--location", "wnam"]),
     );
   }
+}
+
+async function ensureNamedAiGateway() {
+  const accountId = parseCloudflareAccountId(capture("wrangler", ["whoami", "--json"]));
+  const token = parseCloudflareAiGatewayApiToken(process.env.CLOUDFLARE_API_TOKEN);
+  await ensureCloudflareAiGateway(
+    (input, init) =>
+      fetch(input, {
+        ...init,
+        headers: {
+          ...Object.fromEntries(new Headers(init?.headers).entries()),
+          authorization: `Bearer ${token}`,
+        },
+      }),
+    accountId,
+  );
 }
 
 function readGitSource(sha: string) {
@@ -326,6 +347,7 @@ async function waitForVersionOverrideSettle() {
 
 async function assertRuntimeAttribution(state: z.infer<typeof stateSchema>) {
   const runtimeSchema = z.object({
+    aiGatewayId: z.literal(state.aiGatewayId),
     mode: z.literal("workers-ai"),
     versionId: z.literal(state.investigatorReleaseId),
     gitSha: z.literal(state.deployedGitSha),
@@ -486,6 +508,7 @@ async function smoke(state: z.infer<typeof stateSchema>) {
 
 async function deploy() {
   run("wrangler", ["whoami"]);
+  await ensureNamedAiGateway();
   run("pnpm", ["build"]);
   const stableVersionId = readWriteDisabledInvestigatorVersion();
   const databaseId = findOrCreateDatabase();
@@ -570,6 +593,7 @@ async function deploy() {
       });
       const investigator = deployPlatformWithSmokeSecret(investigatorConfig, smokeKey);
       return stateSchema.parse({
+        aiGatewayId: AI_GATEWAY_ID,
         databaseId,
         publicUrl: investigator.url,
         incidentId: `review-${degradedVersionId}`,
@@ -627,6 +651,7 @@ function deployRefreshedInvestigator(
 
 async function refreshInvestigator(githubWriteEnabled = false) {
   run("wrangler", ["whoami"]);
+  await ensureNamedAiGateway();
   if (githubWriteEnabled) assertGitHubWriteSecret();
   run("pnpm", ["build"]);
   const previous = refreshStateSchema.parse(JSON.parse(readFileSync(statePath, "utf8")));
@@ -687,9 +712,13 @@ else if (action === "refresh") await refreshInvestigator(false);
 else if (action === "enable-writes") await refreshInvestigator(true);
 else if (action === "disable-writes") await refreshInvestigator(false);
 else if (action === "reset") resetRemoteEvidence();
-else if (action === "smoke")
+else if (action === "gateway") {
+  run("wrangler", ["whoami"]);
+  await ensureNamedAiGateway();
+  console.log(`AI Gateway ${AI_GATEWAY_ID} is ready.`);
+} else if (action === "smoke")
   await smoke(stateSchema.parse(JSON.parse(readFileSync(statePath, "utf8"))));
 else
   throw new Error(
-    "Usage: node scripts/deploy.ts <deploy|refresh|enable-writes|disable-writes|reset|smoke>",
+    "Usage: node scripts/deploy.ts <deploy|refresh|enable-writes|disable-writes|reset|smoke|gateway>",
   );

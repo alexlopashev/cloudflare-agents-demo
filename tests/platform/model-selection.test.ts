@@ -12,6 +12,9 @@ describe("agent model selection", () => {
       get AI(): never {
         throw new Error("fake mode must not access Workers AI");
       },
+      get AI_GATEWAY_ID(): never {
+        throw new Error("fake mode must not access AI Gateway");
+      },
       MODEL_MODE: "fake" as const,
     };
 
@@ -26,13 +29,35 @@ describe("agent model selection", () => {
     const workersAI = vi.fn(() => liveModel);
 
     expect(
-      selectAgentModel({ AI: binding, MODEL_MODE: "workers-ai" }, { fake: vi.fn(), workersAI }),
+      selectAgentModel(
+        { AI: binding, AI_GATEWAY_ID: "regression-surgeon", MODEL_MODE: "workers-ai" },
+        { fake: vi.fn(), workersAI },
+      ),
     ).toBe(liveModel);
     expect(workersAI).toHaveBeenCalledWith(
       binding,
-      "@cf/zai-org/glm-4.7-flash",
+      "@cf/zai-org/glm-5.2",
       WORKERS_AI_MODEL_SETTINGS,
+      "regression-surgeon",
     );
+  });
+
+  it.each([
+    undefined,
+    "",
+    "   ",
+    "Invalid Gateway",
+  ])("fails closed before live inference for an invalid AI Gateway ID (%s)", (gatewayId) => {
+    expect(() =>
+      selectAgentModel(
+        {
+          AI: {},
+          ...(gatewayId === undefined ? {} : { AI_GATEWAY_ID: gatewayId }),
+          MODEL_MODE: "workers-ai",
+        },
+        { fake: vi.fn(), workersAI: vi.fn() },
+      ),
+    ).toThrow(/gateway/i);
   });
 
   it("fails closed for an unsupported model mode", () => {

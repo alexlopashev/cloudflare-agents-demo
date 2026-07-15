@@ -46,6 +46,7 @@ describe("Cloudflare configuration", () => {
       },
     ]);
     expect(config.vars).toEqual({
+      AI_GATEWAY_ID: "",
       DEPLOY_SMOKE_KEY: "",
       EVIDENCE_INCIDENT_ID: "configured-latency-regression",
       EVIDENCE_BASELINE_RELEASE_ID: "baseline-concurrent",
@@ -67,6 +68,7 @@ describe("Cloudflare configuration", () => {
 
     expect(config.ai).toEqual({ binding: "AI" });
     expect(config.vars).toEqual({
+      AI_GATEWAY_ID: "regression-surgeon",
       DEPLOY_SMOKE_KEY: "",
       EVIDENCE_INCIDENT_ID: "",
       EVIDENCE_BASELINE_RELEASE_ID: "",

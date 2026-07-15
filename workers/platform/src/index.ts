@@ -87,6 +87,7 @@ export class RegressionSurgeonAgent extends Think<PlatformEnvironment, Investiga
 
   private agentConfiguration(): AgentConfiguration {
     this.#agentConfiguration ??= composeAgentConfiguration({
+      aiGatewayId: this.env.AI_GATEWAY_ID,
       githubOwner: this.env.GITHUB_OWNER,
       githubRepo: this.env.GITHUB_REPO,
       ...(this.env.GITHUB_TOKEN === undefined ? {} : { githubToken: this.env.GITHUB_TOKEN }),

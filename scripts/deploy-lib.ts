@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { z } from "zod";
 
+import { AI_GATEWAY_ID, parseAiGatewayId } from "../packages/contracts/src/ai-gateway.ts";
 import { parseIncidentReference } from "../packages/contracts/src/incident.ts";
 import {
   configuredSourceEvidencePolicy,
@@ -18,6 +19,8 @@ import {
 const shaSchema = z.string().regex(/^[0-9a-f]{40}$/);
 const uuidSchema = z.string().uuid();
 const platformWorkerName = "regression-surgeon-platform";
+
+export { AI_GATEWAY_ID } from "../packages/contracts/src/ai-gateway.ts";
 
 export const runtimeAttributionRetryPolicy = Object.freeze({
   maxAttempts: 80,
@@ -266,6 +269,7 @@ export function buildPlatformDeploymentConfig(options: DeploymentConfigOptions) 
     version_metadata: { binding: "CF_VERSION_METADATA" },
     vars: {
       ...evidence,
+      AI_GATEWAY_ID,
       GIT_SHA: gitSha,
       GITHUB_OWNER: "alexlopashev",
       GITHUB_REPO: "cloudflare-agents-demo",
@@ -279,6 +283,77 @@ export function buildPlatformDeploymentConfig(options: DeploymentConfigOptions) 
     },
     observability: { enabled: true },
   } as const;
+}
+
+const accountIdSchema = z.string().regex(/^[a-f0-9]{32}$/);
+const aiGatewayEnvelopeSchema = z.object({
+  success: z.literal(true),
+  result: z.object({
+    id: z.literal(AI_GATEWAY_ID),
+    collect_logs: z.literal(true),
+  }),
+});
+
+export function parseCloudflareAccountId(output: string): string {
+  let value: unknown;
+  try {
+    value = JSON.parse(output) as unknown;
+  } catch {
+    throw new Error("Cloudflare account evidence is invalid.");
+  }
+  const parsed = z
+    .object({ accounts: z.array(z.object({ id: accountIdSchema }).passthrough()).length(1) })
+    .safeParse(value);
+  if (!parsed.success) throw new Error("One exact Cloudflare account is required.");
+  const account = parsed.data.accounts[0];
+  if (account === undefined) throw new Error("One exact Cloudflare account is required.");
+  return account.id;
+}
+
+export function parseCloudflareAiGatewayApiToken(value: string | undefined): string {
+  const parsed = z.string().trim().min(20).max(4096).safeParse(value);
+  if (!parsed.success) {
+    throw new Error(
+      "AI Gateway management requires CLOUDFLARE_API_TOKEN with AI Gateway Write permission.",
+    );
+  }
+  return parsed.data;
+}
+
+type CloudflareApiRequest = (input: string, init?: RequestInit) => Promise<Response>;
+
+export async function ensureCloudflareAiGateway(
+  request: CloudflareApiRequest,
+  accountId: string,
+): Promise<{ id: string }> {
+  const account = accountIdSchema.parse(accountId);
+  const gatewayId = parseAiGatewayId(AI_GATEWAY_ID);
+  const collection = `https://api.cloudflare.com/client/v4/accounts/${account}/ai-gateway/gateways`;
+  let response = await request(`${collection}/${gatewayId}`);
+  if (response.status === 404) {
+    response = await request(collection, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        id: gatewayId,
+        cache_invalidate_on_update: true,
+        cache_ttl: 0,
+        collect_logs: true,
+        rate_limiting_interval: 0,
+        rate_limiting_limit: 0,
+      }),
+    });
+  }
+  if (!response.ok) throw new Error(`AI Gateway verification returned HTTP ${response.status}.`);
+  let value: unknown;
+  try {
+    value = await response.json();
+  } catch {
+    throw new Error("AI Gateway verification returned invalid evidence.");
+  }
+  const parsed = aiGatewayEnvelopeSchema.safeParse(value);
+  if (!parsed.success) throw new Error("AI Gateway verification did not match the named gateway.");
+  return { id: parsed.data.result.id };
 }
 
 function parseVersionId(value: string): string {

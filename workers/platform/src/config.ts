@@ -1,11 +1,14 @@
 import { z } from "zod";
 
+import { parseAiGatewayId } from "../../../packages/contracts/src/ai-gateway";
+
 const gitShaSchema = z.string().regex(/^[0-9a-f]{40}$/, "Git SHA is invalid.");
 const repositoryNameSchema = z.string().regex(/^[A-Za-z0-9_.-]+$/);
 const versionIdSchema = z.string().min(1, "Worker version is required.").max(128);
 const modelModeSchema = z.enum(["fake", "workers-ai"]);
 
 export type ExternalConfigurationInput = {
+  aiGatewayId?: string | undefined;
   gitSha: string;
   githubOwner: string;
   githubRepo: string;
@@ -16,12 +19,14 @@ export type ExternalConfigurationInput = {
 };
 
 export type ExternalConfiguration = {
+  aiGatewayId?: string;
   github: AgentConfiguration["github"];
   modelMode: AgentConfiguration["modelMode"];
   runtime: RuntimeIdentity;
 };
 
 export type AgentConfiguration = {
+  aiGatewayId?: string;
   github: {
     owner: string;
     repo: string;
@@ -43,6 +48,7 @@ export function composeAgentConfiguration(
   const owner = repositoryNameSchema.parse(input.githubOwner);
   const repo = repositoryNameSchema.parse(input.githubRepo);
   const modelMode = modelModeSchema.parse(input.modelMode);
+  const aiGatewayId = modelMode === "workers-ai" ? parseAiGatewayId(input.aiGatewayId) : undefined;
   if (input.githubWriteEnabled !== "true" && input.githubWriteEnabled !== "false") {
     throw new TypeError("GitHub write posture is invalid.");
   }
@@ -53,6 +59,7 @@ export function composeAgentConfiguration(
     throw new TypeError("GitHub writes require an explicit non-empty scoped token.");
   }
   return {
+    ...(aiGatewayId === undefined ? {} : { aiGatewayId }),
     github: {
       owner,
       repo,

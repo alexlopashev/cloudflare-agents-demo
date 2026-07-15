@@ -18,6 +18,8 @@ import {
   deploymentVersionPropagationPolicy,
   deploymentSmokeFailureMessage,
   parseD1DatabaseId,
+  parseCloudflareAccountId,
+  parseCloudflareAiGatewayApiToken,
   parseDeploymentResult,
   parseUploadedVersionId,
   parseWriteDisabledInvestigatorVersion,
@@ -28,6 +30,8 @@ import {
   runWithFailClosedRollback,
   waitForDeploymentVersion,
   waitForDeploymentEvidenceReady,
+  ensureCloudflareAiGateway,
+  AI_GATEWAY_ID,
   type DeploymentStage,
 } from "../../scripts/deploy-lib.ts";
 
@@ -50,6 +54,7 @@ describe("Cloudflare deployment contract", () => {
     );
     expect(mise).toContain('run = "pnpm run deploy"');
     expect(mise).toContain('run = "pnpm run deploy:smoke"');
+    expect(mise).toContain('run = "pnpm run ai:gateway:ensure"');
     expect(mise).toContain(
       'run = "wrangler secret put GITHUB_TOKEN --name regression-surgeon-platform"',
     );
@@ -61,7 +66,10 @@ describe("Cloudflare deployment contract", () => {
     expect(deployScript).toContain('"--secrets-file"');
     expect(deployScript).not.toContain('"secret", "put"');
     expect(deployScript).not.toContain("gh auth token");
+    expect(deployScript).not.toContain('capture("wrangler", ["auth", "token"');
+    expect(deployScript).toContain("process.env.CLOUDFLARE_API_TOKEN");
     expect(deployScript).not.toContain("requestWithRetry");
+    expect(deployScript.match(/await ensureNamedAiGateway\(\)/g)).toHaveLength(3);
     expect(deployScript.match(/await requestDeploymentEndpointOnce/g)).toHaveLength(3);
     expect(deployScript).toMatch(/"versions",\s*"upload"/);
     expect(deployScript).toMatch(/"versions",\s*"deploy"/);
@@ -113,6 +121,7 @@ describe("Cloudflare deployment contract", () => {
 
     expect(baseline.d1_databases[0]?.database_id).toBe(databaseId);
     expect(baseline.vars).toMatchObject({
+      AI_GATEWAY_ID,
       GIT_SHA: "a".repeat(40),
       HEALTH_LOADING_MODE: "concurrent",
       MODEL_MODE: "workers-ai",
@@ -160,6 +169,7 @@ describe("Cloudflare deployment contract", () => {
     });
 
     expect(deployed.vars).toMatchObject({
+      AI_GATEWAY_ID,
       EVIDENCE_INCIDENT_ID: incidentId,
       EVIDENCE_BASELINE_RELEASE_ID: baselineVersionId,
       EVIDENCE_DEGRADED_RELEASE_ID: degradedVersionId,
@@ -173,6 +183,67 @@ describe("Cloudflare deployment contract", () => {
     expect(deployed.main).toBe(`${root}/workers/platform/src/index.ts`);
     expect(deployed.assets.directory).toBe(`${root}/apps/web/dist/client`);
     expect(deployed.d1_databases[0]?.migrations_dir).toBe(`${root}/migrations/telemetry`);
+  });
+
+  it("creates or verifies one explicit named AI Gateway", async () => {
+    const accountId = "0123456789abcdef0123456789abcdef";
+    expect(
+      parseCloudflareAccountId(
+        JSON.stringify({ accounts: [{ id: accountId, name: "Regression Surgeon" }] }),
+      ),
+    ).toBe(accountId);
+    expect(() => parseCloudflareAccountId(JSON.stringify({ accounts: [] }))).toThrow(/account/i);
+
+    const existingRequest = vi.fn(async (_input: string, _init?: RequestInit) =>
+      Response.json({ success: true, result: { id: AI_GATEWAY_ID, collect_logs: true } }),
+    );
+    await expect(ensureCloudflareAiGateway(existingRequest, accountId)).resolves.toEqual({
+      id: AI_GATEWAY_ID,
+    });
+    expect(existingRequest).toHaveBeenCalledOnce();
+    expect(existingRequest.mock.calls[0]?.[0]).toContain(
+      `/accounts/${accountId}/ai-gateway/gateways/${AI_GATEWAY_ID}`,
+    );
+
+    const responses = [
+      new Response(null, { status: 404 }),
+      Response.json({ success: true, result: { id: AI_GATEWAY_ID, collect_logs: true } }),
+    ];
+    const createRequest = vi.fn(
+      async (_input: string, _init?: RequestInit) =>
+        responses.shift() ?? new Response(null, { status: 500 }),
+    );
+    await expect(ensureCloudflareAiGateway(createRequest, accountId)).resolves.toEqual({
+      id: AI_GATEWAY_ID,
+    });
+    expect(createRequest).toHaveBeenCalledTimes(2);
+    expect(createRequest.mock.calls[1]?.[1]).toMatchObject({ method: "POST" });
+    expect(JSON.parse(String(createRequest.mock.calls[1]?.[1]?.body))).toMatchObject({
+      id: AI_GATEWAY_ID,
+      collect_logs: true,
+    });
+  });
+
+  it("requires a bounded dedicated API token for AI Gateway management", () => {
+    expect(parseCloudflareAiGatewayApiToken(` cf-token-${"a".repeat(32)} `)).toBe(
+      `cf-token-${"a".repeat(32)}`,
+    );
+    expect(() => parseCloudflareAiGatewayApiToken(undefined)).toThrow(/CLOUDFLARE_API_TOKEN/);
+    expect(() => parseCloudflareAiGatewayApiToken("   ")).toThrow(/CLOUDFLARE_API_TOKEN/);
+    expect(() => parseCloudflareAiGatewayApiToken("short")).toThrow(/CLOUDFLARE_API_TOKEN/);
+  });
+
+  it("fails closed for missing, malformed, or mismatched gateway evidence", async () => {
+    const accountId = "0123456789abcdef0123456789abcdef";
+    await expect(
+      ensureCloudflareAiGateway(
+        async () => Response.json({ success: true, result: { id: "other-gateway" } }),
+        accountId,
+      ),
+    ).rejects.toThrow(/gateway/i);
+    await expect(
+      ensureCloudflareAiGateway(async () => new Response(null, { status: 503 }), accountId),
+    ).rejects.toThrow(/503/);
   });
 
   it("enables writes only for an explicit investigator deployment", () => {

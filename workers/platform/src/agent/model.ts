@@ -4,6 +4,7 @@ import { MockLanguageModelV3 } from "ai/test";
 
 import { remediationFixture } from "../../../../packages/test-fixtures/src/remediation";
 import { regressionSource } from "../../../../packages/test-fixtures/src/scenario";
+import { parseAiGatewayId } from "../../../../packages/contracts/src/ai-gateway";
 import {
   createWorkersAiModel,
   WORKERS_AI_MODEL,
@@ -14,12 +15,18 @@ export { WORKERS_AI_MODEL, WORKERS_AI_MODEL_SETTINGS } from "./workers-ai-model"
 
 export interface ModelEnvironment<TBinding = Ai> {
   AI?: TBinding;
+  AI_GATEWAY_ID?: string;
   MODEL_MODE: string;
 }
 
 export interface ModelFactories<T, TBinding = Ai> {
   fake(): T;
-  workersAI(binding: TBinding, modelId: string, settings: typeof WORKERS_AI_MODEL_SETTINGS): T;
+  workersAI(
+    binding: TBinding,
+    modelId: string,
+    settings: typeof WORKERS_AI_MODEL_SETTINGS,
+    gatewayId: string,
+  ): T;
 }
 
 export function selectAgentModel<T, TBinding>(
@@ -30,7 +37,13 @@ export function selectAgentModel<T, TBinding>(
 
   if (environment.MODEL_MODE === "workers-ai") {
     if (!environment.AI) throw new Error("Workers AI mode requires the AI binding.");
-    return factories.workersAI(environment.AI, WORKERS_AI_MODEL, WORKERS_AI_MODEL_SETTINGS);
+    const gatewayId = parseAiGatewayId(environment.AI_GATEWAY_ID);
+    return factories.workersAI(
+      environment.AI,
+      WORKERS_AI_MODEL,
+      WORKERS_AI_MODEL_SETTINGS,
+      gatewayId,
+    );
   }
 
   throw new Error(`Unsupported model mode: ${environment.MODEL_MODE}`);
@@ -359,6 +372,7 @@ has been performed.`,
 export function createAgentModel(environment: ModelEnvironment): LanguageModel {
   return selectAgentModel(environment, {
     fake: createDeterministicModel,
-    workersAI: createWorkersAiModel,
+    workersAI: (binding, modelId, settings, gatewayId) =>
+      createWorkersAiModel(binding, gatewayId, modelId, settings),
   });
 }
