@@ -109,10 +109,10 @@ Run `mise run deploy:smoke` from the worktree that last deployed the stack. Its 
 
 ## Alignment evidence
 
-- `README.md`, `IMPLEMENTATION_PLAN.md`, and the wiki identify this document as historical evidence
-  and point to v1.2 for the current completion contract.
-- The v1 milestone is closed. The v1.1 milestone remains open only for carried public verification
-  in issue #27; issue #30 is an unmilestoned optional operator extension.
-- The v1.2 milestone and native dependency graph are the executable review-readiness roadmap.
+- `README.md`, `IMPLEMENTATION_PLAN.md`, and the wiki identify this as the dated evidence for the
+  delivered v1.2 completion contract.
+- The v1, v1.1, and v1.2 milestones are closed. Issue #30 remains an unmilestoned optional operator
+  extension.
+- All v1.2 delivery issues and their native dependency graph are complete.
 - `AGENTS.md` and the alignment skill remain the authoritative delivery workflow.
 - The repository-local alignment skill validates successfully.
