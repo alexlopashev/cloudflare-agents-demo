@@ -511,4 +511,28 @@ describe("RepositoryConnector", () => {
       code: "limit-exceeded",
     });
   });
+
+  it("applies the patch byte limit only to allowlisted evidence", async () => {
+    const connector = createConnector({
+      limits: { maxPatchBytes: 32 },
+      api: {
+        getCommit: vi.fn(async () =>
+          commitPayload({
+            files: [
+              commitPayload().files[0],
+              {
+                ...commitPayload().files[0],
+                filename: "README.md",
+                patch: "x".repeat(4_000),
+              },
+            ],
+          }),
+        ),
+      },
+    }).connector;
+
+    await expect(connector.inspectRelease("release-bad")).resolves.toMatchObject({
+      commit: { changes: [{ path: "apps/web/src/services.ts" }] },
+    });
+  });
 });
