@@ -14,7 +14,7 @@ import type { InvestigationAgentState } from "../../../../workers/platform/src";
 
 import { ApprovalPanel, buildApprovalRequests } from "./ApprovalPanel";
 import { messageText } from "./messages";
-import { resolveInvestigatorSession } from "./session";
+import { clearInvestigatorSession, resolveInvestigatorSession } from "./session";
 import { buildToolTimeline, ToolTimeline } from "./ToolTimeline";
 
 const InvestigatorMessage = lazy(() => import("./InvestigatorMessage"));
@@ -23,6 +23,7 @@ type InvestigatorWidgetChromeProps = {
   isOpen: boolean;
   unreadCount: number;
   status: string;
+  onClear: () => void;
   onToggle: () => void;
   closeButtonRef?: Ref<HTMLButtonElement>;
   dialogRef?: Ref<HTMLElement>;
@@ -40,10 +41,22 @@ export function canSubmitInvestigatorRequest(status: string): boolean {
   return status === "ready" || status === "error";
 }
 
+export function nextUnreadInvestigatorCount(input: {
+  isOpen: boolean;
+  unreadCount: number;
+  previousAssistantMessageCount: number;
+  assistantMessageCount: number;
+}): number {
+  if (input.isOpen) return 0;
+  const added = Math.max(0, input.assistantMessageCount - input.previousAssistantMessageCount);
+  return input.unreadCount + added;
+}
+
 export function InvestigatorWidgetChrome({
   isOpen,
   unreadCount,
   status,
+  onClear,
   onToggle,
   closeButtonRef,
   dialogRef,
@@ -72,14 +85,24 @@ export function InvestigatorWidgetChrome({
               {widgetStatus(status)}
             </p>
           </div>
-          <button
-            aria-label="Collapse investigator"
-            onClick={onToggle}
-            ref={closeButtonRef}
-            type="button"
-          >
-            <span aria-hidden="true">−</span>
-          </button>
+          <div className="support-dialog-actions">
+            <button
+              className="clear-chat-button"
+              disabled={!canSubmitInvestigatorRequest(status)}
+              onClick={onClear}
+              type="button"
+            >
+              Clear chat
+            </button>
+            <button
+              aria-label="Collapse investigator"
+              onClick={onToggle}
+              ref={closeButtonRef}
+              type="button"
+            >
+              <span aria-hidden="true">−</span>
+            </button>
+          </div>
         </header>
         {children}
       </section>
@@ -96,11 +119,6 @@ export function InvestigatorWidgetChrome({
           <path d="M5 4.5h14a2.5 2.5 0 0 1 2.5 2.5v8a2.5 2.5 0 0 1-2.5 2.5h-7l-4.8 3.2.8-3.2H5A2.5 2.5 0 0 1 2.5 15V7A2.5 2.5 0 0 1 5 4.5Z" />
           <path d="M7.5 9h9M7.5 13h6" />
         </svg>
-        <span
-          aria-label={status === "ready" ? "Investigator available" : "Investigator active"}
-          className="availability-badge"
-          role="status"
-        />
         {boundedUnreadCount > 0 && (
           <span aria-label={unreadLabel} className="notification-badge" role="status">
             {boundedUnreadCount > 9 ? "9+" : boundedUnreadCount}
@@ -173,10 +191,16 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
   const wasOpen = useRef(false);
 
   useEffect(() => {
-    const added = Math.max(0, assistantMessageCount - previousAssistantMessageCount.current);
+    const previousCount = previousAssistantMessageCount.current;
     previousAssistantMessageCount.current = assistantMessageCount;
-    if (isOpen) setUnreadCount(0);
-    else if (added > 0) setUnreadCount((count) => count + added);
+    setUnreadCount((count) =>
+      nextUnreadInvestigatorCount({
+        isOpen,
+        unreadCount: count,
+        previousAssistantMessageCount: previousCount,
+        assistantMessageCount,
+      }),
+    );
   }, [assistantMessageCount, isOpen]);
 
   useEffect(() => {
@@ -220,9 +244,16 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
     });
   }
 
+  function clearChat() {
+    if (!canSubmitInvestigatorRequest(status)) return;
+    clearInvestigatorSession(window.localStorage);
+    window.location.reload();
+  }
+
   return (
     <InvestigatorWidgetChrome
       isOpen={isOpen}
+      onClear={clearChat}
       onToggle={toggle}
       closeButtonRef={closeButtonRef}
       dialogRef={dialogRef}

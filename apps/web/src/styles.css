@@ -345,6 +345,22 @@ h1 {
   line-height: 1;
   cursor: pointer;
 }
+.support-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.support-dialog-header .clear-chat-button {
+  width: auto;
+  padding: 0 13px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+.support-dialog-header .clear-chat-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .support-status {
   display: flex;
   align-items: center;
@@ -392,18 +408,10 @@ h1 {
   stroke-linejoin: round;
   stroke-width: 1.8;
 }
-.availability-badge,
 .notification-badge {
   position: absolute;
   border: 3px solid #f3f0e9;
   border-radius: 999px;
-}
-.availability-badge {
-  right: 2px;
-  bottom: 3px;
-  width: 15px;
-  height: 15px;
-  background: #55ca85;
 }
 .notification-badge {
   top: -7px;

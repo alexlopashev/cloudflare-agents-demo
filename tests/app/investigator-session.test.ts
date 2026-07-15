@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveInvestigatorSession } from "../../apps/web/src/investigator/session.ts";
+import {
+  clearInvestigatorSession,
+  resolveInvestigatorSession,
+} from "../../apps/web/src/investigator/session.ts";
 
 describe("public investigator session", () => {
   it("reuses one valid browser-local durable session", () => {
@@ -40,5 +43,17 @@ describe("public investigator session", () => {
     );
 
     expect(session).toBe("browser-new-session");
+  });
+
+  it("clears only the persisted investigator session", () => {
+    const storage = new Map([
+      ["regression-surgeon-session", "browser-abc123"],
+      ["unrelated-preference", "preserved"],
+    ]);
+
+    clearInvestigatorSession({ removeItem: (key) => storage.delete(key) });
+
+    expect(storage.get("regression-surgeon-session")).toBeUndefined();
+    expect(storage.get("unrelated-preference")).toBe("preserved");
   });
 });
