@@ -385,6 +385,36 @@ export function recordEvidenceResult(
   };
 }
 
+export function reconcileEvidenceResults(
+  receipt: EvidenceReceipt,
+  results: readonly EvidenceToolResult[],
+): EvidenceReceipt {
+  let current = receipt;
+  let deferred = [...results];
+  while (deferred.length > 0) {
+    const remaining: EvidenceToolResult[] = [];
+    let recorded = false;
+    for (const result of deferred) {
+      if (result.toolName !== nextEvidenceTool(current)) {
+        remaining.push(result);
+        continue;
+      }
+      const updated = recordEvidenceResult(current, result);
+      recorded ||= updated !== current;
+      current = updated;
+    }
+    if (remaining.length === 0) return current;
+    if (!recorded) {
+      return remaining.reduce(
+        (currentReceipt, result) => recordEvidenceResult(currentReceipt, result),
+        current,
+      );
+    }
+    deferred = remaining;
+  }
+  return current;
+}
+
 export function nextEvidenceTool(receipt: EvidenceReceipt): EvidenceToolName | undefined {
   const phase = receipt.phases.find((candidate) => candidate.status !== "complete");
   return phase !== undefined && phase.attempts.length < 2 ? phase.toolName : undefined;
