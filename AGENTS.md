@@ -148,6 +148,8 @@ Do not assert exact natural-language output from a live model. Assert structured
 - Declining consent performs no associated mutation.
 - TTY settings are restored on every exit path.
 - Bootstrap and teardown are idempotent.
+- Bootstrap fixes mise discovery to the repository configuration and its parent ceiling, installs
+  only the explicit locked repository tool set, and leaves tracked lockfiles unchanged.
 - Teardown removes only project-owned resources.
 - Bootstrap never starts Colima, spawns a replacement login shell, or changes the active Docker
   context.

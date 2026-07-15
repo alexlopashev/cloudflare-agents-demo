@@ -236,12 +236,15 @@ test("plain sh activation uses repository shims without an unsupported mise hook
     "sh",
     [
       "-c",
-      `./scripts/activate sh -c 'printf "%s|%s" "$REGRESSION_SURGEON_MISE_ACTIVE" "$(command -v node)"'`,
+      `./scripts/activate sh -c 'printf "%s|%s|%s|%s" "$REGRESSION_SURGEON_MISE_ACTIVE" "$(command -v node)" "$MISE_CONFIG_FILE" "$MISE_CEILING_PATHS"'`,
     ],
     { cwd: root, encoding: "utf8", env: cleanEnvironment() },
   );
 
-  assert.equal(output, `project|${realpathSync(nodeShim)}`);
+  assert.equal(
+    output,
+    `project|${realpathSync(nodeShim)}|${realpathSync(root)}/mise.toml|${dirname(realpathSync(root))}`,
+  );
   assert.equal(existsSync(log), false);
 
   const nestedPath = execFileSync(
@@ -322,6 +325,8 @@ test("approved bootstrap delegates every pinned setup step through repository-lo
     miseBin,
     [
       "#!/bin/sh",
+      'printf \'config=%s\\n\' "$MISE_CONFIG_FILE" >>"$REGRESSION_SURGEON_TEST_LOG"',
+      'printf \'ceiling=%s\\n\' "$MISE_CEILING_PATHS" >>"$REGRESSION_SURGEON_TEST_LOG"',
       'printf \'ignored=%s\\n\' "$MISE_IGNORED_CONFIG_PATHS" >>"$REGRESSION_SURGEON_TEST_LOG"',
       'printf \'%s\\n\' "$*" >>"$REGRESSION_SURGEON_TEST_LOG"',
     ].join("\n"),
@@ -338,9 +343,17 @@ test("approved bootstrap delegates every pinned setup step through repository-lo
 
   const calls = readFileSync(log, "utf8");
   assert.equal(existsSync(join(root, ".local/mise-global.toml")), true);
+  assert.match(
+    calls,
+    new RegExp(`config=${realpathSync(root).replaceAll("/", "\\/")}\\/mise\\.toml`),
+  );
+  assert.match(calls, new RegExp(`ceiling=${dirname(realpathSync(root)).replaceAll("/", "\\/")}`));
   assert.match(calls, /ignored=.*\.config\/mise\/config\.toml/);
   assert.match(calls, /trust .*mise\.toml/);
-  assert.match(calls, /^install$/m);
+  assert.match(
+    calls,
+    /^install --locked node wrangler gh shellcheck shfmt actionlint github:nushell\/nushell colima docker-cli docker-compose$/m,
+  );
   assert.match(calls, /exec node -- corepack prepare pnpm@10\.34\.5 --activate/);
   assert.match(calls, /exec node -- corepack enable pnpm/);
   assert.match(calls, /exec -- pnpm install --frozen-lockfile/);
