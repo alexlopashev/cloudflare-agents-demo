@@ -163,6 +163,9 @@ test("CI covers both Linux architectures without macOS runners", () => {
   assert.doesNotMatch(workflow, /macos-/);
   assert.match(workflow, /actions\/checkout@v7/);
   assert.match(workflow, /jdx\/mise-action@v4/);
+  assert.match(workflow, /s\|http:\/\/\|https:\/\/\|g/);
+  assert.match(workflow, /Acquire::Retries=3/);
+  assert.match(workflow, /Acquire::ForceIPv4=true/);
   assert.match(workflow, /mise exec node -- pnpm install --frozen-lockfile/);
 });
 
