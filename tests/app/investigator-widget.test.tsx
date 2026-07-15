@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildInvestigatorChatOptions,
   canSubmitInvestigatorRequest,
   configuredInvestigationPrompt,
   InvestigationStarter,
@@ -11,6 +12,45 @@ import {
 } from "../../apps/web/src/investigator/InvestigatorWidget";
 
 describe("investigator support widget", () => {
+  it("resumes the guarded tool turn only after the approval response is complete", () => {
+    const chatOptions = buildInvestigatorChatOptions({ name: "investigator-agent" });
+    const approvalPart = {
+      type: "tool-create_draft_pr" as const,
+      toolCallId: "tool-1",
+      input: { proposalFingerprint: "proposal-v1-0123456789abcdef" },
+      approval: { id: "approval-1" },
+    };
+
+    expect(
+      chatOptions.sendAutomaticallyWhen({
+        messages: [
+          {
+            id: "assistant-1",
+            role: "assistant",
+            parts: [{ ...approvalPart, state: "approval-requested" as const }],
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      chatOptions.sendAutomaticallyWhen({
+        messages: [
+          {
+            id: "assistant-1",
+            role: "assistant",
+            parts: [
+              {
+                ...approvalPart,
+                state: "approval-responded" as const,
+                approval: { id: "approval-1", approved: true },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe(true);
+  });
+
   it("allows an explicit retry after failure without overlapping an active turn", () => {
     expect(canSubmitInvestigatorRequest("ready")).toBe(true);
     expect(canSubmitInvestigatorRequest("error")).toBe(true);
