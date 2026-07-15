@@ -109,12 +109,12 @@ describe("remediation approval panel", () => {
     expect(markup).toContain("Reject");
   });
 
-  it("dispatches one decision only after showing immediate guarded-action feedback", () => {
+  it("dispatches one decision only after showing immediate guarded-action feedback", async () => {
     const request = buildApprovalRequests(messages, preparedRemediation)[0];
     if (request === undefined) throw new Error("Expected approval request fixture.");
     const events: string[] = [];
 
-    startApprovalDecision({
+    await startApprovalDecision({
       approved: true,
       dispatch: ({ id, approved }) => events.push(`dispatch:${id}:${approved}`),
       request,
@@ -122,6 +122,23 @@ describe("remediation approval panel", () => {
     });
 
     expect(events).toEqual(["ui:submitting:true", "dispatch:approval-1:true"]);
+  });
+
+  it("shows a retryable failure when asynchronous approval submission is rejected", async () => {
+    const request = buildApprovalRequests(messages, preparedRemediation)[0];
+    if (request === undefined) throw new Error("Expected approval request fixture.");
+    const states: string[] = [];
+
+    await startApprovalDecision({
+      approved: true,
+      dispatch: async () => {
+        throw new Error("connection closed");
+      },
+      request,
+      update: (decision) => states.push(decision.state),
+    });
+
+    expect(states).toEqual(["submitting", "failed"]);
   });
 
   it("projects rejected, preview, and created outcomes without fabricating writes", () => {

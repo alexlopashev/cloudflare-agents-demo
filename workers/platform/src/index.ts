@@ -23,6 +23,7 @@ import {
 import { configuredComparisonWindowMs, configuredSlowTraceLimit } from "./agent/evidence-policy";
 import {
   evidenceInvestigationRequested,
+  evidenceInvestigationStartedByLatestMessage,
   messagesForCurrentInvestigation,
   remediationPreviewRequested,
 } from "./agent/evidence-step-policy";
@@ -303,7 +304,7 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
         throw new Error(publicUsageDenialMessage(decision, "Public investigator"));
       }
     }
-    if (!context.continuation && evidenceInvestigationRequested(messages)) {
+    if (!context.continuation && evidenceInvestigationStartedByLatestMessage(messages)) {
       this.startConfiguredInvestigation();
     }
     const remediationEligible =

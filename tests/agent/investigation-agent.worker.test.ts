@@ -980,6 +980,88 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     expect(result.preparedTraceId).toMatch(/^regression-sequential-trace-/);
   });
 
+  it("preserves the complete receipt when browser approval resubmits the existing transcript", async () => {
+    await seedRegressionEvidence();
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("browser-approval-transcript");
+
+    const result = await runInDurableObject<
+      RegressionSurgeonAgent,
+      {
+        afterFingerprint: string | undefined;
+        afterInvestigationId: string | undefined;
+        actionStatus: string;
+        beforeFingerprint: string;
+        beforeInvestigationId: string;
+      }
+    >(stub, async (instance) => {
+      await instance.onStart();
+      await instance.runTurn({
+        input:
+          "Investigate the seeded latency regression and prepare the guarded remediation preview.",
+      });
+      if (
+        instance.state.status !== "investigating" ||
+        instance.state.preparedRemediation === undefined
+      ) {
+        throw new Error("Expected a receipt-prepared remediation.");
+      }
+      const beforeInvestigationId = instance.state.investigationId;
+      const beforeFingerprint = instance.state.preparedRemediation.fingerprint;
+
+      await instance.beforeTurn({
+        continuation: false,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Investigate the seeded latency regression and prepare the guarded remediation preview.",
+              },
+            ],
+          },
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "tool-call",
+                toolName: "create_draft_pr",
+                toolCallId: "draft-1",
+                input: { proposalFingerprint: beforeFingerprint },
+              },
+            ],
+          },
+        ],
+      } as never);
+
+      const action = instance.getActions().create_draft_pr;
+      if (action === undefined) throw new Error("Expected the receipt-gated action.");
+      const actionResult = await action.config.execute(
+        { proposalFingerprint: beforeFingerprint },
+        {} as never,
+      );
+
+      return {
+        afterFingerprint:
+          instance.state.status === "investigating"
+            ? instance.state.preparedRemediation?.fingerprint
+            : undefined,
+        afterInvestigationId:
+          instance.state.status === "investigating" ? instance.state.investigationId : undefined,
+        actionStatus:
+          typeof actionResult === "object" && actionResult !== null
+            ? String(Reflect.get(actionResult, "status"))
+            : "invalid",
+        beforeFingerprint,
+        beforeInvestigationId,
+      };
+    });
+
+    expect(result.afterInvestigationId).toBe(result.beforeInvestigationId);
+    expect(result.afterFingerprint).toBe(result.beforeFingerprint);
+    expect(result.actionStatus).toBe("preview");
+  });
+
   it("replays reconnect and deduplicates an approval resend", async () => {
     await seedRegressionEvidence();
     Reflect.set(env, "CF_VERSION_METADATA", {
