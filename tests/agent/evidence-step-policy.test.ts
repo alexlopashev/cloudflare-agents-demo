@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   evidenceInvestigationRequested,
+  evidenceInvestigationStartedByLatestMessage,
   messagesForCurrentInvestigation,
   remediationPreviewRequested,
 } from "../../workers/platform/src/agent/evidence-step-policy";
@@ -29,6 +30,41 @@ describe("Project Think investigation intent", () => {
     ];
 
     expect(messagesForCurrentInvestigation(messages)).toEqual(messages.slice(2));
+  });
+
+  it("does not mistake an approval follow-up transcript for a new investigation", () => {
+    const investigation = {
+      role: "user",
+      content: [{ type: "text", text: "Investigate the latency regression" }],
+    };
+
+    expect(evidenceInvestigationStartedByLatestMessage([investigation])).toBe(true);
+    expect(
+      evidenceInvestigationStartedByLatestMessage([
+        investigation,
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "tool-call",
+              toolName: "create_draft_pr",
+              toolCallId: "draft-1",
+              input: { proposalFingerprint: "proposal-v1-0123456789abcdef" },
+            },
+          ],
+        },
+      ]),
+    ).toBe(false);
+    expect(
+      evidenceInvestigationStartedByLatestMessage([
+        investigation,
+        { role: "assistant", content: [{ type: "text", text: "Completed." }] },
+        {
+          role: "user",
+          content: [{ type: "text", text: "Investigate the regression again" }],
+        },
+      ]),
+    ).toBe(true);
   });
 
   it("recognizes only the explicit guarded-preview request", () => {

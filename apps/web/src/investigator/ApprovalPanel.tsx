@@ -304,12 +304,12 @@ export function buildApprovalOutcome(
   };
 }
 
-export function startApprovalDecision(input: {
+export async function startApprovalDecision(input: {
   approved: boolean;
-  dispatch(args: { id: string; approved: boolean }): void;
+  dispatch(args: { id: string; approved: boolean }): void | PromiseLike<void>;
   request: ApprovalRequest;
   update(decision: ApprovalDecision): void;
-}) {
+}): Promise<void> {
   const decision: ApprovalDecision = {
     approved: input.approved,
     request: input.request,
@@ -317,7 +317,7 @@ export function startApprovalDecision(input: {
   };
   input.update(decision);
   try {
-    input.dispatch({ id: input.request.approvalId, approved: input.approved });
+    await input.dispatch({ id: input.request.approvalId, approved: input.approved });
   } catch {
     input.update({ ...decision, state: "failed" });
   }
