@@ -160,7 +160,9 @@ mise run deploy:writes:enable
 A browser action still requires explicit human approval. The server accepts only the persisted
 proposal fingerprint, resolves the exact prepared diff, and enforces repository, path, base SHA,
 blob SHA, file, byte, line, changed-line, branch-idempotency, and stale-base gates. It has no merge
-capability. Failed enablement automatically restores and verifies the write-disabled posture.
+capability. The review keeps the evidence-backed work log visible, collapses the exact bounded diff
+until requested, and reports rejection, preview, or the created/reused draft PR directly in chat.
+Failed enablement automatically restores and verifies the write-disabled posture.
 
 Immediately afterward:
 

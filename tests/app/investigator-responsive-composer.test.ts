@@ -30,15 +30,15 @@ describe("investigator mobile composer", () => {
     expect(mobileStyles).toMatch(/\.support-dialog\s*{[^}]*width:\s*100%;[^}]*height:\s*100dvh;/s);
   });
 
-  it("reserves visible review space while a remediation approval is pending", () => {
+  it("reserves review space while keeping the investigator chat visible", () => {
     expect(styles).toMatch(
       /\.chat-panel:has\(\.approval-panel\) \.approval-panel\s*{[^}]*min-height:\s*220px;/s,
     );
-    expect(styles).toMatch(
+    expect(styles).not.toMatch(
       /\.chat-panel:has\(\.approval-panel\) \.messages\s*{[^}]*display:\s*none;/s,
     );
     expect(styles).toMatch(
-      /\.chat-panel:has\(\.approval-panel\) \.tool-timeline\s*{[^}]*max-height:\s*150px;[^}]*overflow:\s*auto;/s,
+      /\.chat-panel:has\(\.approval-panel\) \.tool-timeline\s*{[^}]*display:\s*none;/s,
     );
   });
 });
