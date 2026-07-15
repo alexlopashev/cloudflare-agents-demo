@@ -148,8 +148,10 @@ The current no-login demo is
 Authenticate once with `mise run auth:cloudflare`. Gateway management additionally requires an
 ephemeral `CLOUDFLARE_API_TOKEN` with **AI Gateway Write** permission in the current process;
 Wrangler's OAuth token is not accepted by that API. Never put this token in chat, a command argument,
-an environment file, or repository state. `mise run ai:gateway:ensure`, normal deploy, and refresh
-all fail closed without it and create or verify only the exact named gateway. Then run
+an environment file, or repository state. Deployment keeps the token only in the direct Gateway API
+client and removes it from every child-process environment, so Wrangler continues to use its OAuth
+session. `mise run ai:gateway:ensure`, normal deploy, and refresh all fail closed without the token
+and create or verify only the exact named gateway. Then run
 `mise run deploy`. The task reuses or creates only the named D1 database, builds both Workers and the
 web app, applies remote migrations,
 uploads a concurrent baseline and sequential regression behind the current write-disabled
@@ -169,6 +171,10 @@ non-success response stops the deployment with the failing stage and sample iden
 automation never replays an endpoint that may already have recorded telemetry or another effect.
 Each interaction identifier includes its immutable Worker version, so a later deployment cannot
 collide with or rewrite historical evidence for the same sample ordinal.
+
+The configured GLM 5.2 model requires a Workers Paid plan. On a Workers Free account, the named
+Gateway still records the routed attempt, but Workers AI rejects inference before consuming tokens;
+see Cloudflare's [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
 Before either measured sequence begins, deployment keeps the validated write-disabled investigator
 at 100% traffic, adds the measured version to the active deployment at 0%, and polls a
 side-effect-free readiness route with Cloudflare's exact-version override until that version answers
