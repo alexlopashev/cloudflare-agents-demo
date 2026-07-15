@@ -43,6 +43,9 @@ and quality gates.
 - Linux ARM64 and x64
 - sh, Bash, Zsh, Fish, and Nu
 
+Hosted CI runs the complete gate on Linux ARM64 and x64. macOS remains a supported local environment
+and is verified through developer and dated clean-room evidence rather than hosted CI.
+
 Bootstrap is repository-local and shell-neutral. It never edits a shell profile, installs tools into
 a system path, or inherits tools from a user's global mise configuration. It fixes mise discovery to
 this project's configuration and installs only the explicitly named locked tool set, so a successful

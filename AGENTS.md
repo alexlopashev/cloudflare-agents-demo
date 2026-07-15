@@ -152,6 +152,8 @@ Do not assert exact natural-language output from a live model. Assert structured
 
 - Supported hosts are macOS and Linux on ARM64 and x64.
 - Supported shells are sh, Bash, Zsh, Fish, and Nu.
+- Hosted CI runs the complete gate on Linux ARM64 and x64 only. macOS support remains a local and
+  clean-room verification obligation; do not describe the Linux-only matrix as proof of macOS.
 - Bootstrap, activation, and teardown use one executable POSIX implementation each; do not add
   shell-specific Fish or Nu lifecycle adapters.
 - Bootstrap affects only its process and repository-local files. Activation confines environment

@@ -17,16 +17,18 @@ The final fresh run proved:
 - both local D1 migrations, deterministic fixtures, the complete aggregate check, build, and E2E
   passed;
 - 27 foundation checks passed; the only host skip was the documented Fish contract because Fish was
-  absent locally, while the four required CI lanes run that shell contract;
+  absent locally, while the four release-time CI lanes ran that shell contract;
 - 250 ordinary tests and 31 Worker integration tests passed;
 - the controlled regression measured p75 130 ms versus 378 ms through the real service binding;
 - Project Think completed the five exact receipt-backed evidence phases and produced the required
   structured report; and
 - the guarded one-file remediation preview completed with zero GitHub writes.
 
-The four required GitHub Actions lanes remain the cross-platform proof for macOS and Linux on ARM64
-and x64. The repository description, homepage, topics, milestone, native blockers, README, plan,
-instructions, wiki, and repository-local alignment skill were also assessed.
+At release time, four GitHub Actions lanes supplied cross-platform proof for macOS and Linux on ARM64
+and x64. Post-review hosted CI now runs only the two Linux architectures; macOS remains supported and
+retains this dated clean-room and release-time evidence. The repository description, homepage,
+topics, milestone, native blockers, README, plan, instructions, wiki, and repository-local alignment
+skill were also assessed.
 
 The public reviewer proof is credential-free. The rendered Atlas journey on merged `main` completed
 all five phases, identified commit `d591869a8ef995f1835ef80152f4de085b10255b` and PR #19, read the
@@ -61,6 +63,10 @@ by #56.
 The same run exposed that the Gateway management token could otherwise override Wrangler's OAuth
 authentication in deployment child processes. A test-first fix now strips that token from every
 subprocess environment while retaining it only for the bounded direct Gateway API client.
+
+Post-review CI now runs the complete repository gate on `ubuntu-24.04` and `ubuntu-24.04-arm` only.
+The macOS ARM64 and x64 hosted runners were removed to reduce redundant CI usage; macOS remains a
+supported local host, with its historical release proof retained above.
 
 ## Historical v1 and v1.1 evidence
 
