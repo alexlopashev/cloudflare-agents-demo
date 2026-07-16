@@ -11,6 +11,10 @@ const cleanupMigrationPath = new URL(
   "../../migrations/telemetry/0006_remove_platform_metadata.sql",
   import.meta.url,
 );
+const httpSessionMigrationPath = new URL(
+  "../../migrations/telemetry/0007_http_chat_sessions.sql",
+  import.meta.url,
+);
 
 describe("telemetry migration", () => {
   it("defines normalized release, interaction, trace, and span evidence", async () => {
@@ -49,5 +53,14 @@ describe("telemetry migration", () => {
     const sql = await readFile(cleanupMigrationPath, "utf8");
 
     expect(sql.trim()).toBe("DROP TABLE IF EXISTS platform_metadata;");
+  });
+
+  it("registers bounded HTTP chat session summaries without copying Durable Object messages", async () => {
+    const sql = await readFile(httpSessionMigrationPath, "utf8");
+
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS http_chat_sessions");
+    expect(sql).toContain("message_count INTEGER NOT NULL");
+    expect(sql).toContain("idx_http_chat_sessions_updated");
+    expect(sql).not.toContain("message_content");
   });
 });

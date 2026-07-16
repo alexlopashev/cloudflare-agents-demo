@@ -32,6 +32,7 @@ import { createRemediationAction } from "./agent/remediation-action";
 import { createInvestigationTools } from "./agent/tools";
 import { composeAgentConfiguration, type AgentConfiguration } from "./config";
 import { createHealthRemediationProposal } from "./remediation/health-proposal";
+import { normalizeHttpSessionMessage } from "./http/sessions";
 import {
   remediationChangeCounts,
   remediationProposalFingerprint,
@@ -422,6 +423,18 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
       toolTypes,
       report,
     };
+  }
+
+  async runHttpSessionTurn(input: string) {
+    const message = normalizeHttpSessionMessage(input);
+    await this.onStart();
+    await this.runTurn({ input: message });
+    return { messages: await this.getMessages() };
+  }
+
+  async getHttpSessionTranscript() {
+    await this.onStart();
+    return { messages: await this.getMessages() };
   }
 
   async runLocalEvidenceReadiness(): Promise<void> {

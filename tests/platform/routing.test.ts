@@ -53,6 +53,43 @@ function createBindings() {
 }
 
 describe("platform routing", () => {
+  it("exposes the bounded HTTP-created session collection", async () => {
+    const { bindings } = createBindings();
+    const all = vi.fn(async () => ({
+      results: [
+        {
+          session_id: "http-session-123456",
+          created_at_ms: 1_000,
+          updated_at_ms: 1_100,
+          message_count: 2,
+        },
+      ],
+    }));
+    const bind = vi.fn(() => ({ all }));
+    bindings.TELEMETRY_DB = {
+      prepare: vi.fn(() => ({ bind })),
+    } as unknown as D1Database;
+
+    const response = await handlePlatformRequest(
+      new Request("https://example.test/api/sessions?limit=10"),
+      bindings,
+      async () => null,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      sessions: [
+        {
+          id: "http-session-123456",
+          createdAtMs: 1_000,
+          updatedAtMs: 1_100,
+          messageCount: 2,
+        },
+      ],
+    });
+    expect(bind).toHaveBeenCalledExactlyOnceWith(10);
+  });
+
   it("gates exact D1 evidence readiness through the isolated smoke agent session", async () => {
     const { bindings } = createBindings();
     const runLocalEvidenceReadiness = vi.fn(async () => undefined);

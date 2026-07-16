@@ -91,6 +91,36 @@ describe("RegressionSurgeonAgent persistence", () => {
     expect(afterEviction).toEqual([message]);
   });
 
+  it("returns the complete persisted transcript through the HTTP session RPC boundary", async () => {
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("http-session-transcript");
+    const message = {
+      id: "http-message-1",
+      role: "user" as const,
+      parts: [{ type: "text" as const, text: "What happened?" }],
+    };
+
+    const transcript = await runInDurableObject<
+      RegressionSurgeonAgent,
+      Awaited<ReturnType<RegressionSurgeonAgent["getHttpSessionTranscript"]>>
+    >(stub, async (instance) => {
+      await instance.onStart();
+      await instance.addMessages([message]);
+      return instance.getHttpSessionTranscript();
+    });
+
+    expect(transcript).toEqual({ messages: [message] });
+  });
+
+  it("rejects an invalid programmatic HTTP turn before model admission", async () => {
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("http-session-invalid-turn");
+
+    await expect(
+      runInDurableObject<RegressionSurgeonAgent, unknown>(stub, async (instance) =>
+        instance.runHttpSessionTurn("   "),
+      ),
+    ).rejects.toThrow("HTTP session message is invalid");
+  });
+
   it("selects the deterministic model inside workerd without an AI binding", async () => {
     const id = env.REGRESSION_SURGEON_AGENT.idFromName("model-contract");
     const stub = env.REGRESSION_SURGEON_AGENT.get(id);
