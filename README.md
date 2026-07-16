@@ -2,8 +2,8 @@
 
 Regression Surgeon is a Cloudflare-native agent that traces a measured UX latency regression from
 release telemetry to an immutable Git commit and prepares a bounded remediation preview. The public
-demo is credential-free and write-disabled; a real draft PR is an optional, explicitly enabled
-operator workflow.
+demo is credential-free for reviewers, rate-limited, and currently write-enabled through the
+explicit operator workflow. Ordinary deployments still default to writes disabled.
 
 - [Open the public demo](https://regression-surgeon-platform.alexlopashev.workers.dev/app)
 - [Read the current implementation plan](IMPLEMENTATION_PLAN.md)
@@ -18,7 +18,8 @@ operator workflow.
    immutable release, and read the allowlisted source.
 4. Review the separate evidence, inference, confidence, and unknowns sections.
 5. Inspect the exact one-file remediation diff and its immutable evidence references.
-6. Confirm that the runtime is write-disabled and the result is a validated preview.
+6. Confirm that the runtime reports writes enabled. Approve only when intentionally exercising the
+   guarded draft-PR path; otherwise stop after reviewing the validated proposal.
 
 The optional metric generator writes fixed batches of 5, 10, or 20 current-release samples. It
 demonstrates real ingestion but cannot replace or modify the configured incident.
