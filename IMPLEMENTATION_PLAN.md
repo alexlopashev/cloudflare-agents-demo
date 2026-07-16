@@ -163,8 +163,10 @@ compact exact diff in a collapsed disclosure. A decision becomes visible before 
 decisions are disabled, and the persisted action result distinguishes rejection, no-write preview,
 created/reused draft PR, and failure without inferring a write. Receipt phases also produce a
 deterministic evidence-backed chat log with collapsed reasoning summaries, tool calls, bounded tool
-results, approval state, and terminal outcomes. Private model chain-of-thought and raw thinking
-tokens are never exposed as product state. A recoverable GitHub result rejects the current action
+results, approval state, and terminal outcomes. The final bot entry follows live availability,
+investigation, approval-wait, and attention states, animates only active work, and honors reduced
+motion. Private model chain-of-thought and raw thinking tokens are never exposed as product state. A
+recoverable GitHub result rejects the current action
 execution so Project Think releases its stable ledger key; a deterministic reconciliation retry
 then requires a new explicit approval, while successful results remain replay-safe.
 GitHub connector failures retain only a fixed operation identifier and optional bounded HTTP status

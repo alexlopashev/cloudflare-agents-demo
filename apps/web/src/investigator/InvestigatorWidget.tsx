@@ -41,7 +41,41 @@ type InvestigatorWidgetChromeProps = {
 function widgetStatus(status: string): string {
   if (status === "ready") return "Available";
   if (status === "error") return "Needs attention";
+  if (status === "awaiting-approval") return "Awaiting approval";
   return "Investigating";
+}
+
+export function InvestigatorStatusMessage({ status }: { status: string }) {
+  const label = widgetStatus(status);
+  const state =
+    status === "ready"
+      ? "available"
+      : status === "error"
+        ? "attention"
+        : status === "awaiting-approval"
+          ? "awaiting"
+          : "working";
+  return (
+    <article
+      aria-label={`Investigator status: ${label}`}
+      aria-live="polite"
+      className={`message assistant investigator-status-message ${state}`}
+      role="status"
+    >
+      <span>Investigator</span>
+      <div className="investigator-status-line">
+        <b aria-hidden="true" className="status-orb" />
+        <p>{label}</p>
+        {state === "working" && (
+          <span aria-hidden="true" className="thinking-dots">
+            <i />
+            <i />
+            <i />
+          </span>
+        )}
+      </div>
+    </article>
+  );
 }
 
 export function canSubmitInvestigatorRequest(status: string): boolean {
@@ -87,10 +121,6 @@ export function InvestigatorWidgetChrome({
           <div>
             <p className="eyebrow">Project Think support</p>
             <h2 id="investigator-title">Regression Investigator</h2>
-            <p className="support-status">
-              <span aria-hidden="true" />
-              {widgetStatus(status)}
-            </p>
           </div>
           <div className="support-dialog-actions">
             <button
@@ -194,6 +224,12 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
     agent.state?.status === "investigating" ? agent.state.preparedRemediation : undefined,
   );
   const approvalOutcome = buildApprovalOutcome(messages, approvalDecision);
+  const displayedStatus =
+    approvalOutcome === undefined && approvals.length > 0
+      ? "awaiting-approval"
+      : approvalOutcome?.state === "submitting"
+        ? "streaming"
+        : status;
   const visibleMessages = messages
     .map((message) => ({ message, text: messageText(message.parts) }))
     .filter(({ text }) => text.length > 0);
@@ -204,7 +240,9 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
   const wasOpen = useRef(false);
+  const messagePartCount = messages.reduce((count, message) => count + message.parts.length, 0);
 
   useEffect(() => {
     const previousCount = previousAssistantMessageCount.current;
@@ -224,6 +262,17 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
     if (!isOpen && wasOpen.current) launcherRef.current?.focus();
     wasOpen.current = isOpen;
   }, [isOpen]);
+
+  useEffect(() => {
+    const messagesElement = messagesRef.current;
+    if (!isOpen || messagesElement === null) return;
+    const hasActivity =
+      messagePartCount > 0 || approvals.length > 0 || approvalOutcome?.state !== undefined;
+    messagesElement.scrollTo({
+      behavior: !canSubmitInvestigatorRequest(displayedStatus) && hasActivity ? "smooth" : "auto",
+      top: messagesElement.scrollHeight,
+    });
+  }, [approvalOutcome?.state, approvals.length, displayedStatus, isOpen, messagePartCount]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -278,7 +327,7 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
       unreadCount={unreadCount}
     >
       <div className="chat-panel">
-        <div className="messages" aria-live="polite">
+        <div className="messages" aria-live="polite" ref={messagesRef}>
           {visibleMessages.length === 0 ? (
             <InvestigationStarter
               disabled={!canSubmitInvestigatorRequest(status)}
@@ -310,6 +359,7 @@ export function InvestigatorWidget({ initiallyOpen }: { initiallyOpen: boolean }
             }
           />
           <InvestigatorError error={error} />
+          <InvestigatorStatusMessage status={displayedStatus} />
         </div>
         <form className="composer" onSubmit={submit}>
           <label htmlFor="investigation-prompt">Investigation request</label>

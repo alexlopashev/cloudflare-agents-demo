@@ -162,8 +162,10 @@ proposal fingerprint, resolves the exact prepared diff, and enforces repository,
 blob SHA, file, byte, line, changed-line, branch-idempotency, and stale-base gates. It has no merge
 capability. The review keeps a chronological chat log of bounded reasoning summaries, tool calls,
 tool results, and approval state; it collapses reasoning summaries and the exact bounded diff until
-requested, and reports rejection, preview, or the created/reused draft PR directly in chat. Private
-model chain-of-thought and raw thinking tokens are never exposed.
+requested, and reports rejection, preview, or the created/reused draft PR directly in chat. Its last
+bot entry follows the live state through Available, Investigating, Awaiting approval, and Needs
+attention; active work uses a reduced-motion-safe animation. Private model chain-of-thought and raw
+thinking tokens are never exposed.
 Recoverable GitHub outcomes release the stable action-ledger key instead of being replayed as a
 successful result, so every deterministic reconciliation retry requires a new explicit approval.
 When GitHub rejects or cannot complete a bounded operation, chat reports only the allowlisted

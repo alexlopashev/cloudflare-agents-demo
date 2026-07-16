@@ -361,21 +361,6 @@ h1 {
   opacity: 0.45;
   cursor: not-allowed;
 }
-.support-status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding-top: 6px;
-  color: #b7c6c0;
-  font-size: 0.78rem;
-}
-.support-status span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #55ca85;
-  box-shadow: 0 0 0 4px #55ca8520;
-}
 .support-launcher {
   position: relative;
   min-width: 56px;
@@ -541,7 +526,7 @@ h1 {
 }
 .empty-state {
   max-width: 260px;
-  margin: 24% auto 0;
+  margin: 18% auto 0;
   color: #899196;
   text-align: center;
 }
@@ -568,6 +553,107 @@ h1 {
 .message.user {
   margin-left: auto;
   background: #d8eee0;
+}
+.investigator-status-message {
+  margin: 8px 0 0;
+  padding: 12px 14px;
+  border: 1px solid #b8c8c1;
+  background: #f7faf7;
+  box-shadow: 0 10px 26px #17232918;
+}
+.investigator-status-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 7px;
+}
+.investigator-status-line p {
+  margin: 0;
+  color: #385248;
+  font-weight: 750;
+}
+.status-orb {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #3faf6e;
+  box-shadow: 0 0 0 5px #3faf6e20;
+}
+.investigator-status-message.working {
+  border-color: #c9b36f;
+  background: #fffaf0;
+}
+.investigator-status-message.working .investigator-status-line p {
+  color: #665628;
+}
+.investigator-status-message.working .status-orb {
+  background: #d29e2b;
+  box-shadow: 0 0 0 5px #d29e2b20;
+  animation: investigator-status-pulse 1.65s ease-in-out infinite;
+}
+.investigator-status-message.attention {
+  border-color: #d79280;
+  background: #fff5f1;
+}
+.investigator-status-message.attention .investigator-status-line p {
+  color: #7b3f2f;
+}
+.investigator-status-message.attention .status-orb {
+  background: #ce684f;
+  box-shadow: 0 0 0 5px #ce684f20;
+}
+.investigator-status-message.awaiting {
+  border-color: #9bb4aa;
+  background: #f2f7f4;
+}
+.investigator-status-message.awaiting .investigator-status-line p {
+  color: #405d53;
+}
+.investigator-status-message.awaiting .status-orb {
+  background: #6c9585;
+  box-shadow: 0 0 0 5px #6c958520;
+}
+.thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.thinking-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #a27416;
+  animation: investigator-status-dot 1.15s ease-in-out infinite;
+}
+.thinking-dots i:nth-child(2) {
+  animation-delay: 140ms;
+}
+.thinking-dots i:nth-child(3) {
+  animation-delay: 280ms;
+}
+@keyframes investigator-status-pulse {
+  0%,
+  100% {
+    transform: scale(0.88);
+    box-shadow: 0 0 0 4px #d29e2b18;
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 8px #d29e2b2b;
+  }
+}
+@keyframes investigator-status-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
 }
 .message span {
   color: #6f7b78;
@@ -722,6 +808,12 @@ h1 {
 .composer button:disabled {
   cursor: not-allowed;
   opacity: 0.42;
+}
+@media (prefers-reduced-motion: reduce) {
+  .investigator-status-message.working .status-orb,
+  .thinking-dots i {
+    animation: none;
+  }
 }
 .not-found {
   padding: 48px;
