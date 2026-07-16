@@ -1051,6 +1051,80 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     expect(result.actionStatus).toBe("preview");
   });
 
+  it("finalizes after an approved remediation action instead of requesting the action again", async () => {
+    await seedRegressionEvidence();
+    const stub = env.REGRESSION_SURGEON_AGENT.getByName("approved-remediation-final-report");
+
+    const policy = await runInDurableObject<
+      RegressionSurgeonAgent,
+      Awaited<ReturnType<RegressionSurgeonAgent["beforeStep"]>>
+    >(stub, async (instance) => {
+      await instance.onStart();
+      await instance.runTurn({
+        input:
+          "Investigate the seeded latency regression and prepare the guarded remediation preview.",
+      });
+      if (
+        instance.state.status !== "investigating" ||
+        instance.state.preparedRemediation === undefined
+      ) {
+        throw new Error("Expected a receipt-prepared remediation.");
+      }
+      const fingerprint = instance.state.preparedRemediation.fingerprint;
+      return instance.beforeStep({
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Investigate the seeded latency regression and prepare the guarded remediation preview.",
+              },
+            ],
+          },
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "tool-call",
+                toolCallId: "approved-draft",
+                toolName: "create_draft_pr",
+                input: { proposalFingerprint: fingerprint },
+              },
+            ],
+          },
+          {
+            role: "tool",
+            content: [
+              {
+                type: "tool-result",
+                toolCallId: "approved-draft",
+                toolName: "create_draft_pr",
+                output: {
+                  type: "json",
+                  value: {
+                    status: "reused",
+                    writesPerformed: false,
+                    repository: "alexlopashev/cloudflare-agents-demo",
+                    branch: "regression-surgeon/existing",
+                    number: 137,
+                    url: "https://github.com/alexlopashev/cloudflare-agents-demo/pull/137",
+                    draft: true,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+        stepNumber: 0,
+        steps: [],
+      } as never);
+    });
+
+    expect(policy).toMatchObject({ activeTools: [] });
+    expect(policy?.system).toMatch(/approved remediation action is complete/i);
+  });
+
   it("replays reconnect and deduplicates an approval resend", async () => {
     await seedRegressionEvidence();
     Reflect.set(env, "CF_VERSION_METADATA", {

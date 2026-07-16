@@ -42,7 +42,7 @@ export type PreparedApprovalDetails = {
   };
 };
 
-type ApprovalMessage = { id: string; parts: readonly unknown[] };
+type ApprovalMessage = { id: string; parts: readonly unknown[]; role?: string };
 
 export type ApprovalDecision = {
   approved: boolean;
@@ -186,6 +186,13 @@ function lastActionPart(messages: readonly ApprovalMessage[]): object | undefine
   return undefined;
 }
 
+function messagesForLatestUserTurn(
+  messages: readonly ApprovalMessage[],
+): readonly ApprovalMessage[] {
+  const start = messages.findLastIndex((message) => message.role === "user");
+  return start < 0 ? messages : messages.slice(start);
+}
+
 const boundedGitHubFailurePattern =
   /^GitHub (?:read-base-ref|read-base-commit|read-source-file|find-draft-pr|read-remediation-branch|compare-remediation-branch|create-blob|create-tree|create-commit|create-branch|create-draft-pr) failed (?:before a response|with HTTP [1-5][0-9]{2})\. No draft PR was confirmed\. Retry requires a new approval\.$/;
 
@@ -249,7 +256,30 @@ export function buildApprovalOutcome(
   messages: readonly ApprovalMessage[],
   decision?: ApprovalDecision,
 ): ApprovalOutcome | undefined {
-  const part = lastActionPart(messages);
+  const currentTurnMessages = messagesForLatestUserTurn(messages);
+  const successfulPart = currentTurnMessages.findLast((message) =>
+    message.parts.some((candidate) => {
+      if (
+        candidate === null ||
+        typeof candidate !== "object" ||
+        stringProperty(candidate, "type") !== "tool-create_draft_pr" ||
+        stringProperty(candidate, "state") !== "output-available"
+      ) {
+        return false;
+      }
+      const output = property(candidate, "output");
+      if (output === null || typeof output !== "object") return false;
+      return (
+        (stringProperty(output, "status") === "preview" &&
+          property(output, "writesPerformed") === false) ||
+        createdPullRequestOutcome(output) !== undefined
+      );
+    }),
+  );
+  const part =
+    successfulPart === undefined
+      ? lastActionPart(currentTurnMessages)
+      : lastActionPart([successfulPart]);
   const state = part === undefined ? undefined : stringProperty(part, "state");
   const boundedFailure = part === undefined ? undefined : boundedActionFailure(part);
   if (state === "output-denied") {
