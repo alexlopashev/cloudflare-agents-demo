@@ -194,6 +194,54 @@ describe("remediation approval panel", () => {
     });
   });
 
+  it("keeps a successful action visible when an automatic duplicate action follows it", () => {
+    expect(
+      buildApprovalOutcome([
+        {
+          id: "user-1",
+          role: "user",
+          parts: [{ type: "text", text: "Investigate and prepare the guarded preview." }],
+        },
+        {
+          id: "assistant-success",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-create_draft_pr",
+              state: "output-available",
+              toolCallId: "tool-success",
+              output: {
+                status: "reused",
+                writesPerformed: false,
+                repository: "alexlopashev/cloudflare-agents-demo",
+                number: 137,
+                url: "https://github.com/alexlopashev/cloudflare-agents-demo/pull/137",
+                draft: true,
+              },
+            },
+          ],
+        },
+        {
+          id: "assistant-interrupted",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-create_draft_pr",
+              state: "output-error",
+              toolCallId: "tool-duplicate",
+              errorText: "The tool call was interrupted before a result was recorded.",
+            },
+          ],
+        },
+      ]),
+    ).toEqual({
+      message: "Draft PR #137 reused.",
+      number: 137,
+      state: "reused",
+      url: "https://github.com/alexlopashev/cloudflare-agents-demo/pull/137",
+    });
+  });
+
   it("shows only the bounded GitHub operation failure returned by the guarded action", () => {
     const safeMessage =
       "GitHub create-draft-pr failed with HTTP 403. No draft PR was confirmed. Retry requires a new approval.";

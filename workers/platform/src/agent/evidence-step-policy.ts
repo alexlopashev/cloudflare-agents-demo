@@ -40,6 +40,20 @@ export function remediationPreviewRequested(messages: readonly unknown[]): boole
   );
 }
 
+export function remediationActionResolved(messages: readonly unknown[]): boolean {
+  return messages.some((message) => {
+    const content = property(message, "content");
+    return (
+      Array.isArray(content) &&
+      content.some(
+        (part) =>
+          property(part, "type") === "tool-result" &&
+          property(part, "toolName") === "create_draft_pr",
+      )
+    );
+  });
+}
+
 export function messagesForCurrentInvestigation(messages: readonly unknown[]): readonly unknown[] {
   const start = messages.findLastIndex(
     (message) => property(message, "role") === "user" && messageRequestsInvestigation(message),

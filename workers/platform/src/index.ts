@@ -25,6 +25,7 @@ import {
   evidenceInvestigationRequested,
   evidenceInvestigationStartedByLatestMessage,
   messagesForCurrentInvestigation,
+  remediationActionResolved,
   remediationPreviewRequested,
 } from "./agent/evidence-step-policy";
 import { createRemediationAction } from "./agent/remediation-action";
@@ -335,6 +336,11 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
         output: result.output,
       })),
     );
+    const remediationResolved =
+      remediationActionResolved(currentMessages) ||
+      context.steps.some((step) =>
+        step.toolResults.some((result) => result.toolName === "create_draft_pr"),
+      );
     const results = [...evidenceResultsFromModelMessages(currentMessages), ...currentStepResults];
     const activeState = this.state;
     const receipt = reconcileEvidenceResults(activeState.receipt, results);
@@ -356,6 +362,12 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
         return {
           activeTools: [],
           system: `${this.getSystemPrompt()}\n\nThe current evidence phase's bounded retry is exhausted. Call no tool, report the missing evidence with low confidence, and do not propose remediation.`,
+        };
+      }
+      if (remediationResolved) {
+        return {
+          activeTools: [],
+          system: `${this.getSystemPrompt()}\n\nThe approved remediation action is complete. Report its recorded result now without calling another tool.`,
         };
       }
       if (preparedRemediation !== undefined && remediationPreviewRequested(currentMessages)) {
