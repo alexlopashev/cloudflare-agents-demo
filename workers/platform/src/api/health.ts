@@ -93,10 +93,10 @@ export function createHealthAggregator(options: HealthAggregatorOptions) {
         }
       };
       const services: ServiceHealthResult[] = [];
-      if (options.loadingMode === "sequential") {
-        for (const service of serviceDefinitions) services.push(await loadService(service));
-      } else {
-        services.push(...(await Promise.all(serviceDefinitions.map(loadService))));
+      const maximumConcurrentChecks = 2;
+      for (let index = 0; index < serviceDefinitions.length; index += maximumConcurrentChecks) {
+        const batch = serviceDefinitions.slice(index, index + maximumConcurrentChecks);
+        services.push(...(await Promise.all(batch.map(loadService))));
       }
       const healthyCount = services.filter((service) => service.status === "healthy").length;
       const outcome =
