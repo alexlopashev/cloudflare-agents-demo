@@ -6,6 +6,7 @@ import {
   canSubmitInvestigatorRequest,
   configuredInvestigationPrompt,
   InvestigationStarter,
+  InvestigatorStatusMessage,
   InvestigatorError,
   InvestigatorWidgetChrome,
   nextUnreadInvestigatorCount,
@@ -101,6 +102,23 @@ describe("investigator support widget", () => {
     expect(privateFailure).not.toContain("private provider exception");
   });
 
+  it("renders the current agent state as the latest animated investigator message", () => {
+    const working = renderToStaticMarkup(<InvestigatorStatusMessage status="streaming" />);
+    const available = renderToStaticMarkup(<InvestigatorStatusMessage status="ready" />);
+    const attention = renderToStaticMarkup(<InvestigatorStatusMessage status="error" />);
+    const awaiting = renderToStaticMarkup(<InvestigatorStatusMessage status="awaiting-approval" />);
+
+    expect(working).toContain('class="message assistant investigator-status-message working"');
+    expect(working).toContain('aria-label="Investigator status: Investigating"');
+    expect(working).toContain('class="thinking-dots"');
+    expect(working.match(/<i><\/i>/g)).toHaveLength(3);
+    expect(available).toContain('aria-label="Investigator status: Available"');
+    expect(available).not.toContain("thinking-dots");
+    expect(attention).toContain('aria-label="Investigator status: Needs attention"');
+    expect(awaiting).toContain('aria-label="Investigator status: Awaiting approval"');
+    expect(awaiting).not.toContain("thinking-dots");
+  });
+
   it("collapses to an accessible floating launcher with only an unread badge", () => {
     const markup = renderToStaticMarkup(
       <InvestigatorWidgetChrome
@@ -150,7 +168,7 @@ describe("investigator support widget", () => {
     );
   });
 
-  it("opens a named dialog with status and a collapse action", () => {
+  it("opens a named dialog with a collapse action and no duplicated header status", () => {
     const markup = renderToStaticMarkup(
       <InvestigatorWidgetChrome
         isOpen
@@ -168,7 +186,7 @@ describe("investigator support widget", () => {
     expect(markup).toContain('aria-labelledby="investigator-title"');
     expect(markup).toContain('aria-label="Collapse investigator"');
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Clear chat<\/button>/);
-    expect(markup).toContain("Investigating");
+    expect(markup).not.toContain('class="support-status"');
     expect(markup).toMatch(/<section[^>]*class="support-dialog panel"[^>]*>/);
     expect(markup).not.toMatch(/<section[^>]*class="support-dialog panel"[^>]*hidden/);
   });

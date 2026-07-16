@@ -43,4 +43,21 @@ describe("investigator mobile composer", () => {
       widgetSource.indexOf('className="messages"'),
     );
   });
+
+  it("animates only the in-chat working status and honors reduced motion", () => {
+    expect(styles).toMatch(/\.empty-state\s*{[^}]*margin:\s*18% auto 0;/s);
+    expect(styles).not.toMatch(/\.investigator-status-message\s*{[^}]*position:\s*sticky;/s);
+    expect(widgetSource).toMatch(
+      /messagesElement\.scrollTo\(\{[\s\S]*top:\s*messagesElement\.scrollHeight/s,
+    );
+    expect(styles).toMatch(
+      /\.investigator-status-message\.working \.status-orb\s*{[^}]*animation:/s,
+    );
+    expect(styles).toMatch(/\.thinking-dots i\s*{[^}]*animation:/s);
+    expect(styles).toMatch(/@keyframes investigator-status-pulse/);
+    expect(styles).toMatch(/@keyframes investigator-status-dot/);
+    expect(styles).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.investigator-status-message\.working \.status-orb[\s\S]*animation:\s*none/s,
+    );
+  });
 });
