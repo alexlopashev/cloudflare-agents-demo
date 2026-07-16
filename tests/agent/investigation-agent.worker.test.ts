@@ -980,7 +980,7 @@ describe("RegressionSurgeonAgent investigation policy", () => {
     expect(result.preparedTraceId).toMatch(/^regression-sequential-trace-/);
   });
 
-  it("preserves the complete receipt when browser approval resubmits the existing transcript", async () => {
+  it("preserves the complete receipt when browser approval replays only the original user message", async () => {
     await seedRegressionEvidence();
     const stub = env.REGRESSION_SURGEON_AGENT.getByName("browser-approval-transcript");
 
@@ -1017,17 +1017,6 @@ describe("RegressionSurgeonAgent investigation policy", () => {
               {
                 type: "text",
                 text: "Investigate the seeded latency regression and prepare the guarded remediation preview.",
-              },
-            ],
-          },
-          {
-            role: "assistant",
-            content: [
-              {
-                type: "tool-call",
-                toolName: "create_draft_pr",
-                toolCallId: "draft-1",
-                input: { proposalFingerprint: beforeFingerprint },
               },
             ],
           },
