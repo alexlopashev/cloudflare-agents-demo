@@ -304,7 +304,11 @@ proves it. Never claim a merge, deployment, or rollback occurred.${prepared}`;
         throw new Error(publicUsageDenialMessage(decision, "Public investigator"));
       }
     }
-    if (!context.continuation && evidenceInvestigationStartedByLatestMessage(messages)) {
+    if (
+      !context.continuation &&
+      this.state.status === "idle" &&
+      evidenceInvestigationStartedByLatestMessage(messages)
+    ) {
       this.startConfiguredInvestigation();
     }
     const remediationEligible =
