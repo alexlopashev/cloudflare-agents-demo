@@ -5,6 +5,11 @@ import {
 } from "../../../packages/contracts/src/incident";
 import { handleHealthApiRequest } from "./api/health-handler";
 import { composeExternalConfiguration } from "./config";
+import {
+  createHttpSessionStore,
+  handleHttpSessionRequest,
+  type HttpSessionAgent,
+} from "./http/sessions";
 import { generateRegressionScenario } from "./scenario/generator";
 import { RemediationError } from "./remediation/service";
 import { handleScenarioRequest } from "./scenario/handler";
@@ -100,6 +105,25 @@ export async function handlePlatformRequest(
     const response = await routeAgent(request, bindings);
     if (response) return response;
     return new Response("Agent route not found", { status: 404 });
+  }
+
+  if (url.pathname === "/api/sessions" || url.pathname.startsWith("/api/sessions/")) {
+    const store = createHttpSessionStore(bindings.TELEMETRY_DB);
+    return handleHttpSessionRequest(request, {
+      createSessionId: () => `http-${crypto.randomUUID()}`,
+      getAgent: (id): HttpSessionAgent => {
+        const agent = bindings.REGRESSION_SURGEON_AGENT.getByName(id) as unknown as {
+          getHttpSessionTranscript(): Promise<{ messages: unknown[] }>;
+          runHttpSessionTurn(message: string): Promise<{ messages: unknown[] }>;
+        };
+        return {
+          getTranscript: () => agent.getHttpSessionTranscript(),
+          runTurn: (message) => agent.runHttpSessionTurn(message),
+        };
+      },
+      now: Date.now,
+      store,
+    });
   }
 
   if (url.pathname.startsWith("/api/scenario/")) {

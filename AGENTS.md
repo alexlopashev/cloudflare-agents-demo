@@ -67,6 +67,10 @@ The following invariants are especially important and must remain covered.
 - Live report verification recognizes only those four exact ordered sections at line-level Markdown,
   bold, or colon-label headings; it never asserts or exposes the section prose.
 - Reconnection does not duplicate committed messages or side effects.
+- HTTP-created chat sessions use server-generated identifiers and ordinary Project Think turn
+  admission; they cannot bypass public usage limits, evidence sequencing, or action approval.
+- D1 stores only bounded HTTP session summaries. The Durable Object transcript remains canonical;
+  list, input, follow-up, and transcript response limits fail closed without exposing private errors.
 
 Do not assert exact natural-language output from a live model. Assert structured messages, selected tools, evidence references, approvals, and terminal state.
 

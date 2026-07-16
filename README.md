@@ -50,6 +50,35 @@ This is one strict TypeScript package with domain directories, not a multi-packa
 gate. The product intentionally supports one repository, one application, one metric, one seeded
 incident, and one remediation path.
 
+## HTTP session API
+
+The public Worker also exposes a synchronous JSON interface over the same Project Think sessions.
+It requires no authentication and remains subject to the public AI-turn limit, Gateway spend cap,
+evidence policy, and approval boundaries. Only sessions created through this HTTP API appear in its
+listing; browser-local WebSocket sessions remain separate.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| `GET` | `/api/sessions?limit=50` | List the newest HTTP-created session summaries; `limit` is 1–100. |
+| `POST` | `/api/sessions` | Create a server-named session and run its initial message. |
+| `POST` | `/api/sessions/{id}/messages` | Run a follow-up message in an existing HTTP session. |
+| `GET` | `/api/sessions/{id}` | Return the session summary and complete persisted chat transcript. |
+
+Create a session with an `application/json` body:
+
+```json
+{
+  "message": "Investigate the seeded latency regression."
+}
+```
+
+The server generates `http-*` identifiers; callers cannot select or attach to arbitrary Durable
+Objects. Message bodies are limited to 8 KiB, persisted transcripts remain canonical in the
+session's Durable Object, D1 stores only listable summaries, and one transcript response is limited
+to 512 KiB. Follow-ups require an existing HTTP-created session. The HTTP surface does not approve
+actions automatically; consequential GitHub writes still require the existing explicit approval
+protocol.
+
 ## Local setup
 
 Supported hosts are macOS and Linux on ARM64 and x64. Supported shells are sh, Bash, Zsh, Fish, and

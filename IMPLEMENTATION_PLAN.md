@@ -47,7 +47,7 @@ incident. The product is not a general-purpose coding agent.
 
 ```mermaid
 flowchart LR
-    Browser["Browser"] --> Platform["Platform Worker"]
+    Browser["Browser or HTTP client"] --> Platform["Platform Worker"]
     Platform --> Assets["React assets"]
     Platform --> Health["Health-service Worker"]
     Platform --> D1["D1 telemetry and evidence"]
@@ -60,6 +60,7 @@ The platform Worker owns:
 
 - `/app` and `/investigator` for the shared web experience;
 - `/api/health`, `/api/telemetry/ux`, and read-only runtime metadata;
+- `/api/sessions` for bounded HTTP-created chat sessions and transcripts;
 - protected local scenario and deployment-verification routes; and
 - `/agents/*` for Project Think chat and action transport.
 
@@ -203,7 +204,24 @@ refresh, and public-usage tasks force writes off. Only the explicit write-enable
 posture after verifying the remote secret before and after deployment. Any later failure restores
 and verifies the preserved write-disabled investigator or exposes both failures.
 
-### 3.5 Public usage and model failure
+### 3.5 HTTP-created sessions
+
+The public JSON interface is a synchronous façade over the same Project Think Durable Objects used
+by the WebSocket chat:
+
+- `GET /api/sessions` returns at most 100 newest HTTP-created summaries;
+- `POST /api/sessions` generates an `http-*` identifier and runs the initial message;
+- `POST /api/sessions/{id}/messages` runs a follow-up only for a registered HTTP session; and
+- `GET /api/sessions/{id}` returns the complete persisted transcript within a 512 KiB response cap.
+
+D1 owns only the server-generated ID, creation/update timestamps, and message count needed for a
+bounded listing. The Project Think Durable Object remains the canonical transcript owner. Browser
+WebSocket sessions are deliberately absent from this registry, caller-selected session IDs are
+rejected, request bodies are limited to 8 KiB, and failures expose fixed codes rather than model,
+provider, or storage details. HTTP turns use ordinary Project Think admission, so they consume the
+same public AI limit and cannot bypass evidence sequencing or action approval.
+
+### 3.6 Public usage and model failure
 
 The live runtime must use the exact named Gateway and model. Local fake mode must not contact either.
 The public posture is `rate-limited` or emergency `disabled`; it is never unbounded.
